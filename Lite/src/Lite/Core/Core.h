@@ -10,3 +10,4 @@
 #include "Random.h"
 #include "UUID.h"
 #include "FileSystem.h"
+#include "Hash.h"

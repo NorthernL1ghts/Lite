@@ -100,6 +100,8 @@ namespace Lite {
 						layer->OnRender();
 				}
 
+				Renderer2D::Flush();
+
 				{
 					LITE_PROFILE_SCOPE("ImGui");
 					m_ImGuiLayer->Begin();
