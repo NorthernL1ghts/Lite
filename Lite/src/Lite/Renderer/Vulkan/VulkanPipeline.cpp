@@ -1,21 +1,15 @@
 #include "VulkanPipeline.h"
 
-#include "Lite/Assets/AssetRegistry.h"
 #include "Lite/Assets/Shader.h"
 
 namespace Lite {
 
-	bool VulkanPipeline::Create(VkDevice device, VkRenderPass renderPass)
+	bool VulkanPipeline::Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader)
 	{
 		m_Device = device;
 
-		auto vertexShader = AssetRegistry::Get().Load<Shader>("shaders/Triangle.vert.spv");
-		auto fragmentShader = AssetRegistry::Get().Load<Shader>("shaders/Triangle.frag.spv");
-		if (!vertexShader || !fragmentShader)
-			return false;
-
-		VkShaderModule vertex = vertexShader->CreateModule(device);
-		VkShaderModule fragment = fragmentShader->CreateModule(device);
+		VkShaderModule vertex = vertexShader.CreateModule(device);
+		VkShaderModule fragment = fragmentShader.CreateModule(device);
 		if (!vertex || !fragment)
 		{
 			if (vertex)

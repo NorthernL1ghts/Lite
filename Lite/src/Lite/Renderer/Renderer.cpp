@@ -1,5 +1,6 @@
 #include "Renderer.h"
 
+#include "Lite/Assets/Shader.h"
 #include "Lite/Core/Logger.h"
 
 #include <GLFW/glfw3.h>
@@ -36,6 +37,7 @@ namespace {
 		uint32_t IndexCount = 0;
 		bool FrameActive = false;
 		bool FramebufferResized = false;
+		bool ContextReady = false;
 		bool Ready = false;
 	};
 
@@ -119,8 +121,6 @@ namespace Lite {
 			s_Renderer.Swapchain.GetImageViews(),
 			s_Renderer.Swapchain.GetExtent()))
 			return;
-		if (!s_Renderer.Pipeline.Create(s_Renderer.Device.Get(), s_Renderer.RenderPass.Get()))
-			return;
 		if (!CreateGeometry())
 			return;
 		if (!s_Renderer.Commands.Create(s_Renderer.Device.Get(), s_Renderer.Device.GetQueueFamily(), VulkanSync::FramesInFlight))
@@ -128,8 +128,28 @@ namespace Lite {
 		if (!s_Renderer.Sync.Create(s_Renderer.Device.Get(), VulkanSync::FramesInFlight, s_Renderer.Swapchain.GetImageCount()))
 			return;
 
+		s_Renderer.ContextReady = true;
+		LITE_INFO("Renderer context ready");
+	}
+
+	bool Renderer::SetShaders(const Shader& vertex, const Shader& fragment)
+	{
+		if (!s_Renderer.ContextReady)
+			return false;
+
+		if (s_Renderer.Pipeline.Get())
+		{
+			s_Renderer.Device.WaitIdle();
+			s_Renderer.Pipeline.Destroy();
+			s_Renderer.Ready = false;
+		}
+
+		if (!s_Renderer.Pipeline.Create(s_Renderer.Device.Get(), s_Renderer.RenderPass.Get(), vertex, fragment))
+			return false;
+
 		s_Renderer.Ready = true;
-		LITE_INFO("Renderer ready");
+		LITE_INFO("Renderer shaders ready");
+		return true;
 	}
 
 	void Renderer::Shutdown()
@@ -156,6 +176,7 @@ namespace Lite {
 		s_Renderer.IndexCount = 0;
 		s_Renderer.FrameActive = false;
 		s_Renderer.FramebufferResized = false;
+		s_Renderer.ContextReady = false;
 		s_Renderer.Ready = false;
 	}
 

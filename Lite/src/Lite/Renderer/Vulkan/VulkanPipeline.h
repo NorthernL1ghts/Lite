@@ -4,10 +4,12 @@
 
 namespace Lite {
 
+	class Shader;
+
 	class VulkanPipeline
 	{
 	public:
-		bool Create(VkDevice device, VkRenderPass renderPass);
+		bool Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader);
 		void Destroy();
 		void Bind(VkCommandBuffer commandBuffer, VkExtent2D extent) const;
 
