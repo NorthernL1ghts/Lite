@@ -338,7 +338,12 @@ namespace Lite {
 		if (m_Playback == ScenePlayback::Playing)
 			return;
 
+		bool paused = m_Playback == ScenePlayback::Paused;
 		m_Playback = ScenePlayback::Playing;
+		if (paused)
+			SyncPhysics();
+		else
+			StartPhysics();
 		Console::Log(std::format("Scene playing: {}", m_Name));
 	}
 
@@ -356,6 +361,7 @@ namespace Lite {
 		if (m_Playback == ScenePlayback::Stopped)
 			return;
 
+		StopPhysics();
 		m_Playback = ScenePlayback::Stopped;
 		Console::Log(std::format("Scene stopped: {}", m_Name));
 	}
@@ -365,27 +371,7 @@ namespace Lite {
 		if (m_Playback != ScenePlayback::Playing)
 			return;
 
-		for (Record& record : m_Records)
-		{
-			if (record.Spin && record.Transform && record.Spin->Rate != 0.0f)
-			{
-				Transform& transform = record.Transform->Local;
-				transform.SetRotationZ(transform.GetRotationZ() + record.Spin->Rate * seconds);
-			}
-
-			if (!record.Rigidbody2D || !record.Transform || record.Rigidbody2D->Type == BodyType::Static)
-				continue;
-
-			Rigidbody2DComponent& body = *record.Rigidbody2D;
-			Transform& transform = record.Transform->Local;
-			if (body.Type == BodyType::Dynamic)
-				body.LinearVelocity.y -= 9.81f * body.GravityScale * seconds;
-
-			transform.Position.x += body.LinearVelocity.x * seconds;
-			transform.Position.y += body.LinearVelocity.y * seconds;
-			if (!body.FreezeRotation)
-				transform.SetRotationZ(transform.GetRotationZ() + body.AngularVelocity * seconds);
-		}
+		StepPhysics(seconds);
 	}
 
 	void Scene::Render() const

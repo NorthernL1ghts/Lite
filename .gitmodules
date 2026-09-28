@@ -11,3 +11,6 @@
 [submodule "Lite/src/vendor/glm"]
 	path = Lite/src/vendor/glm
 	url = https://github.com/g-truc/glm.git
+[submodule "Lite/src/vendor/box2d"]
+	path = Lite/src/vendor/box2d
+	url = https://github.com/erincatto/box2d.git

@@ -4,7 +4,7 @@ include(cmake/WindowsSDK.cmake)
 
 project(LiteEngine
     VERSION 0.1.0
-    LANGUAGES CXX
+    LANGUAGES C CXX
     DESCRIPTION "Lite game engine"
 )
 

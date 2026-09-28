@@ -18,6 +18,13 @@ set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(src/vendor/glm)
 
+set(BOX2D_SAMPLES OFF CACHE BOOL "" FORCE)
+set(BOX2D_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(BOX2D_DOCS OFF CACHE BOOL "" FORCE)
+set(BOX2D_BENCHMARKS OFF CACHE BOOL "" FORCE)
+set(BOX2D_VALIDATE OFF CACHE BOOL "" FORCE)
+add_subdirectory(src/vendor/box2d)
+
 lite_sources(Lite)
 
 target_include_directories(Lite
@@ -62,6 +69,7 @@ target_link_libraries(Lite
         Vulkan::Vulkan
     PRIVATE
         glfw
+        box2d
 )
 
 lite_bin_dir(Lite lite)

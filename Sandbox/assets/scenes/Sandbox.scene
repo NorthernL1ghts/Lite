@@ -38,7 +38,7 @@ freeze 1
 component box-collider2d
 size 1.0000 1.0000
 offset 0.0000 0.0000
-trigger 0
+trigger 1
 component sorting
 order -10
 entity
@@ -55,6 +55,13 @@ color 1.0000 1.0000 1.0000 1.0000
 tiling 1.0000 1.0000
 vertex-colors 1
 colors 0.9300 0.2200 0.2800 1.0000 0.0800 0.7800 0.4200 1.0000 0.1600 0.3600 0.9600 1.0000 1.0000 1.0000 1.0000 1.0000
+component rigidbody2d
+type static
+mass 1.0000
+gravity 1.0000
+velocity 0.0000 0.0000
+angular 0.0000
+freeze 1
 component circle-collider2d
 radius 0.7000
 offset 0.0000 0.0000
@@ -64,7 +71,7 @@ order 0
 entity
 name Quad
 component transform
-position 1.2200 -0.4800 0.0000
+position 1.1500 0.5500 0.0000
 rotation 0.0000
 scale 0.6200 0.6200 1.0000
 component mesh
@@ -77,9 +84,9 @@ vertex-colors 0
 component spin
 rate 1.1500
 component rigidbody2d
-type kinematic
+type dynamic
 mass 1.0000
-gravity 0.0000
+gravity 1.0000
 velocity 0.0000 0.0000
 angular 0.0000
 freeze 0
@@ -89,3 +96,28 @@ offset 0.0000 0.0000
 trigger 0
 component sorting
 order 1
+entity
+name Ground
+component transform
+position 0.0000 -0.8800 0.0000
+rotation 0.0000
+scale 3.4000 0.1600 1.0000
+component mesh
+type quad
+component material
+shader Batch
+color 0.2200 0.2400 0.2800 1.0000
+tiling 1.0000 1.0000
+component rigidbody2d
+type static
+mass 1.0000
+gravity 1.0000
+velocity 0.0000 0.0000
+angular 0.0000
+freeze 1
+component box-collider2d
+size 1.0000 1.0000
+offset 0.0000 0.0000
+trigger 0
+component sorting
+order 2

@@ -260,6 +260,13 @@ namespace Lite {
 		bool Read(std::istream& input);
 		void Write(std::ostream& output) const;
 		void ResolveTextures();
+		void StartPhysics();
+		void StopPhysics();
+		void SyncPhysics();
+		void StepPhysics(float seconds);
+
+		struct PhysicsStorage;
+		PhysicsStorage* m_Physics = nullptr;
 
 		std::string m_Name;
 		std::string m_Path;

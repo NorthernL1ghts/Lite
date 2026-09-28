@@ -4,7 +4,7 @@ Lite is the engine backend. Editor creates, saves, loads, and plays scenes. Sand
 
 ## Requirements
 
-Windows, Visual Studio with MSVC, CMake, and the Vulkan SDK. The Vulkan installer sets `VULKAN_SDK`. spdlog, GLFW, Dear ImGui, and GLM are git submodules. If those folders are empty, run `git submodule update --init --recursive`.
+Windows, Visual Studio with MSVC, CMake, and the Vulkan SDK. The Vulkan installer sets `VULKAN_SDK`. spdlog, GLFW, Dear ImGui, GLM, and Box2D are git submodules. If those folders are empty, run `git submodule update --init --recursive`.
 
 ## Build
 
@@ -20,7 +20,7 @@ scripts\build.bat
 
 The build uses the compiler's latest C++ mode and the newest Windows SDK installed on the machine. `Lite.dll` is built in `build/bin/lite`. After Sandbox and Editor link, CMake copies it into `build/bin/sandbox` and `build/bin/editor`.
 
-`LITE_WARN` logs from the engine. `LITE_CLIENT_WARN` logs from the application. Editor opens `Sandbox/assets/scenes/Sandbox.scene` stopped, and Save Scene writes that same file. Save Scene As writes any file name to any folder. The play and pause symbols on the menu bar run the open scene, and F5 and F6 do the same. Scenes are entities. Add a component with `entity.Add<TransformComponent>()`, and the same `Add`, `Get`, `Has`, and `Remove` calls work for Camera, Mesh, Material, Spin, Rigidbody 2D, Box Collider 2D, Circle Collider 2D, and Sorting. A camera is orthographic or perspective. While the scene is stopped or paused, click an entity in the viewport to edit it. Press I for instrumentation.
+`LITE_WARN` logs from the engine. `LITE_CLIENT_WARN` logs from the application. Editor opens `Sandbox/assets/scenes/Sandbox.scene` stopped, and Save Scene writes that same file. Save Scene As writes any file name to any folder. The play and pause symbols on the menu bar run the open scene, and F5 and F6 do the same. Play simulates rigidbodies and 2D colliders with Box2D. Scenes are entities. Add a component with `entity.Add<TransformComponent>()`, and the same `Add`, `Get`, `Has`, and `Remove` calls work for Camera, Mesh, Material, Spin, Rigidbody 2D, Box Collider 2D, Circle Collider 2D, and Sorting. A camera is orthographic or perspective. While the scene is stopped or paused, click an entity in the viewport to edit it. Press I for instrumentation.
 
 ## License
 
