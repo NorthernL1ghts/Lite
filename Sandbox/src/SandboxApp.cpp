@@ -1,7 +1,5 @@
 #include <Lite.h>
 
-#include <imgui.h>
-
 namespace {
 
 	class SandboxLayer final : public Lite::Layer
@@ -26,21 +24,6 @@ namespace {
 		{
 			if (event.GetType() == Lite::EventType::KeyPressed)
 				LITE_CLIENT_TRACE("{}", event.ToString());
-		}
-
-		void OnImGuiRender() override
-		{
-			auto [mouseX, mouseY] = Lite::Input::GetMousePosition();
-			bool leftDown = Lite::Input::IsMouseButtonPressed(Lite::Mouse::ButtonLeft);
-			bool spaceDown = Lite::Input::IsKeyPressed(Lite::Key::Space);
-
-			ImGui::Begin("Input");
-			ImGui::Text("Mouse: %.0f, %.0f", mouseX, mouseY);
-			ImGui::Text("Left button: %s", leftDown ? "down" : "up");
-			ImGui::Text("Space: %s", spaceDown ? "down" : "up");
-			ImGui::End();
-
-			ImGui::ShowDemoWindow();
 		}
 	};
 
