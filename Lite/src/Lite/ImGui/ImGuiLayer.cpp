@@ -150,6 +150,55 @@ namespace Lite {
 			return std::format("{:.1f} GB", gigabytes);
 		}
 
+		bool InfoDockNeedsBuild(ImGuiID dockspaceId)
+		{
+			ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
+			if (node == nullptr || !node->IsSplitNode())
+				return true;
+
+			const char* names[] = { "GPU", "Swapchain", "Draw", "Profile" };
+			for (const char* name : names)
+			{
+				ImGuiWindow* window = ImGui::FindWindowByName(name);
+				if (window == nullptr || window->DockNode == nullptr)
+					continue;
+
+				ImGuiDockNode* root = ImGui::DockNodeGetRootNode(window->DockNode);
+				if (root == nullptr || root->ID != dockspaceId)
+					return true;
+			}
+
+			return false;
+		}
+
+		void RetireOldDockspaces()
+		{
+			const char* retired[] = { "LiteInfo", "LiteInfoTabs", "LiteEditorSides" };
+			for (const char* name : retired)
+				ImGui::DockBuilderRemoveNode(ImGui::GetID(name));
+		}
+
+		void BuildInfoDock(ImGuiID dockspaceId, ImVec2 size)
+		{
+			ImGui::DockBuilderRemoveNode(dockspaceId);
+			ImGuiDockNodeFlags nodeFlags = static_cast<ImGuiDockNodeFlags>(
+				static_cast<int>(ImGuiDockNodeFlags_DockSpace) | static_cast<int>(ImGuiDockNodeFlags_PassthruCentralNode));
+			ImGui::DockBuilderAddNode(dockspaceId, nodeFlags);
+			ImGui::DockBuilderSetNodeSize(dockspaceId, size);
+
+			ImGuiID center = dockspaceId;
+			ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.28f, nullptr, &center);
+			ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.30f, nullptr, &center);
+			ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.24f, nullptr, &center);
+			ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.48f, nullptr, &left);
+
+			ImGui::DockBuilderDockWindow("GPU", left);
+			ImGui::DockBuilderDockWindow("Swapchain", leftBottom);
+			ImGui::DockBuilderDockWindow("Draw", right);
+			ImGui::DockBuilderDockWindow("Profile", bottom);
+			ImGui::DockBuilderFinish(dockspaceId);
+		}
+
 	}
 
 	ImGuiLayer::ImGuiLayer(GLFWwindow* window)
@@ -278,31 +327,17 @@ namespace Lite {
 		ImGui::PopStyleVar(3);
 
 		ImGuiID dockspaceId = ImGui::GetID("LiteInfoSections");
-		ImGuiDockNodeFlags dockFlags = ImGuiDockNodeFlags_PassthruCentralNode;
-		ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockFlags);
-
-		ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
-		if (node == nullptr || !node->IsSplitNode())
+		static bool retired = false;
+		if (!retired)
 		{
-			ImGui::DockBuilderRemoveNode(dockspaceId);
-			ImGuiDockNodeFlags nodeFlags = static_cast<ImGuiDockNodeFlags>(
-				static_cast<int>(dockFlags) | static_cast<int>(ImGuiDockNodeFlags_DockSpace));
-			ImGui::DockBuilderAddNode(dockspaceId, nodeFlags);
-			ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->Size);
-
-			ImGuiID center = dockspaceId;
-			ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.28f, nullptr, &center);
-			ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.30f, nullptr, &center);
-			ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.24f, nullptr, &center);
-			ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.48f, nullptr, &left);
-
-			ImGui::DockBuilderDockWindow("GPU", left);
-			ImGui::DockBuilderDockWindow("Swapchain", leftBottom);
-			ImGui::DockBuilderDockWindow("Draw", right);
-			ImGui::DockBuilderDockWindow("Profile", bottom);
-			ImGui::DockBuilderFinish(dockspaceId);
+			RetireOldDockspaces();
+			retired = true;
 		}
 
+		if (InfoDockNeedsBuild(dockspaceId))
+			BuildInfoDock(dockspaceId, viewport->WorkSize);
+
+		ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
 		ImGui::End();
 	}
 
