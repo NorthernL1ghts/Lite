@@ -86,6 +86,8 @@ namespace Lite {
 
 				Renderer2D::EndFrame();
 			}
+
+			Time::Limit();
 		}
 	}
 
