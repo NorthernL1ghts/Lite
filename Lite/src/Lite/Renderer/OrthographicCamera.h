@@ -22,18 +22,25 @@ namespace Lite {
 
 		void SetPosition(const Vec3& position)
 		{
-			m_Position = position;
+			m_Transform.Position = position;
 			Recalculate();
 		}
 
 		void SetRotation(float radians)
 		{
-			m_Rotation = radians;
+			m_Transform.SetRotationZ(radians);
 			Recalculate();
 		}
 
-		const Vec3& GetPosition() const { return m_Position; }
-		float GetRotation() const { return m_Rotation; }
+		void SetTransform(const Transform& transform)
+		{
+			m_Transform = transform;
+			Recalculate();
+		}
+
+		const Vec3& GetPosition() const { return m_Transform.Position; }
+		float GetRotation() const { return m_Transform.GetRotationZ(); }
+		const Transform& GetTransform() const { return m_Transform; }
 		const Mat4& GetProjection() const { return m_Projection; }
 		const Mat4& GetView() const { return m_View; }
 		const Mat4& GetViewProjection() const { return m_ViewProjection; }
@@ -41,12 +48,11 @@ namespace Lite {
 	private:
 		void Recalculate()
 		{
-			m_View = Mat4::Rotate(-m_Rotation, { 0.0f, 0.0f, 1.0f }) * Mat4::Translate(-m_Position);
+			m_View = m_Transform.GetViewMatrix();
 			m_ViewProjection = m_Projection * m_View;
 		}
 
-		Vec3 m_Position {};
-		float m_Rotation = 0.0f;
+		Transform m_Transform {};
 		Mat4 m_Projection = Mat4::Identity();
 		Mat4 m_View = Mat4::Identity();
 		Mat4 m_ViewProjection = Mat4::Identity();
