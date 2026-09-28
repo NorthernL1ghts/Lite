@@ -16,6 +16,11 @@ namespace Lite {
 		return Renderer::SetShaders(vertex, fragment);
 	}
 
+	void Renderer2D::SetViewProjection(const Mat4& viewProjection)
+	{
+		Renderer::SetViewProjection(viewProjection);
+	}
+
 	void Renderer2D::Shutdown()
 	{
 		Renderer::Shutdown();
@@ -24,6 +29,10 @@ namespace Lite {
 	void Renderer2D::BeginFrame()
 	{
 		Renderer::BeginFrame();
+	}
+
+	void Renderer2D::Draw()
+	{
 		if (!Renderer::IsFrameActive())
 			return;
 

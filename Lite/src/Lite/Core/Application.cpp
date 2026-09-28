@@ -79,6 +79,8 @@ namespace Lite {
 				for (auto& layer : m_LayerStack)
 					layer->OnUpdate();
 
+				Renderer2D::Draw();
+
 				m_ImGuiLayer->Begin();
 				for (auto& layer : m_LayerStack)
 					layer->OnImGuiRender();

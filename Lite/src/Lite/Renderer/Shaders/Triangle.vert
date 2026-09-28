@@ -5,15 +5,13 @@ layout(location = 1) in vec3 inBarycentric;
 
 layout(push_constant) uniform Constants
 {
-	float aspect;
+	mat4 viewProjection;
 } constants;
 
 layout(location = 0) out vec3 bary;
 
 void main()
 {
-	vec2 position = inPosition;
-	position.x /= max(constants.aspect, 0.001);
-	gl_Position = vec4(position, 0.0, 1.0);
+	gl_Position = constants.viewProjection * vec4(inPosition, 0.0, 1.0);
 	bary = inBarycentric;
 }

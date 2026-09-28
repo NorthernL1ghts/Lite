@@ -88,7 +88,7 @@ namespace Lite {
 		VkPushConstantRange pushConstant {};
 		pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		pushConstant.offset = 0;
-		pushConstant.size = sizeof(float);
+		pushConstant.size = sizeof(Mat4);
 
 		VkPipelineLayoutCreateInfo layoutInfo {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -142,14 +142,11 @@ namespace Lite {
 		}
 	}
 
-	void VulkanPipeline::Bind(VkCommandBuffer commandBuffer, VkExtent2D extent) const
+	void VulkanPipeline::Bind(VkCommandBuffer commandBuffer, VkExtent2D extent, const Mat4& viewProjection) const
 	{
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
 
-		float aspect = extent.height > 0
-			? static_cast<float>(extent.width) / static_cast<float>(extent.height)
-			: 1.0f;
-		vkCmdPushConstants(commandBuffer, m_Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float), &aspect);
+		vkCmdPushConstants(commandBuffer, m_Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Mat4), viewProjection.Data());
 
 		VkViewport viewport {};
 		viewport.width = static_cast<float>(extent.width);

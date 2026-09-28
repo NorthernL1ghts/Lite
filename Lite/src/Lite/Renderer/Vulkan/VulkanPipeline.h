@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VulkanUtils.h"
+#include "Lite/Math/Math.h"
 
 namespace Lite {
 
@@ -11,7 +12,7 @@ namespace Lite {
 	public:
 		bool Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader);
 		void Destroy();
-		void Bind(VkCommandBuffer commandBuffer, VkExtent2D extent) const;
+		void Bind(VkCommandBuffer commandBuffer, VkExtent2D extent, const Mat4& viewProjection) const;
 
 		VkPipeline Get() const { return m_Pipeline; }
 		VkPipelineLayout GetLayout() const { return m_Layout; }

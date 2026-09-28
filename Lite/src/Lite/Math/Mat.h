@@ -258,6 +258,23 @@ namespace Lite {
 			return result;
 		}
 
+		static Mat4 Orthographic(float left, float right, float bottom, float top, float zNear, float zFar)
+		{
+			Mat4 result;
+			result[0] = {};
+			result[1] = {};
+			result[2] = {};
+			result[3] = {};
+			result[0][0] = 2.0f / (right - left);
+			result[1][1] = 2.0f / (top - bottom);
+			result[2][2] = -1.0f / (zFar - zNear);
+			result[3][0] = -(right + left) / (right - left);
+			result[3][1] = -(top + bottom) / (top - bottom);
+			result[3][2] = -zNear / (zFar - zNear);
+			result[3][3] = 1.0f;
+			return result;
+		}
+
 		static Mat4 Perspective(float fovYRadians, float aspect, float zNear, float zFar)
 		{
 			float tanHalf = std::tan(fovYRadians * 0.5f);

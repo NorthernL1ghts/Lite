@@ -40,6 +40,7 @@ namespace {
 		bool FramebufferResized = false;
 		bool ContextReady = false;
 		bool Ready = false;
+		Lite::Mat4 ViewProjection = Lite::Mat4::Identity();
 	};
 
 	RendererState s_Renderer;
@@ -141,6 +142,16 @@ namespace Lite {
 		return true;
 	}
 
+	void Renderer::SetViewProjection(const Mat4& viewProjection)
+	{
+		s_Renderer.ViewProjection = viewProjection;
+	}
+
+	const Mat4& Renderer::GetViewProjection()
+	{
+		return s_Renderer.ViewProjection;
+	}
+
 	void Renderer::Shutdown()
 	{
 		if (s_Renderer.Device.Get())
@@ -165,6 +176,7 @@ namespace Lite {
 		s_Renderer.FramebufferResized = false;
 		s_Renderer.ContextReady = false;
 		s_Renderer.Ready = false;
+		s_Renderer.ViewProjection = Mat4::Identity();
 	}
 
 	void Renderer::BeginFrame()

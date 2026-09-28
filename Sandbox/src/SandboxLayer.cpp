@@ -2,6 +2,7 @@
 
 #include "Lite/Assets/AssetRegistry.h"
 #include "Lite/Core/Logger.h"
+#include "Lite/Renderer/Renderer.h"
 #include "Lite/Renderer/Renderer2D.h"
 
 SandboxLayer::SandboxLayer()
@@ -23,6 +24,16 @@ void SandboxLayer::OnAttach()
 	}
 
 	Lite::Renderer2D::SetShaders(*m_VertexShader, *m_FragmentShader);
+	m_Camera.SetProjection(2.0f, 16.0f / 9.0f);
+	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
+}
+
+void SandboxLayer::OnUpdate()
+{
+	VkExtent2D extent = Lite::Renderer::GetExtent();
+	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
+	m_Camera.SetProjection(2.0f, aspect);
+	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
 }
 
 void SandboxLayer::OnDetach()

@@ -2,6 +2,7 @@
 
 #include "Lite/Assets/Shader.h"
 #include "Lite/Core/Layer.h"
+#include "Lite/Renderer/OrthographicCamera.h"
 
 #include <memory>
 
@@ -12,9 +13,11 @@ public:
 
 	void OnAttach() override;
 	void OnDetach() override;
+	void OnUpdate() override;
 	void OnEvent(Lite::Event& event) override;
 
 private:
+	Lite::OrthographicCamera m_Camera;
 	std::shared_ptr<Lite::Shader> m_VertexShader;
 	std::shared_ptr<Lite::Shader> m_FragmentShader;
 };

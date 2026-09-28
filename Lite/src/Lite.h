@@ -14,6 +14,7 @@
 #include "Lite/Assets/AssetRegistry.h"
 #include "Lite/Assets/Shader.h"
 #include "Lite/Assets/Texture.h"
+#include "Lite/Renderer/OrthographicCamera.h"
 #include "Lite/Renderer/Buffer.h"
 #include "Lite/Renderer/VertexArray.h"
 #include "Lite/Renderer/Framebuffer.h"
