@@ -1,9 +1,11 @@
 #pragma once
 
 #include "Lite/Assets/Shader.h"
+#include "Lite/Assets/Texture.h"
 #include "Lite/Core/Layer.h"
 #include "Lite/Renderer/Material.h"
 #include "Lite/Renderer/OrthographicCamera.h"
+#include "Lite/Renderer/VertexArray.h"
 
 class SandboxLayer final : public Lite::Layer
 {
@@ -18,7 +20,13 @@ public:
 
 private:
 	Lite::OrthographicCamera m_Camera;
-	Lite::Ref<Lite::Shader> m_VertexShader;
-	Lite::Ref<Lite::Shader> m_FragmentShader;
-	Lite::Ref<Lite::Material> m_Material;
+	Lite::VertexArray m_Triangle;
+	Lite::VertexArray m_Background;
+	Lite::Ref<Lite::Shader> m_TriangleVertex;
+	Lite::Ref<Lite::Shader> m_TriangleFragment;
+	Lite::Ref<Lite::Shader> m_QuadVertex;
+	Lite::Ref<Lite::Shader> m_QuadFragment;
+	Lite::Ref<Lite::Texture> m_Checkerboard;
+	Lite::Ref<Lite::Material> m_TriangleMaterial;
+	Lite::Ref<Lite::Material> m_BackgroundMaterial;
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Lite/Renderer/VertexLayout.h"
 #include "VulkanUtils.h"
 
 namespace Lite {
@@ -9,7 +10,7 @@ namespace Lite {
 	class VulkanPipeline
 	{
 	public:
-		bool Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader, VkDescriptorSetLayout cameraLayout, VkDescriptorSetLayout materialLayout);
+		bool Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader, const VertexLayout& layout, bool blend, VkDescriptorSetLayout cameraLayout, VkDescriptorSetLayout materialLayout, VkDescriptorSetLayout textureLayout);
 		void Destroy();
 		void Bind(VkCommandBuffer commandBuffer, VkExtent2D extent) const;
 

@@ -79,9 +79,9 @@ namespace Lite {
 	void VulkanRenderPass::BeginRenderPass(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent)
 	{
 		VkClearValue clear {};
-		clear.color.float32[0] = 0.0f;
-		clear.color.float32[1] = 0.0f;
-		clear.color.float32[2] = 0.0f;
+		clear.color.float32[0] = 0.10f;
+		clear.color.float32[1] = 0.12f;
+		clear.color.float32[2] = 0.16f;
 		clear.color.float32[3] = 1.0f;
 
 		VkRenderPassBeginInfo info {};
@@ -97,6 +97,9 @@ namespace Lite {
 	void VulkanRenderPass::BeginDynamic(VkCommandBuffer commandBuffer, VkImageView imageView, VkExtent2D extent)
 	{
 		VkClearValue clear {};
+		clear.color.float32[0] = 0.10f;
+		clear.color.float32[1] = 0.12f;
+		clear.color.float32[2] = 0.16f;
 		clear.color.float32[3] = 1.0f;
 
 		VkRenderingAttachmentInfo color {};

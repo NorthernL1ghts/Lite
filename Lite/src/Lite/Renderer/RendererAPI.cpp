@@ -8,6 +8,7 @@ namespace Lite {
 	void RendererAPI::DrawIndexed(const VertexArray& vertexArray)
 	{
 		vertexArray.Bind();
+		Renderer::SetIndexCount(vertexArray.GetIndexCount());
 		vkCmdDrawIndexed(Renderer::GetCommandBuffer(), vertexArray.GetIndexCount(), 1, 0, 0, 0);
 	}
 

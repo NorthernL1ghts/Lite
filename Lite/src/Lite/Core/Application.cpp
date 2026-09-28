@@ -55,8 +55,8 @@ namespace Lite {
 
 		m_LayerStack.Clear();
 		m_ImGuiLayer = nullptr;
-		Renderer2D::Shutdown();
 		AssetRegistry::Shutdown();
+		Renderer2D::Shutdown();
 		Input::SetWindow(nullptr);
 		m_Window.reset();
 

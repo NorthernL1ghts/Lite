@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Lite/Core/Base.h"
+#include "VertexLayout.h"
 #include "UniformBuffer.h"
 #include "Vulkan/VulkanPipeline.h"
 
@@ -11,7 +12,7 @@ namespace Lite {
 	class LITE_API ShaderProgram
 	{
 	public:
-		bool Create(const Shader& vertex, const Shader& fragment, VkDescriptorSetLayout materialLayout);
+		bool Create(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, VkDescriptorSetLayout materialLayout, VkDescriptorSetLayout textureLayout);
 		void Destroy();
 		void Bind();
 

@@ -2,6 +2,7 @@
 
 #include "Material.h"
 #include "RendererAPI.h"
+#include "VertexArray.h"
 
 namespace Lite {
 
@@ -25,13 +26,13 @@ namespace Lite {
 		Renderer::BeginFrame();
 	}
 
-	void Renderer2D::Draw(Material& material)
+	void Renderer2D::Draw(const VertexArray& vertexArray, Material& material)
 	{
 		if (!Renderer::IsFrameActive())
 			return;
 
 		material.Bind();
-		RendererAPI::DrawIndexed(Renderer::GetVertexArray());
+		RendererAPI::DrawIndexed(vertexArray);
 	}
 
 	void Renderer2D::EndFrame()

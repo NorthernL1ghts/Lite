@@ -5,12 +5,12 @@
 
 namespace Lite {
 
-	bool ShaderProgram::Create(const Shader& vertex, const Shader& fragment, VkDescriptorSetLayout materialLayout)
+	bool ShaderProgram::Create(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, VkDescriptorSetLayout materialLayout, VkDescriptorSetLayout textureLayout)
 	{
 		if (!m_Uniforms.Create(sizeof(CameraUniform), 0, VK_SHADER_STAGE_VERTEX_BIT))
 			return false;
 
-		if (!m_Pipeline.Create(Renderer::GetDevice(), Renderer::GetRenderPass(), vertex, fragment, m_Uniforms.GetLayout(), materialLayout))
+		if (!m_Pipeline.Create(Renderer::GetDevice(), Renderer::GetRenderPass(), vertex, fragment, layout, blend, m_Uniforms.GetLayout(), materialLayout, textureLayout))
 		{
 			m_Uniforms.Destroy();
 			return false;

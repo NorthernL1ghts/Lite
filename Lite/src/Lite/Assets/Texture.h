@@ -4,7 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <vector>
+#include <vulkan/vulkan.h>
 
 namespace Lite {
 
@@ -13,20 +13,32 @@ namespace Lite {
 	public:
 		static constexpr AssetType Type = AssetType::Texture;
 
+		~Texture();
+
 		AssetType GetType() const override { return Type; }
 
 		uint32_t GetWidth() const { return m_Width; }
 		uint32_t GetHeight() const { return m_Height; }
-		const std::vector<uint8_t>& GetPixels() const { return m_Pixels; }
+		VkDescriptorSetLayout GetSetLayout() const { return m_SetLayout; }
+
+		void Bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout) const;
 
 	private:
 		friend class TextureHandler;
 
 		bool LoadFromFile(const std::filesystem::path& path);
+		void DestroyGpu();
 
 		uint32_t m_Width = 0;
 		uint32_t m_Height = 0;
-		std::vector<uint8_t> m_Pixels;
+		VkDevice m_Device = VK_NULL_HANDLE;
+		VkImage m_Image = VK_NULL_HANDLE;
+		VkDeviceMemory m_Memory = VK_NULL_HANDLE;
+		VkImageView m_View = VK_NULL_HANDLE;
+		VkSampler m_Sampler = VK_NULL_HANDLE;
+		VkDescriptorSetLayout m_SetLayout = VK_NULL_HANDLE;
+		VkDescriptorPool m_Pool = VK_NULL_HANDLE;
+		VkDescriptorSet m_Set = VK_NULL_HANDLE;
 	};
 
 	class TextureHandler : public AssetHandler

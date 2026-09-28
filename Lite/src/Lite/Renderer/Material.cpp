@@ -6,10 +6,10 @@
 
 namespace Lite {
 
-	Ref<Material> Material::Create(const Shader& vertex, const Shader& fragment)
+	Ref<Material> Material::Create(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture)
 	{
 		auto material = Ref<Material>(new Material());
-		if (!material->Init(vertex, fragment))
+		if (!material->Init(vertex, fragment, layout, blend, texture))
 			return nullptr;
 
 		return material;
@@ -20,12 +20,15 @@ namespace Lite {
 		Destroy();
 	}
 
-	bool Material::Init(const Shader& vertex, const Shader& fragment)
+	bool Material::Init(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture)
 	{
+		m_Texture = texture;
+
 		if (!m_Uniforms.Create(sizeof(MaterialUniform), 1, VK_SHADER_STAGE_FRAGMENT_BIT))
 			return false;
 
-		if (!m_Shader.Create(vertex, fragment, m_Uniforms.GetLayout()))
+		VkDescriptorSetLayout textureLayout = m_Texture ? m_Texture->GetSetLayout() : VK_NULL_HANDLE;
+		if (!m_Shader.Create(vertex, fragment, layout, blend, m_Uniforms.GetLayout(), textureLayout))
 		{
 			m_Uniforms.Destroy();
 			return false;
@@ -56,7 +59,10 @@ namespace Lite {
 		MaterialUniform uniform;
 		uniform.Color = m_Color;
 		m_Uniforms.SetData(&uniform, sizeof(uniform));
-		m_Uniforms.Bind(Renderer::GetCommandBuffer(), m_Shader.GetLayout());
+		VkCommandBuffer commandBuffer = Renderer::GetCommandBuffer();
+		m_Uniforms.Bind(commandBuffer, m_Shader.GetLayout());
+		if (m_Texture)
+			m_Texture->Bind(commandBuffer, m_Shader.GetLayout());
 	}
 
 }

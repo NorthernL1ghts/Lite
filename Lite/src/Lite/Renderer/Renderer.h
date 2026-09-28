@@ -12,8 +12,6 @@
 
 namespace Lite {
 
-	class VertexArray;
-
 	class LITE_API Renderer
 	{
 	public:
@@ -36,11 +34,10 @@ namespace Lite {
 		static VkRenderPass GetRenderPass();
 		static uint32_t GetImageCount();
 		static uint32_t GetMinImageCount();
+		static void SetIndexCount(uint32_t count);
 		static uint32_t GetIndexCount();
 		static VkExtent2D GetExtent();
 		static uint32_t GetFrameIndex();
-
-		static VertexArray& GetVertexArray();
 	};
 
 }

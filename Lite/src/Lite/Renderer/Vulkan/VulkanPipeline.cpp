@@ -4,7 +4,21 @@
 
 namespace Lite {
 
-	bool VulkanPipeline::Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader, VkDescriptorSetLayout cameraLayout, VkDescriptorSetLayout materialLayout)
+	namespace {
+
+		VkFormat AttributeFormat(Lite::VertexFormat format)
+		{
+			switch (format)
+			{
+			case Lite::VertexFormat::Float3: return VK_FORMAT_R32G32B32_SFLOAT;
+			case Lite::VertexFormat::Float4: return VK_FORMAT_R32G32B32A32_SFLOAT;
+			default: return VK_FORMAT_R32G32_SFLOAT;
+			}
+		}
+
+	}
+
+	bool VulkanPipeline::Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader, const VertexLayout& layout, bool blendEnabled, VkDescriptorSetLayout cameraLayout, VkDescriptorSetLayout materialLayout, VkDescriptorSetLayout textureLayout)
 	{
 		m_Device = device;
 
@@ -31,24 +45,24 @@ namespace Lite {
 
 		VkVertexInputBindingDescription binding {};
 		binding.binding = 0;
-		binding.stride = sizeof(float) * 5;
+		binding.stride = layout.Stride;
 		binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-		VkVertexInputAttributeDescription attributes[2] {};
-		attributes[0].location = 0;
-		attributes[0].binding = 0;
-		attributes[0].format = VK_FORMAT_R32G32_SFLOAT;
-		attributes[0].offset = 0;
-		attributes[1].location = 1;
-		attributes[1].binding = 0;
-		attributes[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributes[1].offset = sizeof(float) * 2;
+		VkVertexInputAttributeDescription attributes[8] {};
+		uint32_t attributeCount = layout.Count < 8u ? layout.Count : 8u;
+		for (uint32_t index = 0; index < attributeCount; ++index)
+		{
+			attributes[index].location = layout.Attributes[index].Location;
+			attributes[index].binding = 0;
+			attributes[index].format = AttributeFormat(layout.Attributes[index].Format);
+			attributes[index].offset = layout.Attributes[index].Offset;
+		}
 
 		VkPipelineVertexInputStateCreateInfo vertexInput {};
 		vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertexInput.vertexBindingDescriptionCount = 1;
 		vertexInput.pVertexBindingDescriptions = &binding;
-		vertexInput.vertexAttributeDescriptionCount = 2;
+		vertexInput.vertexAttributeDescriptionCount = attributeCount;
 		vertexInput.pVertexAttributeDescriptions = attributes;
 
 		VkPipelineInputAssemblyStateCreateInfo inputAssembly {};
@@ -73,6 +87,13 @@ namespace Lite {
 
 		VkPipelineColorBlendAttachmentState blendAttachment {};
 		blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		blendAttachment.blendEnable = blendEnabled ? VK_TRUE : VK_FALSE;
+		blendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+		blendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		blendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+		blendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+		blendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		blendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
 		VkPipelineColorBlendStateCreateInfo blend {};
 		blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -85,10 +106,11 @@ namespace Lite {
 		dynamic.dynamicStateCount = 2;
 		dynamic.pDynamicStates = dynamicStates;
 
-		VkDescriptorSetLayout setLayouts[] = { cameraLayout, materialLayout };
+		VkDescriptorSetLayout setLayouts[3] = { cameraLayout, materialLayout, textureLayout };
+		uint32_t setCount = textureLayout ? 3u : 2u;
 		VkPipelineLayoutCreateInfo layoutInfo {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		layoutInfo.setLayoutCount = 2;
+		layoutInfo.setLayoutCount = setCount;
 		layoutInfo.pSetLayouts = setLayouts;
 		if (!CheckVk(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_Layout), "create pipeline layout"))
 		{

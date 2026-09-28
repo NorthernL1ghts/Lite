@@ -5,6 +5,54 @@
 #include "Lite/Input/Input.h"
 #include "Lite/Renderer/Renderer.h"
 #include "Lite/Renderer/Renderer2D.h"
+#include "Lite/Renderer/VertexLayout.h"
+
+namespace {
+
+	Lite::VertexLayout TriangleLayout()
+	{
+		Lite::VertexLayout layout;
+		layout.Stride = sizeof(float) * 5;
+		layout.Count = 2;
+		layout.Attributes[0] = { 0, Lite::VertexFormat::Float2, 0 };
+		layout.Attributes[1] = { 1, Lite::VertexFormat::Float3, sizeof(float) * 2 };
+		return layout;
+	}
+
+	Lite::VertexLayout QuadLayout()
+	{
+		Lite::VertexLayout layout;
+		layout.Stride = sizeof(float) * 4;
+		layout.Count = 2;
+		layout.Attributes[0] = { 0, Lite::VertexFormat::Float2, 0 };
+		layout.Attributes[1] = { 1, Lite::VertexFormat::Float2, sizeof(float) * 2 };
+		return layout;
+	}
+
+	bool CreateTriangle(Lite::VertexArray& mesh)
+	{
+		const float vertices[] = {
+			 0.00f, -0.72f, 1.0f, 0.0f, 0.0f,
+			-0.78f,  0.58f, 0.0f, 1.0f, 0.0f,
+			 0.78f,  0.58f, 0.0f, 0.0f, 1.0f
+		};
+		const uint16_t indices[] = { 0, 1, 2 };
+		return mesh.Create(vertices, sizeof(vertices), indices, 3);
+	}
+
+	bool CreateBackground(Lite::VertexArray& mesh)
+	{
+		const float vertices[] = {
+			-4.0f, -4.0f, 0.0f, 0.0f,
+			 4.0f, -4.0f, 4.0f, 0.0f,
+			 4.0f,  4.0f, 4.0f, 4.0f,
+			-4.0f,  4.0f, 0.0f, 4.0f
+		};
+		const uint16_t indices[] = { 0, 1, 2, 2, 3, 0 };
+		return mesh.Create(vertices, sizeof(vertices), indices, 6);
+	}
+
+}
 
 SandboxLayer::SandboxLayer()
 	: Lite::Layer("Sandbox")
@@ -16,22 +64,34 @@ void SandboxLayer::OnAttach()
 	LITE_CLIENT_INFO("Layer attached");
 	// Lite::Time::SetFPS(60.0f);
 
-	m_VertexShader = Lite::AssetRegistry::Get().Load<Lite::Shader>("shaders/Triangle.vert.spv");
-	m_FragmentShader = Lite::AssetRegistry::Get().Load<Lite::Shader>("shaders/Triangle.frag.spv");
-	if (!m_VertexShader || !m_FragmentShader)
+	auto& assets = Lite::AssetRegistry::Get();
+	m_TriangleVertex = assets.Load<Lite::Shader>("assets/shaders/Triangle.vert.spv");
+	m_TriangleFragment = assets.Load<Lite::Shader>("assets/shaders/Triangle.frag.spv");
+	m_QuadVertex = assets.Load<Lite::Shader>("assets/shaders/Quad.vert.spv");
+	m_QuadFragment = assets.Load<Lite::Shader>("assets/shaders/Quad.frag.spv");
+	m_Checkerboard = assets.Load<Lite::Texture>("assets/Checkerboard.png");
+	if (!m_TriangleVertex || !m_TriangleFragment || !m_QuadVertex || !m_QuadFragment || !m_Checkerboard)
 	{
-		LITE_CLIENT_ERROR("Failed to load the triangle shader");
+		LITE_CLIENT_ERROR("Failed to load Sandbox assets");
 		return;
 	}
 
-	m_Material = Lite::Material::Create(*m_VertexShader, *m_FragmentShader);
-	if (!m_Material)
+	if (!CreateTriangle(m_Triangle) || !CreateBackground(m_Background))
 	{
-		LITE_CLIENT_ERROR("Failed to create the triangle material");
+		LITE_CLIENT_ERROR("Failed to create Sandbox meshes");
 		return;
 	}
 
-	m_Material->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	m_BackgroundMaterial = Lite::Material::Create(*m_QuadVertex, *m_QuadFragment, QuadLayout(), true, m_Checkerboard);
+	m_TriangleMaterial = Lite::Material::Create(*m_TriangleVertex, *m_TriangleFragment, TriangleLayout(), true);
+	if (!m_BackgroundMaterial || !m_TriangleMaterial)
+	{
+		LITE_CLIENT_ERROR("Failed to create Sandbox materials");
+		return;
+	}
+
+	m_BackgroundMaterial->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	m_TriangleMaterial->SetColor({ 1.0f, 1.0f, 1.0f, 0.72f });
 	m_Camera.SetProjection(2.0f, 16.0f / 9.0f);
 	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
 }
@@ -53,15 +113,24 @@ void SandboxLayer::OnRender()
 	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
 	m_Camera.SetProjection(2.0f, aspect);
 	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
-	if (m_Material)
-		Lite::Renderer2D::Draw(*m_Material);
+
+	if (m_BackgroundMaterial)
+		Lite::Renderer2D::Draw(m_Background, *m_BackgroundMaterial);
+	if (m_TriangleMaterial)
+		Lite::Renderer2D::Draw(m_Triangle, *m_TriangleMaterial);
 }
 
 void SandboxLayer::OnDetach()
 {
-	m_Material.reset();
-	m_VertexShader.reset();
-	m_FragmentShader.reset();
+	m_TriangleMaterial.reset();
+	m_BackgroundMaterial.reset();
+	m_Triangle.Destroy();
+	m_Background.Destroy();
+	m_Checkerboard.reset();
+	m_TriangleVertex.reset();
+	m_TriangleFragment.reset();
+	m_QuadVertex.reset();
+	m_QuadFragment.reset();
 	LITE_CLIENT_INFO("Layer detached");
 }
 

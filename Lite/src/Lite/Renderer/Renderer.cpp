@@ -1,7 +1,6 @@
 #include "Renderer.h"
 
 #include "Framebuffer.h"
-#include "VertexArray.h"
 
 #include "Lite/Core/Logger.h"
 
@@ -11,15 +10,6 @@
 
 namespace {
 
-	struct TriangleVertex
-	{
-		float x;
-		float y;
-		float baryX;
-		float baryY;
-		float baryZ;
-	};
-
 	struct RendererState
 	{
 		Lite::VulkanInstance Instance;
@@ -28,7 +18,6 @@ namespace {
 		Lite::VulkanSwapchain Swapchain;
 		Lite::VulkanRenderPass RenderPass;
 		Lite::Framebuffer Frames;
-		Lite::VertexArray Geometry;
 		Lite::VulkanCommandBuffer Commands;
 		Lite::VulkanSync Sync;
 		GLFWwindow* Window = nullptr;
@@ -38,22 +27,11 @@ namespace {
 		bool FramebufferResized = false;
 		bool ContextReady = false;
 		bool Ready = false;
+		uint32_t IndexCount = 0;
 		Lite::Mat4 ViewProjection = Lite::Mat4::Identity();
 	};
 
 	RendererState s_Renderer;
-
-	bool CreateGeometry()
-	{
-		const TriangleVertex vertices[] = {
-			{  0.00f, -0.72f, 1.0f, 0.0f, 0.0f },
-			{ -0.78f,  0.58f, 0.0f, 1.0f, 0.0f },
-			{  0.78f,  0.58f, 0.0f, 0.0f, 1.0f }
-		};
-		const uint16_t indices[] = { 0, 1, 2 };
-
-		return s_Renderer.Geometry.Create(vertices, sizeof(vertices), indices, static_cast<uint32_t>(sizeof(indices) / sizeof(uint16_t)));
-	}
 
 	bool RecreateSwapchain()
 	{
@@ -109,8 +87,6 @@ namespace Lite {
 			s_Renderer.Swapchain.GetImageViews(),
 			s_Renderer.Swapchain.GetExtent()))
 			return;
-		if (!CreateGeometry())
-			return;
 		if (!s_Renderer.Commands.Create(s_Renderer.Device.Get(), s_Renderer.Device.GetQueueFamily(), VulkanSync::FramesInFlight))
 			return;
 		if (!s_Renderer.Sync.Create(s_Renderer.Device.Get(), VulkanSync::FramesInFlight, s_Renderer.Swapchain.GetImageCount()))
@@ -138,7 +114,6 @@ namespace Lite {
 
 		s_Renderer.Sync.Destroy();
 		s_Renderer.Commands.Destroy();
-		s_Renderer.Geometry.Destroy();
 		s_Renderer.Frames.Destroy();
 		s_Renderer.RenderPass.Destroy();
 		s_Renderer.Swapchain.Destroy();
@@ -324,9 +299,14 @@ namespace Lite {
 		return s_Renderer.Swapchain.GetMinImageCount();
 	}
 
+	void Renderer::SetIndexCount(uint32_t count)
+	{
+		s_Renderer.IndexCount = count;
+	}
+
 	uint32_t Renderer::GetIndexCount()
 	{
-		return s_Renderer.Geometry.GetIndexCount();
+		return s_Renderer.IndexCount;
 	}
 
 	VkExtent2D Renderer::GetExtent()
@@ -337,11 +317,6 @@ namespace Lite {
 	uint32_t Renderer::GetFrameIndex()
 	{
 		return s_Renderer.CurrentFrame;
-	}
-
-	VertexArray& Renderer::GetVertexArray()
-	{
-		return s_Renderer.Geometry;
 	}
 
 }
