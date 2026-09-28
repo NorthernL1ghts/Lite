@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "Assert.h"
 #include "Logger.h"
 #include "Window.h"
 
@@ -9,9 +10,29 @@
 
 namespace Lite {
 
+	Application* Application::s_Instance = nullptr;
+
 	Application::Application(const WindowProps& props)
-		: m_Window(Window::Create(props))
+		: m_Props(props)
 	{
+		InitCore();
+	}
+
+	Application::~Application()
+	{
+		ShutdownCore();
+	}
+
+	void Application::InitCore()
+	{
+		Logger::Init();
+		LITE_CORE_ASSERT(s_Instance == nullptr, "Application already exists");
+		if (s_Instance)
+			return;
+
+		s_Instance = this;
+
+		m_Window = Window::Create(m_Props);
 		m_Window->SetEventCallback([this](Event& event) { OnEvent(event); });
 		Input::SetWindow(m_Window->GetNativeHandle());
 		Renderer2D::Init(m_Window->GetNativeHandle());
@@ -20,14 +41,25 @@ namespace Lite {
 		m_ImGuiLayer = imgui.get();
 		PushOverlay(std::move(imgui));
 
+		m_Initialized = true;
 		LITE_INFO("Application created");
 	}
 
-	Application::~Application()
+	void Application::ShutdownCore()
 	{
+		if (!m_Initialized)
+			return;
+
 		m_LayerStack.Clear();
+		m_ImGuiLayer = nullptr;
 		Renderer2D::Shutdown();
+		Input::SetWindow(nullptr);
+		m_Window.reset();
+
+		m_Initialized = false;
+		s_Instance = nullptr;
 		LITE_INFO("Application destroyed");
+		Logger::Shutdown();
 	}
 
 	void Application::Run()

@@ -25,6 +25,13 @@ namespace Lite {
 		s_ClientLogger->set_level(spdlog::level::trace);
 	}
 
+	void Logger::Shutdown()
+	{
+		s_ClientLogger.reset();
+		s_CoreLogger.reset();
+		spdlog::shutdown();
+	}
+
 	std::shared_ptr<spdlog::logger>& Logger::GetCoreLogger()
 	{
 		return s_CoreLogger;

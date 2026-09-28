@@ -24,9 +24,15 @@ namespace Lite {
 		void PopOverlay(Layer* layer);
 
 	private:
+		void InitCore();
+		void ShutdownCore();
 		void OnEvent(Event& event);
 
+		static Application* s_Instance;
+
+		WindowProps m_Props;
 		bool m_Running = true;
+		bool m_Initialized = false;
 		std::unique_ptr<Window> m_Window;
 		ImGuiLayer* m_ImGuiLayer = nullptr;
 		LayerStack m_LayerStack;
