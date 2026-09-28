@@ -1,5 +1,8 @@
 #pragma once
 
+#include <Inspector.h>
+#include <SceneBrowser.h>
+
 #include <Lite/Core/Layer.h>
 #include <Lite/Renderer/OrthographicCamera.h>
 #include <Lite/Scene/Scene.h>
@@ -21,24 +24,15 @@ public:
 
 private:
 	void DrawMenu();
-	void DrawOpenDialog();
-	void DrawSaveDialog();
-	void OpenBrowser();
-	void DrawFileBrowser(bool save);
-	void ApplyDirectoryText();
-	std::string BrowserSelection() const;
 	void DrawScene();
 	void DrawViewport();
-	void DrawInspector();
 	void DrawConsole();
-	void DrawInstrumentation();
 
 	void NewScene();
 	void OpenScene(const std::string& path);
 	void SaveScene();
 	void SyncName();
 	void PickObject(float mouseX, float mouseY);
-	void SyncEntityFields(Lite::Entity entity);
 	void ApplyPlayCamera();
 
 	Lite::OrthographicCamera m_Camera;
@@ -53,17 +47,9 @@ private:
 	Lite::Scope<Lite::Scene> m_Scene;
 	Lite::Scene* m_NamedScene = nullptr;
 	char m_Name[128] {};
-	char m_ObjectName[128] {};
-	char m_ShaderText[128] {};
-	char m_TextureText[260] {};
 	uint32_t m_Selected = 0;
-	uint32_t m_SyncedId = 0;
-	std::string m_BrowserDirectory;
-	char m_DirectoryText[512] {};
-	char m_FileName[256] {};
-	bool m_ShowOpen = false;
-	bool m_ShowSave = false;
-	bool m_FocusFile = false;
+	Inspector m_Inspector;
+	SceneBrowser m_Browser;
 	bool m_ShowInfo = false;
 	bool m_InfoPlaced = false;
 };

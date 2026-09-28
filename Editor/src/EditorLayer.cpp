@@ -2,35 +2,26 @@
 
 #include <Lite/Core/Events/KeyEvent.h>
 #include <Lite/Core/Events/MouseEvent.h>
-#include <Lite/Assets/AssetRegistry.h>
-#include <Lite/Assets/Texture.h>
-#include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Core/Log/Logger.h>
 #include <Lite/Core/Profile/Profiler.h>
-#include <Lite/Core/Time.h>
+#include <Lite/ImGui/Instrumentation.h>
 #include <Lite/Input/Input.h>
 #include <Lite/Input/KeyCodes.h>
 #include <Lite/Renderer/Renderer.h>
 #include <Lite/Renderer/Renderer2D.h>
 #include <Lite/Scene/Console.h>
-#include <Lite/Scene/Scene.h>
 #include <Lite/Scene/SceneCamera.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <filesystem>
 #include <format>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace {
-
-	const ImVec4 kLabelColor { 0.62f, 0.68f, 0.76f, 1.0f };
 
 	const char* kEditorWindows[] = { "Scene", "Viewport", "Inspector", "Console" };
 
@@ -72,193 +63,6 @@ namespace {
 		ImGui::DockBuilderDockWindow("Inspector", right);
 		ImGui::DockBuilderDockWindow("Console", bottom);
 		ImGui::DockBuilderFinish(dockspaceId);
-	}
-
-	void BeginDocked(const char* beside, const char* name, bool place)
-	{
-		if (place)
-		{
-			ImGuiWindow* host = ImGui::FindWindowByName(beside);
-			if (host != nullptr && host->DockId != 0)
-				ImGui::SetNextWindowDockID(host->DockId, ImGuiCond_Always);
-		}
-
-		ImGui::Begin(name);
-	}
-
-	bool BeginRows(const char* id)
-	{
-		if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_PadOuterX | ImGuiTableFlags_SizingStretchProp))
-			return false;
-
-		ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthStretch, 0.46f);
-		ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 0.54f);
-		return true;
-	}
-
-	void Row(const char* label, std::string_view value)
-	{
-		ImGui::TableNextRow();
-		ImGui::TableSetColumnIndex(0);
-		ImGui::PushStyleColor(ImGuiCol_Text, kLabelColor);
-		ImGui::TextUnformatted(label);
-		ImGui::PopStyleColor();
-		ImGui::TableSetColumnIndex(1);
-		ImGui::TextUnformatted(value.data(), value.data() + value.size());
-	}
-
-	const char* FormatName(VkFormat format)
-	{
-		switch (format)
-		{
-		case VK_FORMAT_B8G8R8A8_SRGB: return "B8G8R8A8 sRGB";
-		case VK_FORMAT_R8G8B8A8_SRGB: return "R8G8B8A8 sRGB";
-		case VK_FORMAT_B8G8R8A8_UNORM: return "B8G8R8A8 UNORM";
-		case VK_FORMAT_R8G8B8A8_UNORM: return "R8G8B8A8 UNORM";
-		default: return "Other";
-		}
-	}
-
-	const char* ColorSpaceName(VkColorSpaceKHR space)
-	{
-		switch (space)
-		{
-		case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: return "sRGB nonlinear";
-		default: return "Other";
-		}
-	}
-
-	const char* PresentModeName(VkPresentModeKHR mode)
-	{
-		switch (mode)
-		{
-		case VK_PRESENT_MODE_MAILBOX_KHR: return "Mailbox";
-		case VK_PRESENT_MODE_FIFO_KHR: return "FIFO";
-		case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return "FIFO relaxed";
-		case VK_PRESENT_MODE_IMMEDIATE_KHR: return "Immediate";
-		default: return "Other";
-		}
-	}
-
-	std::string DeviceMemory()
-	{
-		VkPhysicalDeviceMemoryProperties memory {};
-		vkGetPhysicalDeviceMemoryProperties(Lite::Renderer::GetPhysicalDevice(), &memory);
-
-		VkDeviceSize local = 0;
-		for (uint32_t index = 0; index < memory.memoryHeapCount; ++index)
-		{
-			if (memory.memoryHeaps[index].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
-				local += memory.memoryHeaps[index].size;
-		}
-
-		double gigabytes = static_cast<double>(local) / (1024.0 * 1024.0 * 1024.0);
-		return std::format("{:.1f} GB", gigabytes);
-	}
-
-	bool Contains(Lite::Vec2 point, const Lite::Vec2* vertices, int count)
-	{
-		bool positive = false;
-		bool negative = false;
-		for (int index = 0; index < count; ++index)
-		{
-			const Lite::Vec2& current = vertices[index];
-			const Lite::Vec2& next = vertices[(index + 1) % count];
-			float cross = (next.x - current.x) * (point.y - current.y) - (next.y - current.y) * (point.x - current.x);
-			if (cross > 0.0f)
-				positive = true;
-			if (cross < 0.0f)
-				negative = true;
-			if (positive && negative)
-				return false;
-		}
-
-		return true;
-	}
-
-	const char* CameraLabel(const Lite::CameraComponent& camera)
-	{
-		return camera.Projection == Lite::CameraProjection::Perspective ? "Perspective Camera" : "Orthographic Camera";
-	}
-
-	const char* MeshLabel(Lite::MeshType type)
-	{
-		switch (type)
-		{
-			case Lite::MeshType::Triangle: return "Triangle";
-			case Lite::MeshType::Sprite: return "Sprite";
-			default: return "Quad";
-		}
-	}
-
-	const char* BodyLabel(Lite::BodyType type)
-	{
-		switch (type)
-		{
-			case Lite::BodyType::Static: return "Static Rigidbody";
-			case Lite::BodyType::Kinematic: return "Kinematic Rigidbody";
-			default: return "Dynamic Rigidbody";
-		}
-	}
-
-	Lite::Mat4 FitToWindow(const Lite::Mat4& viewProjection, float viewportX, float viewportY, float viewportW, float viewportH, float windowW, float windowH)
-	{
-		if (windowW <= 1.0f || windowH <= 1.0f || viewportW <= 1.0f || viewportH <= 1.0f)
-			return viewProjection;
-
-		float left = (viewportX / windowW) * 2.0f - 1.0f;
-		float right = ((viewportX + viewportW) / windowW) * 2.0f - 1.0f;
-		float top = 1.0f - (viewportY / windowH) * 2.0f;
-		float bottom = 1.0f - ((viewportY + viewportH) / windowH) * 2.0f;
-
-		Lite::Mat4 fit = Lite::Mat4::Identity();
-		fit[0][0] = (right - left) * 0.5f;
-		fit[1][1] = (top - bottom) * 0.5f;
-		fit[3][0] = (right + left) * 0.5f;
-		fit[3][1] = (top + bottom) * 0.5f;
-		return fit * viewProjection;
-	}
-
-	bool Hits(Lite::MeshType type, const Lite::Transform& transform, Lite::Vec2 point)
-	{
-		if (type == Lite::MeshType::Triangle)
-		{
-			const Lite::Vec2 local[3] = {
-				{ 0.00f, -0.72f },
-				{ -0.78f, 0.58f },
-				{ 0.78f, 0.58f }
-			};
-			Lite::Vec2 world[3];
-			for (int index = 0; index < 3; ++index)
-			{
-				Lite::Vec3 transformed = transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
-				world[index] = { transformed.x, transformed.y };
-			}
-			return Contains(point, world, 3);
-		}
-
-		const Lite::Vec2 local[4] = {
-			{ -0.5f, -0.5f },
-			{ 0.5f, -0.5f },
-			{ 0.5f, 0.5f },
-			{ -0.5f, 0.5f }
-		};
-		Lite::Vec2 world[4];
-		for (int index = 0; index < 4; ++index)
-		{
-			Lite::Vec3 transformed = transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
-			world[index] = { transformed.x, transformed.y };
-		}
-		return Contains(point, world, 4);
-	}
-
-	void ColorField(const char* label, Lite::Vec4& color)
-	{
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextUnformatted(label);
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(-1.0f);
-		ImGui::ColorEdit4(label, &color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoLabel);
 	}
 
 	void DrawPlay(ImDrawList* draw, ImVec2 min, ImVec2 max, ImU32 color)
@@ -394,7 +198,7 @@ void EditorLayer::NewScene()
 	m_Scene->Create();
 	Lite::Scene::SetActive(m_Scene.get());
 	m_Selected = 0;
-	m_SyncedId = 0;
+	m_Inspector.Reset();
 	SyncName();
 }
 
@@ -418,7 +222,7 @@ void EditorLayer::OpenScene(const std::string& path)
 			break;
 		}
 	}
-	m_SyncedId = 0;
+	m_Inspector.Reset();
 	SyncName();
 }
 
@@ -429,25 +233,13 @@ void EditorLayer::SyncName()
 	std::snprintf(m_Name, sizeof(m_Name), "%s", name);
 }
 
-void EditorLayer::SyncEntityFields(Lite::Entity entity)
-{
-	if (m_SyncedId == entity.GetId())
-		return;
-
-	m_SyncedId = entity.GetId();
-	std::snprintf(m_ObjectName, sizeof(m_ObjectName), "%s", entity.GetName().c_str());
-	Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>();
-	std::snprintf(m_ShaderText, sizeof(m_ShaderText), "%s", material != nullptr ? material->Shader.c_str() : "");
-	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material != nullptr ? material->TexturePath.c_str() : "");
-}
-
 void EditorLayer::SaveScene()
 {
 	if (m_Scene == nullptr)
 		return;
 
 	if (m_Scene->GetPath().empty())
-		m_ShowSave = true;
+		m_Browser.ShowSave();
 	else if (m_Scene->Save())
 		SyncName();
 }
@@ -466,7 +258,7 @@ void EditorLayer::ApplyPlayCamera()
 	Lite::CameraComponent camera;
 	camera.Size = m_ViewSize;
 	Lite::Mat4 viewProjection = m_Scene->ViewProjection(aspect, m_Camera.GetTransform(), camera);
-	m_ViewProjection = FitToWindow(viewProjection, m_ViewportX, m_ViewportY, m_ViewportW, m_ViewportH, m_WindowW, m_WindowH);
+	m_ViewProjection = Lite::FitViewport(viewProjection, m_ViewportX, m_ViewportY, m_ViewportW, m_ViewportH, m_WindowW, m_WindowH);
 	Lite::Renderer2D::SetViewProjection(m_ViewProjection);
 }
 
@@ -475,58 +267,13 @@ void EditorLayer::PickObject(float mouseX, float mouseY)
 	if (m_Scene == nullptr || m_Scene->IsPlaying())
 		return;
 
-	if (m_WindowW <= 1.0f || m_WindowH <= 1.0f)
+	uint32_t id = m_Scene->Pick(m_ViewProjection, mouseX, mouseY, m_WindowW, m_WindowH);
+	if (id == 0)
 		return;
 
-	float ndcX = (mouseX / m_WindowW) * 2.0f - 1.0f;
-	float ndcY = 1.0f - (mouseY / m_WindowH) * 2.0f;
-	Lite::Vec4 world = m_ViewProjection.Inverse() * Lite::Vec4(ndcX, ndcY, 0.0f, 1.0f);
-	if (world.w != 0.0f)
-		world /= world.w;
-
-	struct Candidate
-	{
-		Lite::Entity Entity;
-		int Order = 0;
-		size_t Index = 0;
-	};
-
-	std::vector<Lite::Entity> entities = m_Scene->GetEntities();
-	std::vector<Candidate> candidates;
-	candidates.reserve(entities.size());
-	for (size_t index = 0; index < entities.size(); ++index)
-	{
-		Lite::Entity entity = entities[index];
-		if (entity.Get<Lite::MeshComponent>() == nullptr || entity.Get<Lite::TransformComponent>() == nullptr)
-			continue;
-
-		int order = 0;
-		if (Lite::SortingComponent* sorting = entity.Get<Lite::SortingComponent>())
-			order = sorting->Order;
-		candidates.push_back({ entity, order, index });
-	}
-
-	std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate& left, const Candidate& right)
-	{
-		if (left.Order != right.Order)
-			return left.Order > right.Order;
-		return left.Index > right.Index;
-	});
-
-	for (Candidate& candidate : candidates)
-	{
-		Lite::MeshComponent* mesh = candidate.Entity.Get<Lite::MeshComponent>();
-		Lite::TransformComponent* transform = candidate.Entity.Get<Lite::TransformComponent>();
-		if (mesh == nullptr || transform == nullptr)
-			continue;
-		if (!Hits(mesh->Type, transform->Local, { world.x, world.y }))
-			continue;
-
-		if (m_Selected != candidate.Entity.GetId())
-			Lite::Console::Log(std::format("Selected: {}", candidate.Entity.GetName()));
-		m_Selected = candidate.Entity.GetId();
-		return;
-	}
+	if (m_Selected != id)
+		Lite::Console::Log(std::format("Selected: {}", m_Scene->GetEntity(id).GetName()));
+	m_Selected = id;
 }
 
 void EditorLayer::OnEvent(Lite::Event& event)
@@ -559,7 +306,7 @@ void EditorLayer::OnEvent(Lite::Event& event)
 
 		if (control && key.GetKeyCode() == Lite::Key::O)
 		{
-			m_ShowOpen = true;
+			m_Browser.ShowOpen();
 			return true;
 		}
 
@@ -616,11 +363,11 @@ void EditorLayer::DrawMenu()
 		if (ImGui::MenuItem("New Scene", "Ctrl+N"))
 			NewScene();
 		if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
-			m_ShowOpen = true;
+			m_Browser.ShowOpen();
 		if (ImGui::MenuItem("Save Scene", "Ctrl+S", false, m_Scene != nullptr))
 			SaveScene();
 		if (ImGui::MenuItem("Save Scene As...", nullptr, false, m_Scene != nullptr))
-			m_ShowSave = true;
+			m_Browser.ShowSave();
 		ImGui::EndMenu();
 	}
 
@@ -658,242 +405,6 @@ void EditorLayer::DrawMenu()
 	ImGui::PopStyleVar();
 }
 
-void EditorLayer::OpenBrowser()
-{
-	std::filesystem::path directory;
-	std::string fileName = m_Scene != nullptr ? m_Scene->GetName() : "Untitled";
-	if (m_Scene != nullptr && !m_Scene->GetPath().empty())
-	{
-		std::filesystem::path current(m_Scene->GetPath());
-		if (current.has_parent_path())
-			directory = current.parent_path();
-		if (!current.stem().empty())
-			fileName = current.stem().string();
-	}
-
-	if (directory.empty())
-	{
-		std::string scenes = Lite::Scene::Locate("assets/scenes");
-		if (!scenes.empty())
-			directory = scenes;
-	}
-
-	if (directory.empty())
-		directory = Lite::FileSystem::ExecutableDirectory() / "assets" / "scenes";
-
-	std::error_code error;
-	if (!std::filesystem::is_directory(directory, error))
-		directory = Lite::FileSystem::ExecutableDirectory();
-
-	m_BrowserDirectory = directory.string();
-	std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
-	std::snprintf(m_FileName, sizeof(m_FileName), "%s", fileName.c_str());
-	m_FocusFile = true;
-}
-
-void EditorLayer::ApplyDirectoryText()
-{
-	std::filesystem::path typed(m_DirectoryText);
-	if (typed.empty())
-	{
-		m_BrowserDirectory.clear();
-		return;
-	}
-
-	std::error_code error;
-	if (std::filesystem::is_directory(typed, error))
-	{
-		m_BrowserDirectory = std::filesystem::absolute(typed, error).string();
-		std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
-		return;
-	}
-
-	if (std::filesystem::is_regular_file(typed, error))
-	{
-		m_BrowserDirectory = std::filesystem::absolute(typed.parent_path(), error).string();
-		std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
-		std::snprintf(m_FileName, sizeof(m_FileName), "%s", typed.stem().string().c_str());
-	}
-}
-
-std::string EditorLayer::BrowserSelection() const
-{
-	std::filesystem::path entered(m_FileName);
-	if (entered.empty())
-		return {};
-
-	if (!entered.is_absolute())
-	{
-		if (m_BrowserDirectory.empty())
-			return {};
-		entered = std::filesystem::path(m_BrowserDirectory) / entered;
-	}
-
-	if (entered.extension().empty())
-		entered.replace_extension(".scene");
-
-	return entered.lexically_normal().string();
-}
-
-void EditorLayer::DrawFileBrowser(bool save)
-{
-	ImGuiInputTextFlags directoryFlags = ImGuiInputTextFlags_EnterReturnsTrue;
-	ImGui::SetNextItemWidth(-1.0f);
-	if (ImGui::InputText("##Directory", m_DirectoryText, sizeof(m_DirectoryText), directoryFlags) || ImGui::IsItemDeactivatedAfterEdit())
-		ApplyDirectoryText();
-
-	ImGui::BeginChild(save ? "##SaveFiles" : "##OpenFiles", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.0f), ImGuiChildFlags_Borders);
-
-	if (m_BrowserDirectory.empty())
-	{
-		for (char letter = 'A'; letter <= 'Z'; ++letter)
-		{
-			std::string root = std::string(1, letter) + ":\\";
-			std::error_code error;
-			if (!std::filesystem::exists(root, error))
-				continue;
-			if (ImGui::Selectable(root.c_str()))
-			{
-				m_BrowserDirectory = root;
-				std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
-			}
-		}
-	}
-	else
-	{
-		std::filesystem::path current(m_BrowserDirectory);
-		if (ImGui::Selectable(".."))
-		{
-			std::filesystem::path parent = current.parent_path();
-			if (parent.empty() || parent == current)
-				m_BrowserDirectory.clear();
-			else
-				m_BrowserDirectory = parent.string();
-			std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
-		}
-
-		struct BrowserEntry
-		{
-			std::string Label;
-			std::filesystem::path Path;
-			bool Directory = false;
-		};
-
-		std::vector<BrowserEntry> entries;
-		std::error_code error;
-		for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(current, error))
-		{
-			std::error_code fileError;
-			bool directory = entry.is_directory(fileError);
-			if (fileError)
-				continue;
-			if (!directory && entry.path().extension() != ".scene")
-				continue;
-
-			BrowserEntry item;
-			item.Directory = directory;
-			item.Path = entry.path();
-			item.Label = directory ? entry.path().filename().string() + "/" : entry.path().filename().string();
-			entries.push_back(std::move(item));
-		}
-
-		std::sort(entries.begin(), entries.end(), [](const BrowserEntry& left, const BrowserEntry& right)
-		{
-			if (left.Directory != right.Directory)
-				return left.Directory;
-			return left.Label < right.Label;
-		});
-
-		for (const BrowserEntry& entry : entries)
-		{
-			bool selected = !entry.Directory && entry.Path.stem().string() == m_FileName;
-			if (!ImGui::Selectable(entry.Label.c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick))
-				continue;
-
-			if (entry.Directory)
-			{
-				m_BrowserDirectory = entry.Path.string();
-				std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
-				continue;
-			}
-
-			std::snprintf(m_FileName, sizeof(m_FileName), "%s", entry.Path.stem().string().c_str());
-			if (!save && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-			{
-				OpenScene(entry.Path.string());
-				ImGui::CloseCurrentPopup();
-			}
-		}
-	}
-
-	ImGui::EndChild();
-
-	ImGui::AlignTextToFramePadding();
-	ImGui::TextUnformatted("Name");
-	ImGui::SameLine();
-	if (m_FocusFile)
-		ImGui::SetKeyboardFocusHere();
-	ImGui::SetNextItemWidth(-1.0f);
-	bool confirm = ImGui::InputText("##FileName", m_FileName, sizeof(m_FileName), ImGuiInputTextFlags_EnterReturnsTrue);
-	m_FocusFile = false;
-
-	const char* action = save ? "Save" : "Open";
-	if ((ImGui::Button(action, ImVec2(96.0f, 0.0f)) || confirm))
-	{
-		std::string path = BrowserSelection();
-		if (!path.empty())
-		{
-			if (save && m_Scene != nullptr && m_Scene->SaveAs(path))
-			{
-				SyncName();
-				ImGui::CloseCurrentPopup();
-			}
-			else if (!save)
-			{
-				OpenScene(path);
-				ImGui::CloseCurrentPopup();
-			}
-		}
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)))
-		ImGui::CloseCurrentPopup();
-}
-
-void EditorLayer::DrawOpenDialog()
-{
-	if (m_ShowOpen)
-	{
-		OpenBrowser();
-		ImGui::OpenPopup("Open Scene");
-		m_ShowOpen = false;
-	}
-
-	ImGui::SetNextWindowSize(ImVec2(560.0f, 460.0f), ImGuiCond_Appearing);
-	if (!ImGui::BeginPopupModal("Open Scene", nullptr, ImGuiWindowFlags_NoResize))
-		return;
-
-	DrawFileBrowser(false);
-	ImGui::EndPopup();
-}
-
-void EditorLayer::DrawSaveDialog()
-{
-	if (m_ShowSave)
-	{
-		OpenBrowser();
-		ImGui::OpenPopup("Save Scene");
-		m_ShowSave = false;
-	}
-
-	ImGui::SetNextWindowSize(ImVec2(560.0f, 460.0f), ImGuiCond_Appearing);
-	if (!ImGui::BeginPopupModal("Save Scene", nullptr, ImGuiWindowFlags_NoResize))
-		return;
-
-	DrawFileBrowser(true);
-	ImGui::EndPopup();
-}
-
 void EditorLayer::OnImGuiRender()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -928,12 +439,14 @@ void EditorLayer::OnImGuiRender()
 
 	DrawScene();
 	DrawViewport();
-	DrawInspector();
+	m_Inspector.Draw(m_Selected);
 	DrawConsole();
 	if (m_ShowInfo)
-		DrawInstrumentation();
-	DrawOpenDialog();
-	DrawSaveDialog();
+	{
+		Lite::DrawInstrumentation(!m_InfoPlaced);
+		m_InfoPlaced = true;
+	}
+	m_Browser.Draw(m_Scene.get(), [this](const std::string& path) { OpenScene(path); }, [this] { SyncName(); });
 }
 
 void EditorLayer::DrawScene()
@@ -959,6 +472,9 @@ void EditorLayer::DrawScene()
 	ImGui::TextDisabled("%s  %s", m_Scene->GetName().c_str(), playback);
 	if (!m_Scene->GetPath().empty())
 		ImGui::TextWrapped("%s", m_Scene->GetPath().c_str());
+
+	size_t componentCount = 0;
+	const Lite::ComponentEntry* catalog = Lite::ComponentCatalog(componentCount);
 	for (Lite::Entity entity : m_Scene->GetEntities())
 	{
 		std::string label = std::format("{}##entity{}", entity.GetName(), entity.GetId());
@@ -966,24 +482,11 @@ void EditorLayer::DrawScene()
 			m_Selected = entity.GetId();
 
 		ImGui::Indent();
-		if (entity.Has<Lite::TransformComponent>())
-			ImGui::TextDisabled("Transform");
-		if (Lite::CameraComponent* camera = entity.Get<Lite::CameraComponent>())
-			ImGui::TextDisabled("%s", CameraLabel(*camera));
-		if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
-			ImGui::TextDisabled("%s", MeshLabel(mesh->Type));
-		if (entity.Has<Lite::MaterialComponent>())
-			ImGui::TextDisabled("Material");
-		if (entity.Has<Lite::SpinComponent>())
-			ImGui::TextDisabled("Spin");
-		if (Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>())
-			ImGui::TextDisabled("%s", BodyLabel(body->Type));
-		if (entity.Has<Lite::BoxCollider2DComponent>())
-			ImGui::TextDisabled("Box Collider 2D");
-		if (entity.Has<Lite::CircleCollider2DComponent>())
-			ImGui::TextDisabled("Circle Collider 2D");
-		if (entity.Has<Lite::SortingComponent>())
-			ImGui::TextDisabled("Sorting");
+		for (size_t index = 0; index < componentCount; ++index)
+		{
+			if (const char* component = catalog[index].Label(entity))
+				ImGui::TextDisabled("%s", component);
+		}
 		ImGui::Unindent();
 	}
 	ImGui::End();
@@ -1012,203 +515,6 @@ void EditorLayer::DrawViewport()
 	ImGui::End();
 }
 
-void EditorLayer::DrawInspector()
-{
-	ImGui::Begin("Inspector");
-	Lite::Scene* scene = Lite::Scene::GetActive();
-	Lite::Entity entity = scene != nullptr ? scene->GetEntity(m_Selected) : Lite::Entity{};
-	if (!entity)
-	{
-		ImGui::TextDisabled("No selection");
-		ImGui::End();
-		return;
-	}
-
-	SyncEntityFields(entity);
-	bool editing = scene->GetPlayback() != Lite::ScenePlayback::Playing;
-	if (!editing)
-		ImGui::BeginDisabled();
-
-	ImGui::SetNextItemWidth(-1.0f);
-	if (ImGui::InputText("##ObjectName", m_ObjectName, sizeof(m_ObjectName)))
-		entity.SetName(m_ObjectName);
-
-	if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
-	{
-		ImGui::SeparatorText("Transform");
-		ImGui::DragFloat3("Position", &transform->Local.Position.x, 0.01f);
-		float rotation = transform->Local.GetRotationZ();
-		if (ImGui::DragFloat("Rotation", &rotation, 0.01f))
-			transform->Local.SetRotationZ(rotation);
-		ImGui::DragFloat3("Scale", &transform->Local.Scale.x, 0.01f);
-	}
-
-	if (Lite::CameraComponent* camera = entity.Get<Lite::CameraComponent>())
-	{
-		ImGui::SeparatorText(CameraLabel(*camera));
-		const char* projections[] = { "Orthographic", "Perspective" };
-		int projection = static_cast<int>(camera->Projection);
-		if (ImGui::Combo("Projection", &projection, projections, 2))
-		{
-			camera->Projection = static_cast<Lite::CameraProjection>(projection);
-			if (camera->Projection == Lite::CameraProjection::Perspective && camera->Near <= 0.0f)
-			{
-				camera->Near = 0.1f;
-				if (camera->Far <= camera->Near)
-					camera->Far = 100.0f;
-			}
-		}
-		if (camera->Projection == Lite::CameraProjection::Orthographic)
-			ImGui::DragFloat("Size", &camera->Size, 0.01f, 0.25f, 12.0f);
-		else
-		{
-			float degrees = camera->FieldOfView * (180.0f / 3.14159265f);
-			if (ImGui::DragFloat("Field of view", &degrees, 0.1f, 1.0f, 179.0f))
-				camera->FieldOfView = degrees * (3.14159265f / 180.0f);
-		}
-		ImGui::DragFloat("Near", &camera->Near, 0.01f);
-		ImGui::DragFloat("Far", &camera->Far, 0.01f);
-		bool primary = camera->Primary;
-		if (ImGui::Checkbox("Primary", &primary))
-		{
-			camera->Primary = primary;
-			if (primary)
-				scene->SetPrimaryCamera(entity.GetId());
-		}
-	}
-
-	if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
-	{
-		ImGui::SeparatorText(MeshLabel(mesh->Type));
-		const char* types[] = { "Quad", "Triangle", "Sprite" };
-		int current = static_cast<int>(mesh->Type);
-		if (ImGui::Combo("Type", &current, types, 3))
-			mesh->Type = static_cast<Lite::MeshType>(current);
-	}
-
-	if (Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>())
-	{
-		ImGui::SeparatorText("Material");
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextUnformatted("Shader");
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(-1.0f);
-		if (ImGui::InputText("##Shader", m_ShaderText, sizeof(m_ShaderText)))
-			material->Shader = m_ShaderText;
-
-		Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
-		bool vertexColors = material->UseVertexColors || (mesh != nullptr && mesh->Type == Lite::MeshType::Triangle);
-		if (ImGui::Checkbox("Vertex colors", &material->UseVertexColors))
-			vertexColors = material->UseVertexColors || (mesh != nullptr && mesh->Type == Lite::MeshType::Triangle);
-
-		if (vertexColors)
-		{
-			int colors = mesh != nullptr && mesh->Type == Lite::MeshType::Triangle ? 3 : 4;
-			for (int index = 0; index < colors; ++index)
-				ColorField(std::format("Color {}", index + 1).c_str(), material->Colors[index]);
-		}
-		else
-		{
-			ColorField("Color", material->Color);
-		}
-
-		if (mesh != nullptr && mesh->Type == Lite::MeshType::Sprite)
-		{
-			ImGui::DragFloat2("Tiling", &material->Tiling.x, 0.01f);
-			ImGui::AlignTextToFramePadding();
-			ImGui::TextUnformatted("Texture");
-			ImGui::SameLine();
-			ImGui::SetNextItemWidth(-1.0f);
-			if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
-			{
-				material->TexturePath = m_TextureText;
-				material->Texture = material->TexturePath.empty()
-					? Lite::Ref<Lite::Texture>{}
-					: Lite::AssetRegistry::Get().Load<Lite::Texture>(material->TexturePath);
-			}
-		}
-	}
-
-	if (Lite::SpinComponent* spin = entity.Get<Lite::SpinComponent>())
-	{
-		ImGui::SeparatorText("Spin");
-		ImGui::DragFloat("Rate", &spin->Rate, 0.01f);
-	}
-
-	if (Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>())
-	{
-		ImGui::SeparatorText(BodyLabel(body->Type));
-		const char* types[] = { "Static", "Kinematic", "Dynamic" };
-		int current = static_cast<int>(body->Type);
-		if (ImGui::Combo("Body", &current, types, 3))
-			body->Type = static_cast<Lite::BodyType>(current);
-		ImGui::DragFloat("Mass", &body->Mass, 0.01f, 0.0f, 1000.0f);
-		ImGui::DragFloat("Gravity", &body->GravityScale, 0.01f);
-		ImGui::DragFloat2("Velocity", &body->LinearVelocity.x, 0.01f);
-		ImGui::DragFloat("Angular", &body->AngularVelocity, 0.01f);
-		ImGui::Checkbox("Freeze rotation", &body->FreezeRotation);
-	}
-
-	if (Lite::BoxCollider2DComponent* box = entity.Get<Lite::BoxCollider2DComponent>())
-	{
-		ImGui::SeparatorText("Box Collider 2D");
-		ImGui::DragFloat2("Box size", &box->Size.x, 0.01f, 0.0f, 100.0f);
-		ImGui::DragFloat2("Box offset", &box->Offset.x, 0.01f);
-		ImGui::Checkbox("Box trigger", &box->IsTrigger);
-	}
-
-	if (Lite::CircleCollider2DComponent* circle = entity.Get<Lite::CircleCollider2DComponent>())
-	{
-		ImGui::SeparatorText("Circle Collider 2D");
-		ImGui::DragFloat("Radius", &circle->Radius, 0.01f, 0.0f, 100.0f);
-		ImGui::DragFloat2("Circle offset", &circle->Offset.x, 0.01f);
-		ImGui::Checkbox("Circle trigger", &circle->IsTrigger);
-	}
-
-	if (Lite::SortingComponent* sorting = entity.Get<Lite::SortingComponent>())
-	{
-		ImGui::SeparatorText("Sorting");
-		ImGui::DragInt("Order", &sorting->Order);
-	}
-
-	if (editing)
-	{
-		ImGui::Separator();
-		static int addIndex = 0;
-		const char* components[] = {
-			"Transform", "Orthographic Camera", "Quad", "Material", "Spin",
-			"Rigidbody 2D", "Box Collider 2D", "Circle Collider 2D", "Sorting"
-		};
-		ImGui::SetNextItemWidth(-90.0f);
-		ImGui::Combo("##AddComponent", &addIndex, components, IM_ARRAYSIZE(components));
-		ImGui::SameLine();
-		if (ImGui::Button("Add"))
-		{
-			switch (addIndex)
-			{
-				case 0: entity.Add<Lite::TransformComponent>(); break;
-				case 1: entity.Add<Lite::CameraComponent>(); break;
-				case 2: entity.Add<Lite::MeshComponent>(); break;
-				case 3: entity.Add<Lite::MaterialComponent>(); break;
-				case 4: entity.Add<Lite::SpinComponent>(); break;
-				case 5: entity.Add<Lite::Rigidbody2DComponent>(); break;
-				case 6: entity.Add<Lite::BoxCollider2DComponent>(); break;
-				case 7: entity.Add<Lite::CircleCollider2DComponent>(); break;
-				case 8: entity.Add<Lite::SortingComponent>(); break;
-				default: break;
-			}
-		}
-	}
-
-	if (!editing)
-	{
-		ImGui::EndDisabled();
-		ImGui::TextDisabled("Pause to edit");
-	}
-
-	ImGui::End();
-}
-
 void EditorLayer::DrawConsole()
 {
 	ImGui::Begin("Console");
@@ -1223,120 +529,4 @@ void EditorLayer::DrawConsole()
 	if (follow)
 		ImGui::SetScrollHereY(1.0f);
 	ImGui::End();
-}
-
-void EditorLayer::DrawInstrumentation()
-{
-	LITE_PROFILE_SCOPE("ImGui Panels");
-
-	VkPhysicalDeviceProperties properties {};
-	vkGetPhysicalDeviceProperties(Lite::Renderer::GetPhysicalDevice(), &properties);
-	VkExtent2D extent = Lite::Renderer::GetExtent();
-
-	auto version = [](uint32_t value)
-	{
-		return std::format("{}.{}.{}", VK_VERSION_MAJOR(value), VK_VERSION_MINOR(value), VK_VERSION_PATCH(value));
-	};
-
-	const char* deviceType = "Other";
-	switch (properties.deviceType)
-	{
-		case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: deviceType = "Discrete GPU"; break;
-		case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: deviceType = "Integrated GPU"; break;
-		case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: deviceType = "Virtual GPU"; break;
-		case VK_PHYSICAL_DEVICE_TYPE_CPU: deviceType = "CPU"; break;
-		default: break;
-	}
-
-	bool place = !m_InfoPlaced;
-	BeginDocked("Console", "Profile", place);
-	const ImGuiIO& io = ImGui::GetIO();
-	float cap = Lite::Time::GetFPS();
-	if (BeginRows("##session"))
-	{
-		Row("FPS", std::format("{:.1f}", io.Framerate));
-		Row("Elapsed", std::format("{:.1f} s", Lite::Time::GetElapsed()));
-		Row("Cap", cap > 0.0f ? std::format("{:.0f}", cap) : "off");
-		ImGui::EndTable();
-	}
-
-	ImGui::Dummy(ImVec2(0.0f, 6.0f));
-	const std::vector<Lite::ProfileSample>& samples = Lite::Profiler::GetSamples();
-	if (samples.empty())
-	{
-		ImGui::TextDisabled("Waiting for a completed frame");
-	}
-	else if (ImGui::BeginTable("##profile", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_PadOuterX | ImGuiTableFlags_SizingStretchProp))
-	{
-		ImGui::TableSetupColumn("Scope", ImGuiTableColumnFlags_WidthStretch, 0.72f);
-		ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthStretch, 0.28f);
-		ImGui::TableHeadersRow();
-
-		for (const Lite::ProfileSample& sample : samples)
-		{
-			ImGui::TableNextRow();
-			ImGui::TableSetColumnIndex(0);
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + static_cast<float>(sample.Depth) * 14.0f);
-			ImGui::TextUnformatted(sample.Name);
-			ImGui::TableSetColumnIndex(1);
-			ImGui::TextUnformatted(std::format("{:.3f} ms", sample.Milliseconds).c_str());
-		}
-
-		ImGui::EndTable();
-	}
-	ImGui::Spacing();
-	ImGui::TextDisabled("Press I to hide");
-	ImGui::End();
-
-	BeginDocked("Inspector", "Draw", place);
-	if (BeginRows("##draw"))
-	{
-		Row("Frame active", Lite::Renderer::IsFrameActive() ? "yes" : "no");
-		Row("Draw calls", std::format("{}", Lite::Renderer::GetDrawCalls()));
-		Row("Quads", std::format("{}", Lite::Renderer::GetQuadCount()));
-		Row("Triangles", std::format("{}", Lite::Renderer::GetTriangleCount()));
-		Row("Indices", std::format("{}", Lite::Renderer::GetIndexCount()));
-		Row("Samples", "1");
-		Row("Blend", "Premultiplied");
-		ImGui::EndTable();
-	}
-	ImGui::End();
-
-	BeginDocked("Scene", "GPU", place);
-	if (BeginRows("##gpu"))
-	{
-		Row("Name", properties.deviceName);
-		Row("Type", deviceType);
-		Row("Vendor", std::format("{:04X}", properties.vendorID));
-		Row("Device", std::format("{:04X}", properties.deviceID));
-		Row("Memory", DeviceMemory());
-		Row("API", version(properties.apiVersion));
-		Row("Driver", version(properties.driverVersion));
-		Row("Max texture", std::format("{}", properties.limits.maxImageDimension2D));
-		Row("Max framebuffer", std::format("{} x {}", properties.limits.maxFramebufferWidth, properties.limits.maxFramebufferHeight));
-		Row("Max uniform", std::format("{}", properties.limits.maxUniformBufferRange));
-		Row("Max anisotropy", std::format("{:.0f}", properties.limits.maxSamplerAnisotropy));
-		Row("Max samplers", std::format("{}", properties.limits.maxPerStageDescriptorSamplers));
-		ImGui::EndTable();
-	}
-	ImGui::End();
-
-	BeginDocked("Scene", "Swapchain", place);
-	if (BeginRows("##swapchain"))
-	{
-		Row("Extent", std::format("{} x {}", extent.width, extent.height));
-		Row("Format", FormatName(Lite::Renderer::GetSwapchainFormat()));
-		Row("Color space", ColorSpaceName(Lite::Renderer::GetColorSpace()));
-		Row("Present", PresentModeName(Lite::Renderer::GetPresentMode()));
-		Row("Images", std::format("{}", Lite::Renderer::GetImageCount()));
-		Row("Min images", std::format("{}", Lite::Renderer::GetMinImageCount()));
-		Row("Image index", std::format("{}", Lite::Renderer::GetImageIndex()));
-		Row("Frame index", std::format("{}", Lite::Renderer::GetFrameIndex()));
-		Row("Frames in flight", std::format("{}", Lite::VulkanSync::FramesInFlight));
-		Row("Queue family", std::format("{}", Lite::Renderer::GetGraphicsQueueFamily()));
-		ImGui::EndTable();
-	}
-	ImGui::End();
-
-	m_InfoPlaced = true;
 }

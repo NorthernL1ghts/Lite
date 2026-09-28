@@ -8,6 +8,7 @@
 
 #include <Lite/Core/Log/Logger.h>
 #include <Lite/Core/Profile/Profiler.h>
+#include <Lite/Renderer/MeshShape.h>
 
 #include <array>
 #include <vector>
@@ -180,12 +181,7 @@ namespace Lite {
 
 		void PushQuad(const Transform& transform, const Vec4 colors[4], const Vec2& tiling, float textureIndex)
 		{
-			const Vec2 corners[4] = {
-				{ -0.5f, -0.5f },
-				{  0.5f, -0.5f },
-				{  0.5f,  0.5f },
-				{ -0.5f,  0.5f }
-			};
+			const Vec2* corners = kQuadCorners;
 			const Vec2 uvs[4] = {
 				{ 0.0f, 0.0f },
 				{ tiling.x, 0.0f },
@@ -336,11 +332,7 @@ namespace Lite {
 			Flush();
 
 		float textureIndex = TextureSlot({});
-		const Vec2 corners[3] = {
-			{  0.00f, -0.72f },
-			{ -0.78f,  0.58f },
-			{  0.78f,  0.58f }
-		};
+		const Vec2* corners = kTriangleCorners;
 		const Vec4 colors[3] = { first, second, third };
 		uint16_t base = static_cast<uint16_t>(s_Vertices.size());
 		for (int corner = 0; corner < 3; ++corner)

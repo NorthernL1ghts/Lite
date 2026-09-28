@@ -37,4 +37,22 @@ namespace Lite {
 		size = std::clamp(size, kCameraSizeMin, kCameraSizeMax);
 	}
 
+	inline Mat4 FitViewport(const Mat4& viewProjection, float viewportX, float viewportY, float viewportW, float viewportH, float windowW, float windowH)
+	{
+		if (windowW <= 1.0f || windowH <= 1.0f || viewportW <= 1.0f || viewportH <= 1.0f)
+			return viewProjection;
+
+		float left = (viewportX / windowW) * 2.0f - 1.0f;
+		float right = ((viewportX + viewportW) / windowW) * 2.0f - 1.0f;
+		float top = 1.0f - (viewportY / windowH) * 2.0f;
+		float bottom = 1.0f - ((viewportY + viewportH) / windowH) * 2.0f;
+
+		Mat4 fit = Mat4::Identity();
+		fit[0][0] = (right - left) * 0.5f;
+		fit[1][1] = (top - bottom) * 0.5f;
+		fit[3][0] = (right + left) * 0.5f;
+		fit[3][1] = (top + bottom) * 0.5f;
+		return fit * viewProjection;
+	}
+
 }

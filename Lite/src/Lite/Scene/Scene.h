@@ -4,6 +4,7 @@
 #include <Lite/Core/Base.h>
 #include <Lite/Math/Math.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <iosfwd>
 #include <optional>
@@ -191,6 +192,15 @@ namespace Lite {
 		uint32_t m_Id = 0;
 	};
 
+	struct ComponentEntry
+	{
+		const char* Name = nullptr;
+		const char* (*Label)(Entity entity) = nullptr;
+		void (*Add)(Entity entity) = nullptr;
+	};
+
+	LITE_API const ComponentEntry* ComponentCatalog(size_t& count);
+
 	class LITE_API Scene
 	{
 	public:
@@ -221,6 +231,7 @@ namespace Lite {
 		void Update(float seconds);
 		void Render() const;
 		Mat4 ViewProjection(float aspect, const Transform& fallbackTransform, const CameraComponent& fallbackCamera) const;
+		uint32_t Pick(const Mat4& viewProjection, float mouseX, float mouseY, float windowW, float windowH);
 
 		static void Close(Scope<Scene>& scene);
 
