@@ -288,7 +288,36 @@ namespace {
 			color, 1.0f);
 	}
 
-	bool TransportButton(const char* id, bool enabled, bool active, const ImVec4& activeColor, bool play)
+	void DrawReset(ImDrawList* draw, ImVec2 min, ImVec2 max, ImU32 color)
+	{
+		ImVec2 center { (min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f + 0.5f };
+		float radius = 5.2f;
+		float start = -2.5f;
+		float end = 2.4f;
+		draw->PathArcTo(center, radius, start, end, 16);
+		draw->PathStroke(color, ImDrawFlags_None, 1.6f);
+
+		float tipX = center.x + std::cos(end) * radius;
+		float tipY = center.y + std::sin(end) * radius;
+		float tangentX = -std::sin(end);
+		float tangentY = std::cos(end);
+		float normalX = std::cos(end);
+		float normalY = std::sin(end);
+		draw->AddTriangleFilled(
+			ImVec2(tipX + tangentX * 1.2f, tipY + tangentY * 1.2f),
+			ImVec2(tipX - tangentX * 4.2f + normalX * 2.6f, tipY - tangentY * 4.2f + normalY * 2.6f),
+			ImVec2(tipX - tangentX * 4.2f - normalX * 2.6f, tipY - tangentY * 4.2f - normalY * 2.6f),
+			color);
+	}
+
+	enum class TransportSymbol
+	{
+		Play,
+		Pause,
+		Reset
+	};
+
+	bool TransportButton(const char* id, bool enabled, bool active, const ImVec4& activeColor, TransportSymbol symbol)
 	{
 		ImGui::BeginDisabled(!enabled);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
@@ -297,12 +326,16 @@ namespace {
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? activeColor : ImVec4(0.22f, 0.26f, 0.32f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, active ? activeColor : ImVec4(0.28f, 0.34f, 0.44f, 1.0f));
 		bool pressed = ImGui::Button(id, ImVec2(28.0f, 22.0f));
-		ImU32 symbol = ImGui::GetColorU32(active ? ImVec4(0.96f, 0.97f, 0.98f, 1.0f) : ImVec4(0.78f, 0.82f, 0.88f, 1.0f));
+		ImU32 symbolColor = ImGui::GetColorU32(active ? ImVec4(0.96f, 0.97f, 0.98f, 1.0f) : ImVec4(0.78f, 0.82f, 0.88f, 1.0f));
 		ImDrawList* draw = ImGui::GetWindowDrawList();
-		if (play)
-			DrawPlay(draw, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), symbol);
+		ImVec2 itemMin = ImGui::GetItemRectMin();
+		ImVec2 itemMax = ImGui::GetItemRectMax();
+		if (symbol == TransportSymbol::Play)
+			DrawPlay(draw, itemMin, itemMax, symbolColor);
+		else if (symbol == TransportSymbol::Pause)
+			DrawPause(draw, itemMin, itemMax, symbolColor);
 		else
-			DrawPause(draw, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), symbol);
+			DrawReset(draw, itemMin, itemMax, symbolColor);
 		ImGui::PopStyleColor(3);
 		ImGui::PopStyleVar(2);
 		ImGui::EndDisabled();
@@ -558,6 +591,12 @@ void EditorLayer::OnEvent(Lite::Event& event)
 			return true;
 		}
 
+		if (key.GetKeyCode() == Lite::Key::F7 && m_Scene)
+		{
+			m_Scene->Restart();
+			return true;
+		}
+
 		return false;
 	});
 
@@ -616,19 +655,24 @@ void EditorLayer::DrawMenu()
 		ImGui::EndMenu();
 	}
 
-	float transport = 28.0f * 2.0f + 8.0f;
+	float transport = 28.0f * 3.0f + 8.0f * 2.0f;
 	ImGui::SetCursorPosX((ImGui::GetWindowWidth() - transport) * 0.5f);
 	bool playing = m_Scene && m_Scene->IsPlaying();
 	bool paused = m_Scene && m_Scene->GetPlayback() == Lite::ScenePlayback::Paused;
-	if (TransportButton("##Play", m_Scene != nullptr, playing, ImVec4(0.18f, 0.48f, 0.28f, 1.0f), true))
+	if (TransportButton("##Play", m_Scene != nullptr, playing, ImVec4(0.18f, 0.48f, 0.28f, 1.0f), TransportSymbol::Play))
 		m_Scene->Play();
 	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
 		ImGui::SetTooltip("Play");
 	ImGui::SameLine(0.0f, 8.0f);
-	if (TransportButton("##Pause", m_Scene != nullptr, paused, ImVec4(0.45f, 0.36f, 0.14f, 1.0f), false))
+	if (TransportButton("##Pause", m_Scene != nullptr, paused, ImVec4(0.45f, 0.36f, 0.14f, 1.0f), TransportSymbol::Pause))
 		m_Scene->Pause();
 	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
 		ImGui::SetTooltip("Pause");
+	ImGui::SameLine(0.0f, 8.0f);
+	if (TransportButton("##Reset", m_Scene != nullptr, false, ImVec4(0.16f, 0.17f, 0.21f, 1.0f), TransportSymbol::Reset))
+		m_Scene->Restart();
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		ImGui::SetTooltip("Reset");
 
 	ImGui::EndMainMenuBar();
 	ImGui::PopStyleVar();

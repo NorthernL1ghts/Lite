@@ -366,6 +366,18 @@ namespace Lite {
 		Console::Log(std::format("Scene stopped: {}", m_Name));
 	}
 
+	void Scene::Restart()
+	{
+		if (!m_Loaded)
+			Load();
+
+		StopPhysics();
+		m_Playback = ScenePlayback::Stopped;
+		StartPhysics();
+		m_Playback = ScenePlayback::Playing;
+		Console::Log(std::format("Scene restarted: {}", m_Name));
+	}
+
 	void Scene::Update(float seconds)
 	{
 		if (m_Playback != ScenePlayback::Playing)

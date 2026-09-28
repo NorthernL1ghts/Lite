@@ -204,6 +204,7 @@ namespace Lite {
 		void Play();
 		void Pause();
 		void Stop();
+		void Restart();
 		void Update(float seconds);
 		void Render() const;
 
