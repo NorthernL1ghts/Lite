@@ -32,9 +32,13 @@ add_custom_command(
         "$<TARGET_FILE:Lite>"
         "${CMAKE_BINARY_DIR}/bin/sandbox"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${SANDBOX_ASSET_DIR}/shaders"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${SANDBOX_ASSET_DIR}/scenes"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/Checkerboard.png"
         "${SANDBOX_ASSET_DIR}/Checkerboard.png"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/scenes/Sandbox.scene"
+        "${SANDBOX_ASSET_DIR}/scenes/Sandbox.scene"
     COMMENT "Copying Lite DLL and Sandbox assets"
     VERBATIM
 )

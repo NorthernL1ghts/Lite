@@ -1,7 +1,6 @@
 #include <Lite.h>
 
 #include "EditorLayer.h"
-#include "SandboxLayer.h"
 
 namespace {
 
@@ -11,7 +10,6 @@ namespace {
 		Editor()
 			: Lite::Application(Lite::WindowProps("Editor"))
 		{
-			PushLayer(Lite::CreateScope<SandboxLayer>());
 			PushOverlay(Lite::CreateScope<EditorLayer>());
 			LITE_CLIENT_INFO("Created");
 		}

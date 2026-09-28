@@ -1,6 +1,6 @@
 # Lite
 
-Lite is the engine backend. Editor is the editor: scenes and viewports live there. Sandbox is the test scene the editor runs, and it can also be launched on its own.
+Lite is the engine backend. Editor creates, saves, loads, and plays scenes. Sandbox is an example scene, and the Sandbox app plays that scene on its own.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ scripts\build.bat
 
 The build uses the compiler's latest C++ mode and the newest Windows SDK installed on the machine. `Lite.dll` is built in `build/bin/lite`. After Sandbox and Editor link, CMake copies it into `build/bin/sandbox` and `build/bin/editor`.
 
-`LITE_WARN` logs from the engine. `LITE_CLIENT_WARN` logs from the application. Editor opens with the Sandbox test scene in the Viewport. Press I for instrumentation.
+`LITE_WARN` logs from the engine. `LITE_CLIENT_WARN` logs from the application. Editor opens the Sandbox example stopped. New, Save, and the scene list create and load scenes. Play and Pause run the open scene, and F5 and F6 do the same. Press I for instrumentation.
 
 ## License
 

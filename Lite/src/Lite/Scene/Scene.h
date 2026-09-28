@@ -4,6 +4,7 @@
 #include "Lite/Core/Base.h"
 #include "Lite/Math/Math.h"
 
+#include <iosfwd>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -17,6 +18,13 @@ namespace Lite {
 		Triangle
 	};
 
+	enum class ScenePlayback
+	{
+		Stopped,
+		Playing,
+		Paused
+	};
+
 	struct SceneObject
 	{
 		std::string Name;
@@ -26,7 +34,9 @@ namespace Lite {
 		Vec4 CornerColors[4] {};
 		bool UseCornerColors = false;
 		Vec2 Tiling { 1.0f, 1.0f };
+		std::string TexturePath;
 		Ref<Texture> Texture;
+		float Spin = 0.0f;
 	};
 
 	class LITE_API Scene
@@ -39,25 +49,41 @@ namespace Lite {
 		Scene& operator=(const Scene&) = delete;
 
 		const std::string& GetName() const { return m_Name; }
+		void SetName(std::string name) { m_Name = std::move(name); }
+		const std::string& GetPath() const { return m_Path; }
 		const std::vector<SceneObject>& GetObjects() const { return m_Objects; }
 		SceneObject* Find(std::string_view name);
+		ScenePlayback GetPlayback() const { return m_Playback; }
 
 		void AddObject(SceneObject object);
+		void Create();
 		void Load();
-		void Start();
+		void Play();
+		void Pause();
 		void Stop();
+		void Update(float seconds);
+		void Render() const;
+
+		bool Save();
+		static Scope<Scene> Open(std::string_view path);
+		static std::vector<std::string> List();
 
 		bool IsLoaded() const { return m_Loaded; }
-		bool IsStarted() const { return m_Started; }
+		bool IsPlaying() const { return m_Playback == ScenePlayback::Playing; }
 
 		static void SetActive(Scene* scene);
 		static Scene* GetActive();
 
 	private:
+		bool Read(std::istream& input);
+		void Write(std::ostream& output) const;
+		void ResolveTextures();
+
 		std::string m_Name;
+		std::string m_Path;
 		std::vector<SceneObject> m_Objects;
 		bool m_Loaded = false;
-		bool m_Started = false;
+		ScenePlayback m_Playback = ScenePlayback::Stopped;
 	};
 
 }

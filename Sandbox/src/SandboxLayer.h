@@ -16,10 +16,7 @@ public:
 	void OnEvent(Lite::Event& event) override;
 
 private:
-	void DrawObject(const Lite::SceneObject& object);
-
 	Lite::OrthographicCamera m_Camera;
 	float m_ViewSize = 2.0f;
-	float m_QuadRotation = 0.0f;
 	Lite::Scope<Lite::Scene> m_Scene;
 };

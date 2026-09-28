@@ -1,0 +1,32 @@
+lite-scene 1
+name Sandbox
+object
+name Checkerboard
+kind sprite
+position 0.0000 0.0000 0.0000
+rotation 0.0000
+scale 8.0000 8.0000 1.0000
+color 1.0000 1.0000 1.0000 1.0000
+tiling 8.0000 8.0000
+texture assets/Checkerboard.png
+spin 0.0000
+corners 0.1600 0.2800 0.6200 1.0000 0.1200 0.5200 0.5800 1.0000 0.9300 0.5800 0.2400 1.0000 0.5200 0.2600 0.7200 1.0000
+object
+name Triangle
+kind triangle
+position 0.0000 0.0000 0.0000
+rotation 0.0000
+scale 1.0000 1.0000 1.0000
+color 1.0000 1.0000 1.0000 1.0000
+tiling 1.0000 1.0000
+spin 0.0000
+corners 0.9300 0.2200 0.2800 1.0000 0.0800 0.7800 0.4200 1.0000 0.1600 0.3600 0.9600 1.0000 1.0000 1.0000 1.0000 1.0000
+object
+name Quad
+kind quad
+position 1.2200 -0.4800 0.0000
+rotation 0.0000
+scale 0.6200 0.6200 1.0000
+color 0.8600 0.1600 0.1800 1.0000
+tiling 1.0000 1.0000
+spin 1.1500

@@ -12,16 +12,11 @@ set(EDITOR_SHADER_SOURCES
     ../Sandbox/assets/shaders/Batch.vert
     ../Sandbox/assets/shaders/Batch.frag
 )
-target_sources(Editor PRIVATE
-    ${EDITOR_SHADER_SOURCES}
-    "${CMAKE_SOURCE_DIR}/Sandbox/src/SandboxLayer.h"
-    "${CMAKE_SOURCE_DIR}/Sandbox/src/SandboxLayer.cpp"
-)
+target_sources(Editor PRIVATE ${EDITOR_SHADER_SOURCES})
 set_source_files_properties(${EDITOR_SHADER_SOURCES} PROPERTIES
     HEADER_FILE_ONLY ON
 )
 
-target_include_directories(Editor PRIVATE "${CMAKE_SOURCE_DIR}/Sandbox/src")
 target_link_libraries(Editor PRIVATE Lite)
 
 target_compile_definitions(Editor
@@ -37,9 +32,13 @@ add_custom_command(
         "$<TARGET_FILE:Lite>"
         "${CMAKE_BINARY_DIR}/bin/editor"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${EDITOR_ASSET_DIR}/shaders"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${EDITOR_ASSET_DIR}/scenes"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/Sandbox/assets/Checkerboard.png"
         "${EDITOR_ASSET_DIR}/Checkerboard.png"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/Sandbox/assets/scenes/Sandbox.scene"
+        "${EDITOR_ASSET_DIR}/scenes/Sandbox.scene"
     COMMENT "Copying Lite DLL and Sandbox assets"
     VERBATIM
 )

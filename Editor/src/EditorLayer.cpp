@@ -1,17 +1,23 @@
 #include "EditorLayer.h"
 
 #include "Lite/Core/Events/KeyEvent.h"
+#include "Lite/Core/Events/MouseEvent.h"
 #include "Lite/Core/Logger.h"
 #include "Lite/Core/Profiler.h"
 #include "Lite/Core/Time.h"
+#include "Lite/Input/Input.h"
 #include "Lite/Input/KeyCodes.h"
 #include "Lite/Renderer/Renderer.h"
+#include "Lite/Renderer/Renderer2D.h"
 #include "Lite/Scene/Console.h"
 #include "Lite/Scene/Scene.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include <cmath>
+#include <cstdio>
+#include <filesystem>
 #include <format>
 #include <string>
 #include <string_view>
@@ -152,17 +158,149 @@ EditorLayer::EditorLayer()
 {
 }
 
+void EditorLayer::OnAttach()
+{
+	OpenScene("assets/scenes/Sandbox.scene");
+	if (!m_Scene)
+		NewScene();
+
+	m_Camera.SetProjection(m_ViewSize, 16.0f / 9.0f);
+}
+
+void EditorLayer::OnDetach()
+{
+	if (m_Scene)
+	{
+		m_Scene->Stop();
+		if (Lite::Scene::GetActive() == m_Scene.get())
+			Lite::Scene::SetActive(nullptr);
+		m_Scene.reset();
+	}
+}
+
+void EditorLayer::OnUpdate(Lite::Timestep timestep)
+{
+	LITE_PROFILE_SCOPE("Editor Update");
+	float rotation = m_Camera.GetRotation();
+	float step = 1.6f * timestep.GetSeconds();
+	if (Lite::Input::IsKeyPressed(Lite::Key::Q))
+		rotation += step;
+	if (Lite::Input::IsKeyPressed(Lite::Key::E))
+		rotation -= step;
+	m_Camera.SetRotation(rotation);
+
+	if (m_Scene)
+		m_Scene->Update(timestep.GetSeconds());
+}
+
+void EditorLayer::OnRender()
+{
+	LITE_PROFILE_SCOPE("Editor Render");
+	if (!m_Scene)
+		return;
+
+	VkExtent2D extent = Lite::Renderer::GetExtent();
+	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
+	m_Camera.SetProjection(m_ViewSize, aspect);
+	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
+	m_Scene->Render();
+}
+
+void EditorLayer::NewScene()
+{
+	m_Scene = Lite::CreateScope<Lite::Scene>("Untitled");
+	m_Scene->Create();
+	Lite::Scene::SetActive(m_Scene.get());
+	m_Selection.clear();
+	SyncName();
+}
+
+void EditorLayer::OpenScene(const std::string& path)
+{
+	Lite::Scope<Lite::Scene> scene = Lite::Scene::Open(path);
+	if (!scene)
+		return;
+
+	if (m_Scene && Lite::Scene::GetActive() == m_Scene.get())
+		Lite::Scene::SetActive(nullptr);
+
+	m_Scene = std::move(scene);
+	Lite::Scene::SetActive(m_Scene.get());
+	m_Selection = m_Scene->Find("Triangle") != nullptr ? "Triangle" : std::string{};
+	SyncName();
+}
+
+void EditorLayer::SaveScene()
+{
+	if (!m_Scene)
+		return;
+
+	m_Scene->SetName(m_Name);
+	m_Scene->Save();
+}
+
+void EditorLayer::SyncName()
+{
+	m_NamedScene = m_Scene.get();
+	const char* name = m_Scene != nullptr ? m_Scene->GetName().c_str() : "";
+	std::snprintf(m_Name, sizeof(m_Name), "%s", name);
+}
+
 void EditorLayer::OnEvent(Lite::Event& event)
 {
 	Lite::EventDispatcher dispatcher(event);
 	dispatcher.Dispatch<Lite::KeyPressedEvent>([this](Lite::KeyPressedEvent& key)
 	{
-		if (key.GetKeyCode() != Lite::Key::I || key.IsRepeat())
+		if (key.IsRepeat())
 			return false;
 
-		m_ShowInfo = !m_ShowInfo;
-		LITE_CLIENT_INFO("Instrumentation {}", m_ShowInfo ? "shown" : "hidden");
-		return true;
+		if (key.GetKeyCode() == Lite::Key::I)
+		{
+			m_ShowInfo = !m_ShowInfo;
+			LITE_CLIENT_INFO("Instrumentation {}", m_ShowInfo ? "shown" : "hidden");
+			return true;
+		}
+
+		bool control = Lite::Input::IsKeyPressed(Lite::Key::LeftControl) || Lite::Input::IsKeyPressed(Lite::Key::RightControl);
+		if (control && key.GetKeyCode() == Lite::Key::N)
+		{
+			NewScene();
+			return true;
+		}
+
+		if (control && key.GetKeyCode() == Lite::Key::S)
+		{
+			SaveScene();
+			return true;
+		}
+
+		if (key.GetKeyCode() == Lite::Key::F5 && m_Scene)
+		{
+			m_Scene->Play();
+			return true;
+		}
+
+		if (key.GetKeyCode() == Lite::Key::F6 && m_Scene)
+		{
+			m_Scene->Pause();
+			return true;
+		}
+
+		return false;
+	});
+
+	dispatcher.Dispatch<Lite::MouseScrolledEvent>([this](Lite::MouseScrolledEvent& scroll)
+	{
+		float steps = scroll.GetYOffset();
+		if (steps == 0.0f)
+			return false;
+
+		m_ViewSize *= std::pow(0.85f, steps);
+		if (m_ViewSize < 0.25f)
+			m_ViewSize = 0.25f;
+		if (m_ViewSize > 12.0f)
+			m_ViewSize = 12.0f;
+		return false;
 	});
 }
 
@@ -203,16 +341,63 @@ void EditorLayer::OnImGuiRender()
 void EditorLayer::DrawScene()
 {
 	ImGui::Begin("Scene");
-	Lite::Scene* scene = Lite::Scene::GetActive();
-	if (scene == nullptr)
+	if (ImGui::Button("New"))
+		NewScene();
+	ImGui::SameLine();
+	if (ImGui::Button("Save"))
+		SaveScene();
+	ImGui::SameLine();
+	bool playing = m_Scene && m_Scene->IsPlaying();
+	if (playing)
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.48f, 0.28f, 1.0f));
+	if (ImGui::Button("Play") && m_Scene)
+		m_Scene->Play();
+	if (playing)
+		ImGui::PopStyleColor();
+	ImGui::SameLine();
+	bool paused = m_Scene && m_Scene->GetPlayback() == Lite::ScenePlayback::Paused;
+	if (paused)
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.45f, 0.36f, 0.14f, 1.0f));
+	if (ImGui::Button("Pause") && m_Scene)
+		m_Scene->Pause();
+	if (paused)
+		ImGui::PopStyleColor();
+
+	if (m_Scene)
+	{
+		if (m_NamedScene != m_Scene.get())
+			SyncName();
+		ImGui::SetNextItemWidth(-1.0f);
+		if (ImGui::InputText("##SceneName", m_Name, sizeof(m_Name)))
+			m_Scene->SetName(m_Name);
+	}
+
+	ImGui::TextDisabled("Scenes");
+	for (const std::string& path : Lite::Scene::List())
+	{
+		std::string label = std::filesystem::path(path).stem().string();
+		bool current = m_Scene && m_Scene->GetPath() == path;
+		if (ImGui::Selectable(label.c_str(), current))
+			OpenScene(path);
+	}
+
+	ImGui::Separator();
+	if (m_Scene == nullptr)
 	{
 		ImGui::TextDisabled("No scene");
 		ImGui::End();
 		return;
 	}
 
-	ImGui::TextDisabled("%s", scene->GetName().c_str());
-	for (const Lite::SceneObject& object : scene->GetObjects())
+	const char* playback = "stopped";
+	switch (m_Scene->GetPlayback())
+	{
+		case Lite::ScenePlayback::Playing: playback = "playing"; break;
+		case Lite::ScenePlayback::Paused: playback = "paused"; break;
+		case Lite::ScenePlayback::Stopped: playback = "stopped"; break;
+	}
+	ImGui::TextDisabled("%s  %s", m_Scene->GetName().c_str(), playback);
+	for (const Lite::SceneObject& object : m_Scene->GetObjects())
 	{
 		if (ImGui::Selectable(object.Name.c_str(), m_Selection == object.Name))
 			m_Selection = object.Name;
@@ -224,9 +409,18 @@ void EditorLayer::DrawViewport()
 {
 	ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 	ImVec2 size = ImGui::GetContentRegionAvail();
-	Lite::Scene* scene = Lite::Scene::GetActive();
-	const char* name = scene != nullptr ? scene->GetName().c_str() : "No scene";
-	ImGui::TextDisabled("%s  %.0f x %.0f", name, size.x, size.y);
+	const char* name = m_Scene != nullptr ? m_Scene->GetName().c_str() : "No scene";
+	const char* playback = "stopped";
+	if (m_Scene)
+	{
+		switch (m_Scene->GetPlayback())
+		{
+			case Lite::ScenePlayback::Playing: playback = "playing"; break;
+			case Lite::ScenePlayback::Paused: playback = "paused"; break;
+			case Lite::ScenePlayback::Stopped: playback = "stopped"; break;
+		}
+	}
+	ImGui::TextDisabled("%s  %s  %.0f x %.0f", name, playback, size.x, size.y);
 	ImGui::End();
 }
 
