@@ -6,9 +6,9 @@
 
 namespace Lite {
 
-	std::shared_ptr<Material> Material::Create(const Shader& vertex, const Shader& fragment)
+	Ref<Material> Material::Create(const Shader& vertex, const Shader& fragment)
 	{
-		auto material = std::shared_ptr<Material>(new Material());
+		auto material = Ref<Material>(new Material());
 		if (!material->Init(vertex, fragment))
 			return nullptr;
 

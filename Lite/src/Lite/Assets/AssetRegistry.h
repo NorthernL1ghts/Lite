@@ -18,13 +18,13 @@ namespace Lite {
 		static AssetRegistry& Get();
 
 		template<typename T>
-		std::shared_ptr<T> Load(std::string_view path)
+		Ref<T> Load(std::string_view path)
 		{
 			return std::static_pointer_cast<T>(LoadAsset(T::Type, path));
 		}
 
 		template<typename T>
-		std::shared_ptr<T> Get(std::string_view path) const
+		Ref<T> Get(std::string_view path) const
 		{
 			return std::dynamic_pointer_cast<T>(Find(path));
 		}
@@ -40,15 +40,15 @@ namespace Lite {
 		AssetRegistry(AssetRegistry&&) = delete;
 		AssetRegistry& operator=(AssetRegistry&&) = delete;
 
-		void Register(std::unique_ptr<AssetHandler> handler);
-		std::shared_ptr<Asset> LoadAsset(AssetType type, std::string_view path);
-		std::shared_ptr<Asset> Find(std::string_view path) const;
+		void Register(Scope<AssetHandler> handler);
+		Ref<Asset> LoadAsset(AssetType type, std::string_view path);
+		Ref<Asset> Find(std::string_view path) const;
 		std::string Key(std::string_view path) const;
 		std::filesystem::path Resolve(std::string_view path) const;
 
 		std::filesystem::path m_Root;
-		std::unordered_map<AssetType, std::unique_ptr<AssetHandler>> m_Handlers;
-		std::unordered_map<std::string, std::shared_ptr<Asset>> m_Assets;
+		std::unordered_map<AssetType, Scope<AssetHandler>> m_Handlers;
+		std::unordered_map<std::string, Ref<Asset>> m_Assets;
 	};
 
 }

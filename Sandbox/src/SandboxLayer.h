@@ -5,8 +5,6 @@
 #include "Lite/Renderer/Material.h"
 #include "Lite/Renderer/OrthographicCamera.h"
 
-#include <memory>
-
 class SandboxLayer final : public Lite::Layer
 {
 public:
@@ -20,7 +18,7 @@ public:
 
 private:
 	Lite::OrthographicCamera m_Camera;
-	std::shared_ptr<Lite::Shader> m_VertexShader;
-	std::shared_ptr<Lite::Shader> m_FragmentShader;
-	std::shared_ptr<Lite::Material> m_Material;
+	Lite::Ref<Lite::Shader> m_VertexShader;
+	Lite::Ref<Lite::Shader> m_FragmentShader;
+	Lite::Ref<Lite::Material> m_Material;
 };

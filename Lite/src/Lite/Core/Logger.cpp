@@ -4,8 +4,8 @@
 
 namespace {
 
-	std::shared_ptr<spdlog::logger> s_CoreLogger;
-	std::shared_ptr<spdlog::logger> s_ClientLogger;
+	Lite::Ref<spdlog::logger> s_CoreLogger;
+	Lite::Ref<spdlog::logger> s_ClientLogger;
 
 }
 
@@ -32,12 +32,12 @@ namespace Lite {
 		spdlog::shutdown();
 	}
 
-	std::shared_ptr<spdlog::logger>& Logger::GetCoreLogger()
+	Ref<spdlog::logger>& Logger::GetCoreLogger()
 	{
 		return s_CoreLogger;
 	}
 
-	std::shared_ptr<spdlog::logger>& Logger::GetClientLogger()
+	Ref<spdlog::logger>& Logger::GetClientLogger()
 	{
 		return s_ClientLogger;
 	}

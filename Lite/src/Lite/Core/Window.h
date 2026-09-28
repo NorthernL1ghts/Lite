@@ -3,7 +3,6 @@
 #include "Events/Event.h"
 
 #include <functional>
-#include <memory>
 #include <string>
 #include <string_view>
 
@@ -39,7 +38,7 @@ namespace Lite {
 		virtual const WindowProps& GetProps() const = 0;
 		virtual void* GetNativeHandle() const = 0;
 
-		static std::unique_ptr<Window> Create(const WindowProps& props);
+		static Scope<Window> Create(const WindowProps& props);
 	};
 
 }

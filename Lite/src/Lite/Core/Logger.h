@@ -2,7 +2,6 @@
 
 #include "Base.h"
 
-#include <memory>
 #include <spdlog/spdlog.h>
 
 namespace Lite {
@@ -13,8 +12,8 @@ namespace Lite {
 		static void Init();
 		static void Shutdown();
 
-		static std::shared_ptr<spdlog::logger>& GetCoreLogger();
-		static std::shared_ptr<spdlog::logger>& GetClientLogger();
+		static Ref<spdlog::logger>& GetCoreLogger();
+		static Ref<spdlog::logger>& GetClientLogger();
 	};
 
 }

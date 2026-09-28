@@ -4,9 +4,9 @@
 
 namespace Lite {
 
-	std::unique_ptr<Window> Window::Create(const WindowProps& props)
+	Scope<Window> Window::Create(const WindowProps& props)
 	{
-		return std::make_unique<GLFWWindow>(props);
+		return CreateScope<GLFWWindow>(props);
 	}
 
 }

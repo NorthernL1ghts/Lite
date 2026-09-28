@@ -3,7 +3,6 @@
 #include "Asset.h"
 
 #include <filesystem>
-#include <memory>
 
 namespace Lite {
 
@@ -13,7 +12,7 @@ namespace Lite {
 		virtual ~AssetHandler() = default;
 
 		virtual AssetType GetType() const = 0;
-		virtual std::shared_ptr<Asset> Load(const std::filesystem::path& path) = 0;
+		virtual Ref<Asset> Load(const std::filesystem::path& path) = 0;
 	};
 
 }

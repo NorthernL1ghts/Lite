@@ -41,7 +41,7 @@ namespace Lite {
 	{
 	public:
 		AssetType GetType() const override { return AssetType::Shader; }
-		std::shared_ptr<Asset> Load(const std::filesystem::path& path) override;
+		Ref<Asset> Load(const std::filesystem::path& path) override;
 	};
 
 }

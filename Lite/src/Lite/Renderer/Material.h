@@ -4,8 +4,6 @@
 #include "Lite/Math/Math.h"
 #include "ShaderProgram.h"
 
-#include <memory>
-
 namespace Lite {
 
 	class Shader;
@@ -13,7 +11,7 @@ namespace Lite {
 	class LITE_API Material
 	{
 	public:
-		static std::shared_ptr<Material> Create(const Shader& vertex, const Shader& fragment);
+		static Ref<Material> Create(const Shader& vertex, const Shader& fragment);
 
 		~Material();
 

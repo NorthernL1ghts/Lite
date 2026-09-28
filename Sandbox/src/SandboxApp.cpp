@@ -10,7 +10,7 @@ namespace {
 		Sandbox()
 			: Lite::Application(Lite::WindowProps("Sandbox"))
 		{
-			PushLayer(std::make_unique<SandboxLayer>());
+			PushLayer(Lite::CreateScope<SandboxLayer>());
 			LITE_CLIENT_INFO("Created");
 		}
 
@@ -22,7 +22,7 @@ namespace {
 
 }
 
-std::unique_ptr<Lite::Application> Lite::CreateApplication()
+Lite::Scope<Lite::Application> Lite::CreateApplication()
 {
-	return std::make_unique<Sandbox>();
+	return Lite::CreateScope<Sandbox>();
 }

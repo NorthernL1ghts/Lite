@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Platform.h"
+#include "Memory.h"
 
 #define LITE_BIT(x) (1 << (x))
 

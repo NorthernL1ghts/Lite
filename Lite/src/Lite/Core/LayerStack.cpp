@@ -12,7 +12,7 @@ namespace Lite {
 			layer->OnDetach();
 	}
 
-	void LayerStack::PushLayer(std::unique_ptr<Layer> layer)
+	void LayerStack::PushLayer(Scope<Layer> layer)
 	{
 		LITE_TRACE("Attached layer {}", layer->GetName());
 		layer->OnAttach();
@@ -20,7 +20,7 @@ namespace Lite {
 		++m_LayerInsertIndex;
 	}
 
-	void LayerStack::PushOverlay(std::unique_ptr<Layer> layer)
+	void LayerStack::PushOverlay(Scope<Layer> layer)
 	{
 		LITE_TRACE("Attached overlay {}", layer->GetName());
 		layer->OnAttach();

@@ -2,7 +2,6 @@
 
 #include "Layer.h"
 
-#include <memory>
 #include <vector>
 
 namespace Lite {
@@ -18,8 +17,8 @@ namespace Lite {
 		LayerStack(LayerStack&&) noexcept = default;
 		LayerStack& operator=(LayerStack&&) noexcept = default;
 
-		void PushLayer(std::unique_ptr<Layer> layer);
-		void PushOverlay(std::unique_ptr<Layer> layer);
+		void PushLayer(Scope<Layer> layer);
+		void PushOverlay(Scope<Layer> layer);
 		void PopLayer(Layer* layer);
 		void PopOverlay(Layer* layer);
 		void Clear();
@@ -30,7 +29,7 @@ namespace Lite {
 		auto rend() { return m_Layers.rend(); }
 
 	private:
-		std::vector<std::unique_ptr<Layer>> m_Layers;
+		std::vector<Scope<Layer>> m_Layers;
 		unsigned int m_LayerInsertIndex = 0;
 	};
 

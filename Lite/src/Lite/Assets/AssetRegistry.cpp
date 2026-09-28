@@ -12,7 +12,7 @@ namespace Lite {
 
 	namespace {
 
-		std::unique_ptr<AssetRegistry> s_Registry;
+		Scope<AssetRegistry> s_Registry;
 
 	}
 
@@ -23,10 +23,10 @@ namespace Lite {
 		if (s_Registry)
 			return;
 
-		s_Registry.reset(new AssetRegistry());
+		s_Registry = Scope<AssetRegistry>(new AssetRegistry());
 		s_Registry->m_Root = FileSystem::ExecutableDirectory();
-		s_Registry->Register(std::make_unique<ShaderHandler>());
-		s_Registry->Register(std::make_unique<TextureHandler>());
+		s_Registry->Register(CreateScope<ShaderHandler>());
+		s_Registry->Register(CreateScope<TextureHandler>());
 		LITE_INFO("Asset registry ready ({})", s_Registry->m_Root.string());
 	}
 
@@ -41,13 +41,13 @@ namespace Lite {
 		return *s_Registry;
 	}
 
-	void AssetRegistry::Register(std::unique_ptr<AssetHandler> handler)
+	void AssetRegistry::Register(Scope<AssetHandler> handler)
 	{
 		AssetType type = handler->GetType();
 		m_Handlers[type] = std::move(handler);
 	}
 
-	std::shared_ptr<Asset> AssetRegistry::LoadAsset(AssetType type, std::string_view path)
+	Ref<Asset> AssetRegistry::LoadAsset(AssetType type, std::string_view path)
 	{
 		std::string key = Key(path);
 		if (auto found = m_Assets.find(key); found != m_Assets.end())
@@ -68,7 +68,7 @@ namespace Lite {
 			return nullptr;
 		}
 
-		std::shared_ptr<Asset> asset = handler->second->Load(Resolve(path));
+		Ref<Asset> asset = handler->second->Load(Resolve(path));
 		if (!asset)
 			return nullptr;
 
@@ -77,7 +77,7 @@ namespace Lite {
 		return asset;
 	}
 
-	std::shared_ptr<Asset> AssetRegistry::Find(std::string_view path) const
+	Ref<Asset> AssetRegistry::Find(std::string_view path) const
 	{
 		auto found = m_Assets.find(Key(path));
 		if (found == m_Assets.end())

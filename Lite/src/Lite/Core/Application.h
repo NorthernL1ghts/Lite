@@ -4,8 +4,6 @@
 #include "LayerStack.h"
 #include "Window.h"
 
-#include <memory>
-
 namespace Lite {
 
 	class ImGuiLayer;
@@ -18,8 +16,8 @@ namespace Lite {
 
 		void Run();
 
-		void PushLayer(std::unique_ptr<Layer> layer);
-		void PushOverlay(std::unique_ptr<Layer> layer);
+		void PushLayer(Scope<Layer> layer);
+		void PushOverlay(Scope<Layer> layer);
 		void PopLayer(Layer* layer);
 		void PopOverlay(Layer* layer);
 
@@ -33,11 +31,11 @@ namespace Lite {
 		WindowProps m_Props;
 		bool m_Running = true;
 		bool m_Initialized = false;
-		std::unique_ptr<Window> m_Window;
+		Scope<Window> m_Window;
 		ImGuiLayer* m_ImGuiLayer = nullptr;
 		LayerStack m_LayerStack;
 	};
 
-	std::unique_ptr<Application> CreateApplication();
+	Scope<Application> CreateApplication();
 
 }

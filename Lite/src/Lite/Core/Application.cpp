@@ -40,7 +40,7 @@ namespace Lite {
 		Input::SetWindow(m_Window->GetNativeHandle());
 		Renderer2D::Init(m_Window->GetNativeHandle());
 
-		auto imgui = std::make_unique<ImGuiLayer>(static_cast<GLFWwindow*>(m_Window->GetNativeHandle()));
+		auto imgui = CreateScope<ImGuiLayer>(static_cast<GLFWwindow*>(m_Window->GetNativeHandle()));
 		m_ImGuiLayer = imgui.get();
 		PushOverlay(std::move(imgui));
 
@@ -123,12 +123,12 @@ namespace Lite {
 			LITE_TRACE("{}", event.ToString());
 	}
 
-	void Application::PushLayer(std::unique_ptr<Layer> layer)
+	void Application::PushLayer(Scope<Layer> layer)
 	{
 		m_LayerStack.PushLayer(std::move(layer));
 	}
 
-	void Application::PushOverlay(std::unique_ptr<Layer> layer)
+	void Application::PushOverlay(Scope<Layer> layer)
 	{
 		m_LayerStack.PushOverlay(std::move(layer));
 	}

@@ -102,9 +102,9 @@ namespace Lite {
 		return true;
 	}
 
-	std::shared_ptr<Asset> TextureHandler::Load(const std::filesystem::path& path)
+	Ref<Asset> TextureHandler::Load(const std::filesystem::path& path)
 	{
-		auto texture = std::make_shared<Texture>();
+		auto texture = CreateRef<Texture>();
 		if (!texture->LoadFromFile(path))
 			return nullptr;
 

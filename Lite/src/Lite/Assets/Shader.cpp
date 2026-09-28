@@ -77,9 +77,9 @@ namespace Lite {
 		return shader;
 	}
 
-	std::shared_ptr<Asset> ShaderHandler::Load(const std::filesystem::path& path)
+	Ref<Asset> ShaderHandler::Load(const std::filesystem::path& path)
 	{
-		auto shader = std::make_shared<Shader>();
+		auto shader = CreateRef<Shader>();
 		if (!shader->LoadFromFile(path))
 			return nullptr;
 
