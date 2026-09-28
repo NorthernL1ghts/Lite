@@ -2,6 +2,7 @@
 
 #include "Lite/Core/Events/Event.h"
 #include "Lite/Core/Logger.h"
+#include "Lite/Core/Time.h"
 #include "Lite/Renderer/Renderer.h"
 
 #include <imgui.h>
@@ -47,6 +48,55 @@ namespace Lite {
 			ImGui::PopStyleColor();
 			ImGui::TextUnformatted(value.data(), value.data() + value.size());
 			ImGui::EndGroup();
+		}
+
+		const char* FormatName(VkFormat format)
+		{
+			switch (format)
+			{
+			case VK_FORMAT_B8G8R8A8_SRGB: return "B8G8R8A8 sRGB";
+			case VK_FORMAT_R8G8B8A8_SRGB: return "R8G8B8A8 sRGB";
+			case VK_FORMAT_B8G8R8A8_UNORM: return "B8G8R8A8 UNORM";
+			case VK_FORMAT_R8G8B8A8_UNORM: return "R8G8B8A8 UNORM";
+			default: return "Other";
+			}
+		}
+
+		const char* ColorSpaceName(VkColorSpaceKHR space)
+		{
+			switch (space)
+			{
+			case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: return "sRGB nonlinear";
+			default: return "Other";
+			}
+		}
+
+		const char* PresentModeName(VkPresentModeKHR mode)
+		{
+			switch (mode)
+			{
+			case VK_PRESENT_MODE_MAILBOX_KHR: return "Mailbox";
+			case VK_PRESENT_MODE_FIFO_KHR: return "FIFO";
+			case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return "FIFO relaxed";
+			case VK_PRESENT_MODE_IMMEDIATE_KHR: return "Immediate";
+			default: return "Other";
+			}
+		}
+
+		std::string DeviceMemory()
+		{
+			VkPhysicalDeviceMemoryProperties memory {};
+			vkGetPhysicalDeviceMemoryProperties(Renderer::GetPhysicalDevice(), &memory);
+
+			VkDeviceSize local = 0;
+			for (uint32_t index = 0; index < memory.memoryHeapCount; ++index)
+			{
+				if (memory.memoryHeaps[index].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+					local += memory.memoryHeaps[index].size;
+			}
+
+			double gigabytes = static_cast<double>(local) / (1024.0 * 1024.0 * 1024.0);
+			return std::format("{:.1f} GB", gigabytes);
 		}
 
 	}
@@ -229,17 +279,28 @@ namespace Lite {
 		PanelHeader("GPU");
 		Property("Name", properties.deviceName);
 		Property("Type", deviceType);
+		Property("Vendor", std::format("{:04X}", properties.vendorID));
+		Property("Device", std::format("{:04X}", properties.deviceID));
+		Property("Memory", DeviceMemory());
 		Property("API", version(properties.apiVersion));
 		Property("Driver", version(properties.driverVersion));
 		Property("Max texture", std::format("{}", properties.limits.maxImageDimension2D));
 		Property("Max framebuffer", std::format("{} x {}", properties.limits.maxFramebufferWidth, properties.limits.maxFramebufferHeight));
+		Property("Max uniform", std::format("{}", properties.limits.maxUniformBufferRange));
+		Property("Max anisotropy", std::format("{:.0f}", properties.limits.maxSamplerAnisotropy));
+		Property("Max samplers", std::format("{}", properties.limits.maxPerStageDescriptorSamplers));
 		ImGui::End();
 
 		ImGui::Begin("Swapchain");
 		PanelHeader("Swapchain");
 		Property("Extent", std::format("{} x {}", extent.width, extent.height));
+		Property("Format", FormatName(Renderer::GetSwapchainFormat()));
+		Property("Color space", ColorSpaceName(Renderer::GetColorSpace()));
+		Property("Present", PresentModeName(Renderer::GetPresentMode()));
 		Property("Images", std::format("{}", Renderer::GetImageCount()));
 		Property("Min images", std::format("{}", Renderer::GetMinImageCount()));
+		Property("Image index", std::format("{}", Renderer::GetImageIndex()));
+		Property("Frame index", std::format("{}", Renderer::GetFrameIndex()));
 		Property("Frames in flight", std::format("{}", VulkanSync::FramesInFlight));
 		Property("Queue family", std::format("{}", Renderer::GetGraphicsQueueFamily()));
 		ImGui::End();
@@ -247,17 +308,32 @@ namespace Lite {
 		ImGui::Begin("Draw");
 		PanelHeader("Draw");
 		Property("Frame active", Renderer::IsFrameActive() ? "yes" : "no");
-		Property("Index count", std::format("{}", Renderer::GetIndexCount()));
+		Property("Draw calls", std::format("{}", Renderer::GetDrawCalls()));
+		Property("Quads", std::format("{}", Renderer::GetQuadCount()));
+		Property("Triangles", std::format("{}", Renderer::GetTriangleCount()));
+		Property("Indices", std::format("{}", Renderer::GetIndexCount()));
 		Property("Samples", "1");
+		Property("Blend", "Premultiplied");
 		ImGui::End();
 
 		const ImGuiIO& io = ImGui::GetIO();
 		float frameMs = io.Framerate > 0.0f ? 1000.0f / io.Framerate : 0.0f;
+		float cap = Time::GetFPS();
 		ImGui::Begin("Stats");
 		PanelHeader("Stats");
 		Stat("FPS", std::format("{:.1f}", io.Framerate));
-		ImGui::SameLine(0.0f, 36.0f);
-		Stat("Frame time", std::format("{:.3f} ms", frameMs));
+		ImGui::SameLine(0.0f, 22.0f);
+		Stat("Frame", std::format("{:.2f} ms", frameMs));
+		ImGui::SameLine(0.0f, 22.0f);
+		Stat("Delta", std::format("{:.2f} ms", Time::GetDeltaMilliseconds()));
+		ImGui::SameLine(0.0f, 22.0f);
+		Stat("Elapsed", std::format("{:.1f} s", Time::GetElapsed()));
+		ImGui::SameLine(0.0f, 22.0f);
+		Stat("Cap", cap > 0.0f ? std::format("{:.0f}", cap) : "off");
+		ImGui::SameLine(0.0f, 22.0f);
+		Stat("Draws", std::format("{}", Renderer::GetDrawCalls()));
+		ImGui::SameLine(0.0f, 22.0f);
+		Stat("Quads", std::format("{}", Renderer::GetQuadCount()));
 		ImGui::End();
 	}
 

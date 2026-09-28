@@ -27,6 +27,9 @@ namespace {
 		bool FramebufferResized = false;
 		bool ContextReady = false;
 		bool Ready = false;
+		uint32_t DrawCalls = 0;
+		uint32_t QuadCount = 0;
+		uint32_t TriangleCount = 0;
 		uint32_t IndexCount = 0;
 		Lite::Mat4 ViewProjection = Lite::Mat4::Identity();
 	};
@@ -135,6 +138,10 @@ namespace Lite {
 	void Renderer::BeginFrame()
 	{
 		s_Renderer.FrameActive = false;
+		s_Renderer.DrawCalls = 0;
+		s_Renderer.QuadCount = 0;
+		s_Renderer.TriangleCount = 0;
+		s_Renderer.IndexCount = 0;
 		if (!s_Renderer.Ready)
 			return;
 
@@ -299,9 +306,28 @@ namespace Lite {
 		return s_Renderer.Swapchain.GetMinImageCount();
 	}
 
-	void Renderer::SetIndexCount(uint32_t count)
+	void Renderer::RecordDraw(uint32_t indexCount)
 	{
-		s_Renderer.IndexCount = count;
+		uint32_t triangles = indexCount / 3u;
+		s_Renderer.DrawCalls += 1;
+		s_Renderer.TriangleCount += triangles;
+		s_Renderer.QuadCount += triangles / 2u;
+		s_Renderer.IndexCount += indexCount;
+	}
+
+	uint32_t Renderer::GetDrawCalls()
+	{
+		return s_Renderer.DrawCalls;
+	}
+
+	uint32_t Renderer::GetQuadCount()
+	{
+		return s_Renderer.QuadCount;
+	}
+
+	uint32_t Renderer::GetTriangleCount()
+	{
+		return s_Renderer.TriangleCount;
 	}
 
 	uint32_t Renderer::GetIndexCount()
@@ -312,6 +338,26 @@ namespace Lite {
 	VkExtent2D Renderer::GetExtent()
 	{
 		return s_Renderer.Swapchain.GetExtent();
+	}
+
+	VkFormat Renderer::GetSwapchainFormat()
+	{
+		return s_Renderer.Swapchain.GetFormat();
+	}
+
+	VkColorSpaceKHR Renderer::GetColorSpace()
+	{
+		return s_Renderer.Swapchain.GetColorSpace();
+	}
+
+	VkPresentModeKHR Renderer::GetPresentMode()
+	{
+		return s_Renderer.Swapchain.GetPresentMode();
+	}
+
+	uint32_t Renderer::GetImageIndex()
+	{
+		return s_Renderer.ImageIndex;
 	}
 
 	uint32_t Renderer::GetFrameIndex()

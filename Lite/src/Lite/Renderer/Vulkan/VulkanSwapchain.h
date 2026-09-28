@@ -21,6 +21,8 @@ namespace Lite {
 		VkSurfaceKHR GetSurface() const { return m_Surface; }
 		VkSwapchainKHR Get() const { return m_Swapchain; }
 		VkFormat GetFormat() const { return m_Format; }
+		VkColorSpaceKHR GetColorSpace() const { return m_ColorSpace; }
+		VkPresentModeKHR GetPresentMode() const { return m_PresentMode; }
 		VkExtent2D GetExtent() const { return m_Extent; }
 		uint32_t GetImageCount() const { return static_cast<uint32_t>(m_Images.size()); }
 		uint32_t GetMinImageCount() const { return m_MinImageCount; }
@@ -39,6 +41,8 @@ namespace Lite {
 		VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
 		VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
 		VkFormat m_Format = VK_FORMAT_UNDEFINED;
+		VkColorSpaceKHR m_ColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+		VkPresentModeKHR m_PresentMode = VK_PRESENT_MODE_FIFO_KHR;
 		VkExtent2D m_Extent {};
 		uint32_t m_ImageCount = 0;
 		uint32_t m_MinImageCount = 2;

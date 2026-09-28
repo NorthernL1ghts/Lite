@@ -23,6 +23,8 @@ namespace Lite {
 
 		void SetColor(const Vec4& color);
 		const Vec4& GetColor() const { return m_Color; }
+		void SetTiling(const Vec2& tiling);
+		const Vec2& GetTiling() const { return m_Tiling; }
 
 		void Bind();
 
@@ -36,6 +38,7 @@ namespace Lite {
 		UniformBuffer m_Uniforms;
 		Ref<Texture> m_Texture;
 		Vec4 m_Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		Vec2 m_Tiling = { 1.0f, 1.0f };
 	};
 
 }

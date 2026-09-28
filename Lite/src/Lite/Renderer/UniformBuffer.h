@@ -20,6 +20,8 @@ namespace Lite {
 	struct MaterialUniform
 	{
 		Vec4 Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		Vec2 Tiling = { 1.0f, 1.0f };
+		Vec2 Padding {};
 	};
 
 	class LITE_API UniformBuffer

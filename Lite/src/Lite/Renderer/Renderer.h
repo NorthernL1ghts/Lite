@@ -34,9 +34,16 @@ namespace Lite {
 		static VkRenderPass GetRenderPass();
 		static uint32_t GetImageCount();
 		static uint32_t GetMinImageCount();
-		static void SetIndexCount(uint32_t count);
+		static void RecordDraw(uint32_t indexCount);
+		static uint32_t GetDrawCalls();
+		static uint32_t GetQuadCount();
+		static uint32_t GetTriangleCount();
 		static uint32_t GetIndexCount();
 		static VkExtent2D GetExtent();
+		static VkFormat GetSwapchainFormat();
+		static VkColorSpaceKHR GetColorSpace();
+		static VkPresentModeKHR GetPresentMode();
+		static uint32_t GetImageIndex();
 		static uint32_t GetFrameIndex();
 	};
 

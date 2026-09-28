@@ -6,20 +6,21 @@ layout(location = 0) out vec4 outColor;
 layout(set = 1, binding = 0) uniform MaterialBlock
 {
 	vec4 color;
+	vec2 tiling;
 } material;
 
 void main()
 {
-	vec3 albedo = vec3(0.93, 0.32, 0.38) * bary.x
-		+ vec3(0.18, 0.78, 0.58) * bary.y
-		+ vec3(0.28, 0.46, 0.96) * bary.z;
+	vec3 albedo = vec3(0.93, 0.22, 0.28) * bary.x
+		+ vec3(0.08, 0.78, 0.42) * bary.y
+		+ vec3(0.16, 0.36, 0.96) * bary.z;
 
 	float edge = min(min(bary.x, bary.y), bary.z);
-	float rim = 1.0 - smoothstep(0.0, 0.04, edge);
-	float core = smoothstep(0.02, 0.30, edge);
+	float coverage = smoothstep(0.0, 0.012, edge);
+	float core = smoothstep(0.12, 0.34, edge);
+	albedo += albedo * core * 0.12;
 
-	albedo += vec3(1.0, 0.96, 0.90) * core * 0.28;
-	albedo = mix(albedo, vec3(0.96, 0.97, 1.0), rim * 0.45);
-
-	outColor = vec4(albedo * material.color.rgb, material.color.a);
+	float alpha = coverage * material.color.a;
+	vec3 rgb = albedo * material.color.rgb;
+	outColor = vec4(rgb * alpha, alpha);
 }

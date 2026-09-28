@@ -163,6 +163,8 @@ namespace Lite {
 			m_Format = surfaceFormat.format;
 		else
 			surfaceFormat.format = m_Format;
+		m_ColorSpace = surfaceFormat.colorSpace;
+		m_PresentMode = ChoosePresentMode(presentModes);
 
 		m_Extent = ChooseExtent(capabilities, m_Window);
 		if (m_Extent.width == 0 || m_Extent.height == 0)
@@ -191,7 +193,7 @@ namespace Lite {
 		info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		info.preTransform = capabilities.currentTransform;
 		info.compositeAlpha = ChooseCompositeAlpha(capabilities);
-		info.presentMode = ChoosePresentMode(presentModes);
+		info.presentMode = m_PresentMode;
 		info.clipped = VK_TRUE;
 		info.oldSwapchain = oldSwapchain;
 

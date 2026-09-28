@@ -52,12 +52,18 @@ namespace Lite {
 		m_Color = color;
 	}
 
+	void Material::SetTiling(const Vec2& tiling)
+	{
+		m_Tiling = tiling;
+	}
+
 	void Material::Bind()
 	{
 		m_Shader.Bind();
 
 		MaterialUniform uniform;
 		uniform.Color = m_Color;
+		uniform.Tiling = m_Tiling;
 		m_Uniforms.SetData(&uniform, sizeof(uniform));
 		VkCommandBuffer commandBuffer = Renderer::GetCommandBuffer();
 		m_Uniforms.Bind(commandBuffer, m_Shader.GetLayout());

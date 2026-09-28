@@ -20,6 +20,7 @@ public:
 
 private:
 	Lite::OrthographicCamera m_Camera;
+	float m_ViewSize = 2.0f;
 	Lite::VertexArray m_Triangle;
 	Lite::VertexArray m_Background;
 	Lite::Ref<Lite::Shader> m_TriangleVertex;

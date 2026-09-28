@@ -1,11 +1,14 @@
 #include "SandboxLayer.h"
 
 #include "Lite/Assets/AssetRegistry.h"
+#include "Lite/Core/Events/MouseEvent.h"
 #include "Lite/Core/Logger.h"
 #include "Lite/Input/Input.h"
 #include "Lite/Renderer/Renderer.h"
 #include "Lite/Renderer/Renderer2D.h"
 #include "Lite/Renderer/VertexLayout.h"
+
+#include <cmath>
 
 namespace {
 
@@ -44,9 +47,9 @@ namespace {
 	{
 		const float vertices[] = {
 			-4.0f, -4.0f, 0.0f, 0.0f,
-			 4.0f, -4.0f, 4.0f, 0.0f,
-			 4.0f,  4.0f, 4.0f, 4.0f,
-			-4.0f,  4.0f, 0.0f, 4.0f
+			 4.0f, -4.0f, 1.0f, 0.0f,
+			 4.0f,  4.0f, 1.0f, 1.0f,
+			-4.0f,  4.0f, 0.0f, 1.0f
 		};
 		const uint16_t indices[] = { 0, 1, 2, 2, 3, 0 };
 		return mesh.Create(vertices, sizeof(vertices), indices, 6);
@@ -91,8 +94,9 @@ void SandboxLayer::OnAttach()
 	}
 
 	m_BackgroundMaterial->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-	m_TriangleMaterial->SetColor({ 1.0f, 1.0f, 1.0f, 0.72f });
-	m_Camera.SetProjection(2.0f, 16.0f / 9.0f);
+	m_BackgroundMaterial->SetTiling({ 8.0f, 8.0f });
+	m_TriangleMaterial->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	m_Camera.SetProjection(m_ViewSize, 16.0f / 9.0f);
 	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
 }
 
@@ -111,7 +115,7 @@ void SandboxLayer::OnRender()
 {
 	VkExtent2D extent = Lite::Renderer::GetExtent();
 	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
-	m_Camera.SetProjection(2.0f, aspect);
+	m_Camera.SetProjection(m_ViewSize, aspect);
 	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
 
 	if (m_BackgroundMaterial)
@@ -136,6 +140,21 @@ void SandboxLayer::OnDetach()
 
 void SandboxLayer::OnEvent(Lite::Event& event)
 {
+	Lite::EventDispatcher dispatcher(event);
+	dispatcher.Dispatch<Lite::MouseScrolledEvent>([this](Lite::MouseScrolledEvent& scroll)
+	{
+		float steps = scroll.GetYOffset();
+		if (steps == 0.0f)
+			return false;
+
+		m_ViewSize *= std::pow(0.85f, steps);
+		if (m_ViewSize < 0.25f)
+			m_ViewSize = 0.25f;
+		if (m_ViewSize > 12.0f)
+			m_ViewSize = 12.0f;
+		return false;
+	});
+
 	if (event.GetType() == Lite::EventType::KeyPressed)
 		LITE_CLIENT_TRACE("{}", event.ToString());
 }
