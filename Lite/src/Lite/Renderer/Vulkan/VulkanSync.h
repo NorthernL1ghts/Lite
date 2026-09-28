@@ -22,7 +22,7 @@ namespace Lite {
 		void TrackImage(uint32_t imageIndex, uint32_t frame);
 
 		VkSemaphore ImageAvailable(uint32_t frame) const { return m_ImageAvailable[frame]; }
-		VkSemaphore RenderFinished(uint32_t frame) const { return m_RenderFinished[frame]; }
+		VkSemaphore RenderFinished(uint32_t imageIndex) const { return m_RenderFinished[imageIndex]; }
 		VkFence InFlight(uint32_t frame) const { return m_InFlight[frame]; }
 
 	private:

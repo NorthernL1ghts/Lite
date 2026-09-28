@@ -29,6 +29,30 @@ target_include_directories(Lite
 
 find_package(Vulkan REQUIRED)
 
+if(NOT Vulkan_GLSLC_EXECUTABLE)
+    find_program(Vulkan_GLSLC_EXECUTABLE glslc HINTS "$ENV{VULKAN_SDK}/Bin")
+endif()
+if(NOT Vulkan_GLSLC_EXECUTABLE)
+    message(FATAL_ERROR "glslc was not found. Install the Vulkan SDK.")
+endif()
+
+set(LITE_SHADER_SOURCES
+    src/Lite/Renderer/Shaders/Quad.vert
+    src/Lite/Renderer/Shaders/Quad.frag
+)
+target_sources(Lite PRIVATE ${LITE_SHADER_SOURCES})
+set_source_files_properties(${LITE_SHADER_SOURCES} PROPERTIES
+    HEADER_FILE_ONLY ON
+)
+
+add_custom_command(TARGET Lite POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Lite>/shaders"
+    COMMAND "${Vulkan_GLSLC_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/src/Lite/Renderer/Shaders/Quad.vert" -o "$<TARGET_FILE_DIR:Lite>/shaders/Quad.vert.spv"
+    COMMAND "${Vulkan_GLSLC_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/src/Lite/Renderer/Shaders/Quad.frag" -o "$<TARGET_FILE_DIR:Lite>/shaders/Quad.frag.spv"
+    COMMENT "Compiling Vulkan shaders"
+    VERBATIM
+)
+
 set(LITE_IMGUI_SOURCES
     src/vendor/imgui/imgui.cpp
     src/vendor/imgui/imgui_draw.cpp

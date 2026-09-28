@@ -6,7 +6,7 @@ namespace Lite {
 	{
 		m_Device = device;
 		m_ImageAvailable.resize(frames);
-		m_RenderFinished.resize(frames);
+		m_RenderFinished.resize(imageCount);
 		m_InFlight.resize(frames);
 		m_ImageFences.assign(imageCount, VK_NULL_HANDLE);
 
@@ -21,9 +21,13 @@ namespace Lite {
 		{
 			if (!CheckVk(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_ImageAvailable[index]), "create image semaphore"))
 				return false;
-			if (!CheckVk(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_RenderFinished[index]), "create render semaphore"))
-				return false;
 			if (!CheckVk(vkCreateFence(device, &fenceInfo, nullptr, &m_InFlight[index]), "create frame fence"))
+				return false;
+		}
+
+		for (uint32_t index = 0; index < imageCount; ++index)
+		{
+			if (!CheckVk(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_RenderFinished[index]), "create render semaphore"))
 				return false;
 		}
 
@@ -48,6 +52,15 @@ namespace Lite {
 	void VulkanSync::ResetImages(uint32_t imageCount)
 	{
 		m_ImageFences.assign(imageCount, VK_NULL_HANDLE);
+
+		for (auto semaphore : m_RenderFinished)
+			vkDestroySemaphore(m_Device, semaphore, nullptr);
+
+		m_RenderFinished.assign(imageCount, VK_NULL_HANDLE);
+		VkSemaphoreCreateInfo semaphoreInfo {};
+		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		for (uint32_t index = 0; index < imageCount; ++index)
+			vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinished[index]);
 	}
 
 	bool VulkanSync::Wait(uint32_t frame) const

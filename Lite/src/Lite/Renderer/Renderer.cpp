@@ -238,7 +238,7 @@ namespace Lite {
 		s_Renderer.Commands.End(frame);
 
 		VkSemaphore imageAvailable = s_Renderer.Sync.ImageAvailable(frame);
-		VkSemaphore renderFinished = s_Renderer.Sync.RenderFinished(frame);
+		VkSemaphore renderFinished = s_Renderer.Sync.RenderFinished(s_Renderer.ImageIndex);
 		VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 		VkSubmitInfo submitInfo {};

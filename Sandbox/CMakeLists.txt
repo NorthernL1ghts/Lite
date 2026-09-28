@@ -17,7 +17,10 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "$<TARGET_FILE:Lite>"
         "${CMAKE_BINARY_DIR}/bin/sandbox"
-    COMMENT "Copying Lite DLL from build/bin/lite to build/bin/sandbox"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_BINARY_DIR}/bin/lite/shaders"
+        "${CMAKE_BINARY_DIR}/bin/sandbox/shaders"
+    COMMENT "Copying Lite DLL and shaders into build/bin/sandbox"
     VERBATIM
 )
 
