@@ -1,5 +1,7 @@
 #include "Renderer2D.h"
 
+#include "RendererAPI.h"
+
 #include "Lite/Assets/Shader.h"
 
 namespace Lite {
@@ -25,11 +27,7 @@ namespace Lite {
 		if (!Renderer::IsFrameActive())
 			return;
 
-		VkCommandBuffer commandBuffer = Renderer::GetCommandBuffer();
-		Renderer::GetPipeline().Bind(commandBuffer, Renderer::GetExtent());
-		Renderer::GetVertexBuffer().BindVertex(commandBuffer);
-		Renderer::GetIndexBuffer().BindIndex(commandBuffer);
-		vkCmdDrawIndexed(commandBuffer, Renderer::GetIndexCount(), 1, 0, 0, 0);
+		RendererAPI::DrawIndexed(Renderer::GetVertexArray());
 	}
 
 	void Renderer2D::EndFrame()

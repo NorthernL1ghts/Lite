@@ -2,7 +2,6 @@
 
 #include "Lite/Assets/AssetRegistry.h"
 #include "Lite/Core/Logger.h"
-#include "Lite/Core/Time.h"
 #include "Lite/Renderer/Renderer2D.h"
 
 SandboxLayer::SandboxLayer()
@@ -13,7 +12,7 @@ SandboxLayer::SandboxLayer()
 void SandboxLayer::OnAttach()
 {
 	LITE_CLIENT_INFO("Layer attached");
-	Lite::Time::SetFPS(60.0f);
+	// Lite::Time::SetFPS(60.0f);
 
 	m_VertexShader = Lite::AssetRegistry::Get().Load<Lite::Shader>("shaders/Triangle.vert.spv");
 	m_FragmentShader = Lite::AssetRegistry::Get().Load<Lite::Shader>("shaders/Triangle.frag.spv");

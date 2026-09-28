@@ -2,16 +2,6 @@
 
 #include "Lite/Core/Base.h"
 #include "Renderer.h"
-#include "Vulkan/VulkanInstance.h"
-#include "Vulkan/VulkanPhysicalDevice.h"
-#include "Vulkan/VulkanDevice.h"
-#include "Vulkan/VulkanSwapchain.h"
-#include "Vulkan/VulkanRenderPass.h"
-#include "Vulkan/VulkanFramebuffer.h"
-#include "Vulkan/VulkanPipeline.h"
-#include "Vulkan/VulkanBuffer.h"
-#include "Vulkan/VulkanCommandBuffer.h"
-#include "Vulkan/VulkanSync.h"
 
 namespace Lite {
 

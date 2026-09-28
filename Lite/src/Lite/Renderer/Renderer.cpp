@@ -1,5 +1,8 @@
 #include "Renderer.h"
 
+#include "Framebuffer.h"
+#include "VertexArray.h"
+
 #include "Lite/Assets/Shader.h"
 #include "Lite/Core/Logger.h"
 
@@ -25,16 +28,14 @@ namespace {
 		Lite::VulkanDevice Device;
 		Lite::VulkanSwapchain Swapchain;
 		Lite::VulkanRenderPass RenderPass;
-		Lite::VulkanFramebuffer Framebuffers;
+		Lite::Framebuffer Frames;
 		Lite::VulkanPipeline Pipeline;
-		Lite::VulkanBuffer VertexBuffer;
-		Lite::VulkanBuffer IndexBuffer;
+		Lite::VertexArray Geometry;
 		Lite::VulkanCommandBuffer Commands;
 		Lite::VulkanSync Sync;
 		GLFWwindow* Window = nullptr;
 		uint32_t CurrentFrame = 0;
 		uint32_t ImageIndex = 0;
-		uint32_t IndexCount = 0;
 		bool FrameActive = false;
 		bool FramebufferResized = false;
 		bool ContextReady = false;
@@ -52,19 +53,7 @@ namespace {
 		};
 		const uint16_t indices[] = { 0, 1, 2 };
 
-		auto device = s_Renderer.Device.Get();
-		auto physical = s_Renderer.PhysicalDevice.Get();
-
-		if (!s_Renderer.VertexBuffer.Create(device, physical, sizeof(vertices), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT))
-			return false;
-		s_Renderer.VertexBuffer.Upload(vertices, sizeof(vertices));
-
-		if (!s_Renderer.IndexBuffer.Create(device, physical, sizeof(indices), VK_BUFFER_USAGE_INDEX_BUFFER_BIT))
-			return false;
-		s_Renderer.IndexBuffer.Upload(indices, sizeof(indices));
-
-		s_Renderer.IndexCount = static_cast<uint32_t>(sizeof(indices) / sizeof(uint16_t));
-		return true;
+		return s_Renderer.Geometry.Create(vertices, sizeof(vertices), indices, static_cast<uint32_t>(sizeof(indices) / sizeof(uint16_t)));
 	}
 
 	bool RecreateSwapchain()
@@ -79,8 +68,8 @@ namespace {
 		if (!s_Renderer.Swapchain.Recreate())
 			return false;
 
-		s_Renderer.Framebuffers.Destroy();
-		if (!s_Renderer.Framebuffers.Create(
+		s_Renderer.Frames.Destroy();
+		if (!s_Renderer.Frames.Create(
 			s_Renderer.Device.Get(),
 			s_Renderer.RenderPass.Get(),
 			s_Renderer.Swapchain.GetImageViews(),
@@ -115,7 +104,7 @@ namespace Lite {
 			return;
 		if (!s_Renderer.RenderPass.Create(s_Renderer.Device.Get(), s_Renderer.Swapchain.GetFormat()))
 			return;
-		if (!s_Renderer.Framebuffers.Create(
+		if (!s_Renderer.Frames.Create(
 			s_Renderer.Device.Get(),
 			s_Renderer.RenderPass.Get(),
 			s_Renderer.Swapchain.GetImageViews(),
@@ -159,10 +148,9 @@ namespace Lite {
 
 		s_Renderer.Sync.Destroy();
 		s_Renderer.Commands.Destroy();
-		s_Renderer.IndexBuffer.Destroy();
-		s_Renderer.VertexBuffer.Destroy();
+		s_Renderer.Geometry.Destroy();
 		s_Renderer.Pipeline.Destroy();
-		s_Renderer.Framebuffers.Destroy();
+		s_Renderer.Frames.Destroy();
 		s_Renderer.RenderPass.Destroy();
 		s_Renderer.Swapchain.Destroy();
 		s_Renderer.Device.Destroy();
@@ -173,7 +161,6 @@ namespace Lite {
 		s_Renderer.Window = nullptr;
 		s_Renderer.CurrentFrame = 0;
 		s_Renderer.ImageIndex = 0;
-		s_Renderer.IndexCount = 0;
 		s_Renderer.FrameActive = false;
 		s_Renderer.FramebufferResized = false;
 		s_Renderer.ContextReady = false;
@@ -237,7 +224,7 @@ namespace Lite {
 		VkCommandBuffer commandBuffer = s_Renderer.Commands.Begin(frame);
 		s_Renderer.RenderPass.Begin(
 			commandBuffer,
-			s_Renderer.Framebuffers.Get(s_Renderer.ImageIndex),
+			s_Renderer.Frames.Get(s_Renderer.ImageIndex),
 			s_Renderer.Swapchain.GetImageView(s_Renderer.ImageIndex),
 			s_Renderer.Swapchain.GetExtent());
 
@@ -349,7 +336,7 @@ namespace Lite {
 
 	uint32_t Renderer::GetIndexCount()
 	{
-		return s_Renderer.IndexCount;
+		return s_Renderer.Geometry.GetIndexCount();
 	}
 
 	VkExtent2D Renderer::GetExtent()
@@ -362,14 +349,9 @@ namespace Lite {
 		return s_Renderer.Pipeline;
 	}
 
-	VulkanBuffer& Renderer::GetVertexBuffer()
+	VertexArray& Renderer::GetVertexArray()
 	{
-		return s_Renderer.VertexBuffer;
-	}
-
-	VulkanBuffer& Renderer::GetIndexBuffer()
-	{
-		return s_Renderer.IndexBuffer;
+		return s_Renderer.Geometry;
 	}
 
 }

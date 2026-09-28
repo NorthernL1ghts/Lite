@@ -6,15 +6,14 @@
 #include "Vulkan/VulkanDevice.h"
 #include "Vulkan/VulkanSwapchain.h"
 #include "Vulkan/VulkanRenderPass.h"
-#include "Vulkan/VulkanFramebuffer.h"
 #include "Vulkan/VulkanPipeline.h"
-#include "Vulkan/VulkanBuffer.h"
 #include "Vulkan/VulkanCommandBuffer.h"
 #include "Vulkan/VulkanSync.h"
 
 namespace Lite {
 
 	class Shader;
+	class VertexArray;
 
 	class LITE_API Renderer
 	{
@@ -41,8 +40,7 @@ namespace Lite {
 		static VkExtent2D GetExtent();
 
 		static VulkanPipeline& GetPipeline();
-		static VulkanBuffer& GetVertexBuffer();
-		static VulkanBuffer& GetIndexBuffer();
+		static VertexArray& GetVertexArray();
 	};
 
 }
