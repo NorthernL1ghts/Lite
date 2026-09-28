@@ -3,6 +3,7 @@
 #include "Lite/Core/Base.h"
 #include "Lite/Math/Math.h"
 #include "Renderer.h"
+#include "ShaderLibrary.h"
 
 namespace Lite {
 
@@ -14,6 +15,7 @@ namespace Lite {
 	public:
 		static void Init(void* window);
 		static void Shutdown();
+		static ShaderLibrary& GetShaderLibrary();
 		static void SetViewProjection(const Mat4& viewProjection);
 
 		static void BeginFrame();

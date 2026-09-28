@@ -32,6 +32,7 @@ namespace Lite {
 		m_GlfwInitialized = true;
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
 		m_Window = glfwCreateWindow(m_Data.Props.Width, m_Data.Props.Height, m_Data.Props.Title.c_str(), nullptr, nullptr);
 		if (!m_Window)
@@ -93,6 +94,14 @@ namespace Lite {
 			data.Props.Width = width;
 			data.Props.Height = height;
 
+			WindowResizeEvent event(width, height);
+			if (data.Callback)
+				data.Callback(event);
+		});
+
+		glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
+		{
+			auto& data = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
 			WindowResizeEvent event(width, height);
 			if (data.Callback)
 				data.Callback(event);

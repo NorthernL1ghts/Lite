@@ -67,12 +67,12 @@ void SandboxLayer::OnAttach()
 	LITE_CLIENT_INFO("Layer attached");
 	// Lite::Time::SetFPS(60.0f);
 
-	auto& assets = Lite::AssetRegistry::Get();
-	m_TriangleVertex = assets.Load<Lite::Shader>("assets/shaders/Triangle.vert.spv");
-	m_TriangleFragment = assets.Load<Lite::Shader>("assets/shaders/Triangle.frag.spv");
-	m_QuadVertex = assets.Load<Lite::Shader>("assets/shaders/Quad.vert.spv");
-	m_QuadFragment = assets.Load<Lite::Shader>("assets/shaders/Quad.frag.spv");
-	m_Checkerboard = assets.Load<Lite::Texture>("assets/Checkerboard.png");
+	auto& shaders = Lite::Renderer2D::GetShaderLibrary();
+	m_TriangleVertex = shaders.Load("assets/shaders/Triangle.vert.spv");
+	m_TriangleFragment = shaders.Load("assets/shaders/Triangle.frag.spv");
+	m_QuadVertex = shaders.Load("assets/shaders/Quad.vert.spv");
+	m_QuadFragment = shaders.Load("assets/shaders/Quad.frag.spv");
+	m_Checkerboard = Lite::AssetRegistry::Get().Load<Lite::Texture>("assets/Checkerboard.png");
 	if (!m_TriangleVertex || !m_TriangleFragment || !m_QuadVertex || !m_QuadFragment || !m_Checkerboard)
 	{
 		LITE_CLIENT_ERROR("Failed to load Sandbox assets");

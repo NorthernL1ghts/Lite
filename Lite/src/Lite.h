@@ -16,6 +16,7 @@
 #include "Lite/Renderer/VertexArray.h"
 #include "Lite/Renderer/Framebuffer.h"
 #include "Lite/Renderer/UniformBuffer.h"
+#include "Lite/Renderer/ShaderLibrary.h"
 #include "Lite/Renderer/ShaderProgram.h"
 #include "Lite/Renderer/Material.h"
 #include "Lite/Renderer/RendererAPI.h"

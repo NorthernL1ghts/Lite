@@ -37,7 +37,7 @@ namespace Lite {
 			ImGui::PushTextWrapPos(0.0f);
 			ImGui::TextUnformatted(value.data(), value.data() + value.size());
 			ImGui::PopTextWrapPos();
-			ImGui::Dummy(ImVec2(0.0f, 6.0f));
+			ImGui::Dummy(ImVec2(0.0f, 2.0f));
 		}
 
 		void Stat(const char* label, std::string_view value)

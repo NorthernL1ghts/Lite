@@ -6,9 +6,21 @@
 
 namespace Lite {
 
+	namespace {
+
+		ShaderLibrary s_ShaderLibrary;
+
+	}
+
 	void Renderer2D::Init(void* window)
 	{
+		s_ShaderLibrary.Clear();
 		Renderer::Init(window);
+	}
+
+	ShaderLibrary& Renderer2D::GetShaderLibrary()
+	{
+		return s_ShaderLibrary;
 	}
 
 	void Renderer2D::SetViewProjection(const Mat4& viewProjection)
@@ -18,6 +30,7 @@ namespace Lite {
 
 	void Renderer2D::Shutdown()
 	{
+		s_ShaderLibrary.Clear();
 		Renderer::Shutdown();
 	}
 

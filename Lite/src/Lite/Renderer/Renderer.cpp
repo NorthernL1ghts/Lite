@@ -48,15 +48,20 @@ namespace {
 		if (!s_Renderer.Swapchain.Recreate())
 			return false;
 
+		VkExtent2D extent = s_Renderer.Swapchain.GetExtent();
+		if (extent.width == 0 || extent.height == 0)
+			return false;
+
 		s_Renderer.Frames.Destroy();
 		if (!s_Renderer.Frames.Create(
 			s_Renderer.Device.Get(),
 			s_Renderer.RenderPass.Get(),
 			s_Renderer.Swapchain.GetImageViews(),
-			s_Renderer.Swapchain.GetExtent()))
+			extent))
 			return false;
 
 		s_Renderer.Sync.ResetImages(s_Renderer.Swapchain.GetImageCount());
+		LITE_INFO("Swapchain resized ({}x{})", extent.width, extent.height);
 		return true;
 	}
 
