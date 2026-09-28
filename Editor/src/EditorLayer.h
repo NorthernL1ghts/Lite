@@ -19,6 +19,8 @@ public:
 	void OnEvent(Lite::Event& event) override;
 
 private:
+	void DrawMenu();
+	void DrawOpenDialog();
 	void DrawScene();
 	void DrawViewport();
 	void DrawInspector();
@@ -36,6 +38,8 @@ private:
 	Lite::Scene* m_NamedScene = nullptr;
 	char m_Name[128] {};
 	std::string m_Selection = "Triangle";
+	std::string m_OpenPath;
+	bool m_ShowOpen = false;
 	bool m_ShowInfo = false;
 	bool m_InfoPlaced = false;
 };

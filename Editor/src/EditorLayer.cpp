@@ -151,6 +151,55 @@ namespace {
 		return std::format("{:.1f} GB", gigabytes);
 	}
 
+	void DrawPlay(ImDrawList* draw, ImVec2 min, ImVec2 max, ImU32 color)
+	{
+		ImVec2 center { (min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f };
+		float height = 10.0f;
+		float width = 8.0f;
+		draw->AddTriangleFilled(
+			ImVec2(center.x - width * 0.35f, center.y - height * 0.5f),
+			ImVec2(center.x - width * 0.35f, center.y + height * 0.5f),
+			ImVec2(center.x + width * 0.65f, center.y),
+			color);
+	}
+
+	void DrawPause(ImDrawList* draw, ImVec2 min, ImVec2 max, ImU32 color)
+	{
+		ImVec2 center { (min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f };
+		float height = 10.0f;
+		float width = 2.5f;
+		float gap = 2.5f;
+		draw->AddRectFilled(
+			ImVec2(center.x - gap - width, center.y - height * 0.5f),
+			ImVec2(center.x - gap, center.y + height * 0.5f),
+			color, 1.0f);
+		draw->AddRectFilled(
+			ImVec2(center.x + gap, center.y - height * 0.5f),
+			ImVec2(center.x + gap + width, center.y + height * 0.5f),
+			color, 1.0f);
+	}
+
+	bool TransportButton(const char* id, bool enabled, bool active, const ImVec4& activeColor, bool play)
+	{
+		ImGui::BeginDisabled(!enabled);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Button, active ? activeColor : ImVec4(0.16f, 0.17f, 0.21f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? activeColor : ImVec4(0.22f, 0.26f, 0.32f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, active ? activeColor : ImVec4(0.28f, 0.34f, 0.44f, 1.0f));
+		bool pressed = ImGui::Button(id, ImVec2(28.0f, 22.0f));
+		ImU32 symbol = ImGui::GetColorU32(active ? ImVec4(0.96f, 0.97f, 0.98f, 1.0f) : ImVec4(0.78f, 0.82f, 0.88f, 1.0f));
+		ImDrawList* draw = ImGui::GetWindowDrawList();
+		if (play)
+			DrawPlay(draw, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), symbol);
+		else
+			DrawPause(draw, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), symbol);
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(2);
+		ImGui::EndDisabled();
+		return pressed && enabled;
+	}
+
 }
 
 EditorLayer::EditorLayer()
@@ -274,6 +323,12 @@ void EditorLayer::OnEvent(Lite::Event& event)
 			return true;
 		}
 
+		if (control && key.GetKeyCode() == Lite::Key::O)
+		{
+			m_ShowOpen = true;
+			return true;
+		}
+
 		if (key.GetKeyCode() == Lite::Key::F5 && m_Scene)
 		{
 			m_Scene->Play();
@@ -304,8 +359,118 @@ void EditorLayer::OnEvent(Lite::Event& event)
 	});
 }
 
+void EditorLayer::DrawMenu()
+{
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 8.0f));
+	if (!ImGui::BeginMainMenuBar())
+	{
+		ImGui::PopStyleVar();
+		return;
+	}
+
+	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.78f, 0.88f, 1.0f, 1.0f));
+	ImGui::TextUnformatted("Lite");
+	ImGui::PopStyleColor();
+	ImGui::SameLine(0.0f, 14.0f);
+	ImGui::TextDisabled("|");
+	ImGui::SameLine(0.0f, 14.0f);
+
+	if (ImGui::BeginMenu("File"))
+	{
+		if (ImGui::MenuItem("New Scene", "Ctrl+N"))
+			NewScene();
+		if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
+			m_ShowOpen = true;
+		if (ImGui::MenuItem("Save", "Ctrl+S", false, m_Scene != nullptr))
+			SaveScene();
+		ImGui::EndMenu();
+	}
+
+	ImGui::SameLine(0.0f, 8.0f);
+	ImGui::TextDisabled("|");
+	ImGui::SameLine(0.0f, 8.0f);
+
+	if (ImGui::BeginMenu("View"))
+	{
+		if (ImGui::MenuItem("Instrumentation", "I", &m_ShowInfo))
+			LITE_CLIENT_INFO("Instrumentation {}", m_ShowInfo ? "shown" : "hidden");
+		ImGui::EndMenu();
+	}
+
+	float transport = 28.0f * 2.0f + 8.0f;
+	ImGui::SetCursorPosX((ImGui::GetWindowWidth() - transport) * 0.5f);
+	bool playing = m_Scene && m_Scene->IsPlaying();
+	bool paused = m_Scene && m_Scene->GetPlayback() == Lite::ScenePlayback::Paused;
+	if (TransportButton("##Play", m_Scene != nullptr, playing, ImVec4(0.18f, 0.48f, 0.28f, 1.0f), true))
+		m_Scene->Play();
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		ImGui::SetTooltip("Play");
+	ImGui::SameLine(0.0f, 8.0f);
+	if (TransportButton("##Pause", m_Scene != nullptr, paused, ImVec4(0.45f, 0.36f, 0.14f, 1.0f), false))
+		m_Scene->Pause();
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		ImGui::SetTooltip("Pause");
+
+	ImGui::EndMainMenuBar();
+	ImGui::PopStyleVar();
+}
+
+void EditorLayer::DrawOpenDialog()
+{
+	if (m_ShowOpen)
+	{
+		m_OpenPath = m_Scene != nullptr ? m_Scene->GetPath() : std::string{};
+		ImGui::OpenPopup("Open Scene");
+		m_ShowOpen = false;
+	}
+
+	ImGui::SetNextWindowSize(ImVec2(460.0f, 380.0f), ImGuiCond_Appearing);
+	if (!ImGui::BeginPopupModal("Open Scene", nullptr, ImGuiWindowFlags_NoResize))
+		return;
+
+	ImGui::TextDisabled("assets/scenes");
+	ImGui::BeginChild("##SceneFiles", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.0f), ImGuiChildFlags_Borders);
+	const std::vector<std::string> scenes = Lite::Scene::List();
+	if (scenes.empty())
+		ImGui::TextDisabled("No scenes");
+
+	for (const std::string& path : scenes)
+	{
+		std::string label = std::filesystem::path(path).stem().string();
+		if (!ImGui::Selectable(label.c_str(), m_OpenPath == path, ImGuiSelectableFlags_AllowDoubleClick))
+			continue;
+
+		m_OpenPath = path;
+		if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			OpenScene(path);
+			ImGui::CloseCurrentPopup();
+		}
+	}
+	ImGui::EndChild();
+
+	char openName[128] {};
+	if (!m_OpenPath.empty())
+		std::snprintf(openName, sizeof(openName), "%s", std::filesystem::path(m_OpenPath).stem().string().c_str());
+	ImGui::SetNextItemWidth(-1.0f);
+	ImGui::InputText("##OpenName", openName, sizeof(openName), ImGuiInputTextFlags_ReadOnly);
+
+	if (ImGui::Button("Open", ImVec2(96.0f, 0.0f)) && !m_OpenPath.empty())
+	{
+		OpenScene(m_OpenPath);
+		ImGui::CloseCurrentPopup();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
+}
+
 void EditorLayer::OnImGuiRender()
 {
+	DrawMenu();
+
 	ImGuiWindowFlags hostFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
 		| ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
 		| ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
@@ -336,33 +501,12 @@ void EditorLayer::OnImGuiRender()
 	DrawConsole();
 	if (m_ShowInfo)
 		DrawInstrumentation();
+	DrawOpenDialog();
 }
 
 void EditorLayer::DrawScene()
 {
 	ImGui::Begin("Scene");
-	if (ImGui::Button("New"))
-		NewScene();
-	ImGui::SameLine();
-	if (ImGui::Button("Save"))
-		SaveScene();
-	ImGui::SameLine();
-	bool playing = m_Scene && m_Scene->IsPlaying();
-	if (playing)
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.48f, 0.28f, 1.0f));
-	if (ImGui::Button("Play") && m_Scene)
-		m_Scene->Play();
-	if (playing)
-		ImGui::PopStyleColor();
-	ImGui::SameLine();
-	bool paused = m_Scene && m_Scene->GetPlayback() == Lite::ScenePlayback::Paused;
-	if (paused)
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.45f, 0.36f, 0.14f, 1.0f));
-	if (ImGui::Button("Pause") && m_Scene)
-		m_Scene->Pause();
-	if (paused)
-		ImGui::PopStyleColor();
-
 	if (m_Scene)
 	{
 		if (m_NamedScene != m_Scene.get())
@@ -372,16 +516,6 @@ void EditorLayer::DrawScene()
 			m_Scene->SetName(m_Name);
 	}
 
-	ImGui::TextDisabled("Scenes");
-	for (const std::string& path : Lite::Scene::List())
-	{
-		std::string label = std::filesystem::path(path).stem().string();
-		bool current = m_Scene && m_Scene->GetPath() == path;
-		if (ImGui::Selectable(label.c_str(), current))
-			OpenScene(path);
-	}
-
-	ImGui::Separator();
 	if (m_Scene == nullptr)
 	{
 		ImGui::TextDisabled("No scene");
