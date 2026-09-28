@@ -280,6 +280,12 @@ namespace Lite {
 			{
 				stream >> current->Spin;
 			}
+			else if (key == "shader")
+			{
+				std::string shader;
+				std::getline(stream >> std::ws, shader);
+				current->Shader = Trim(shader);
+			}
 			else if (key == "corners")
 			{
 				current->UseCornerColors = true;
@@ -311,6 +317,7 @@ namespace Lite {
 			output << "object\n";
 			output << std::format("name {}\n", object.Name);
 			output << std::format("kind {}\n", KindName(object.Kind));
+			output << std::format("shader {}\n", object.Shader.empty() ? "Batch" : object.Shader);
 			output << std::format("position {:.4f} {:.4f} {:.4f}\n", position.x, position.y, position.z);
 			output << std::format("rotation {:.4f}\n", object.Transform.GetRotationZ());
 			output << std::format("scale {:.4f} {:.4f} {:.4f}\n", scale.x, scale.y, scale.z);

@@ -35,12 +35,18 @@ private:
 	void NewScene();
 	void OpenScene(const std::string& path);
 	void SyncName();
+	void PickObject(float mouseX, float mouseY);
+	void SyncObjectFields(const Lite::SceneObject& object);
 
 	Lite::OrthographicCamera m_Camera;
 	float m_ViewSize = 2.0f;
 	Lite::Scope<Lite::Scene> m_Scene;
 	Lite::Scene* m_NamedScene = nullptr;
 	char m_Name[128] {};
+	char m_ObjectName[128] {};
+	char m_ShaderText[128] {};
+	char m_TextureText[260] {};
+	std::string m_ObjectEdit;
 	std::string m_Selection = "Triangle";
 	std::string m_BrowserDirectory;
 	char m_DirectoryText[512] {};

@@ -2,6 +2,8 @@
 
 #include "Lite/Core/Events/KeyEvent.h"
 #include "Lite/Core/Events/MouseEvent.h"
+#include "Lite/Assets/AssetRegistry.h"
+#include "Lite/Assets/Texture.h"
 #include "Lite/Core/FileSystem.h"
 #include "Lite/Core/Logger.h"
 #include "Lite/Core/Profiler.h"
@@ -153,6 +155,68 @@ namespace {
 		return std::format("{:.1f} GB", gigabytes);
 	}
 
+	bool Contains(Lite::Vec2 point, const Lite::Vec2* vertices, int count)
+	{
+		bool positive = false;
+		bool negative = false;
+		for (int index = 0; index < count; ++index)
+		{
+			const Lite::Vec2& current = vertices[index];
+			const Lite::Vec2& next = vertices[(index + 1) % count];
+			float cross = (next.x - current.x) * (point.y - current.y) - (next.y - current.y) * (point.x - current.x);
+			if (cross > 0.0f)
+				positive = true;
+			if (cross < 0.0f)
+				negative = true;
+			if (positive && negative)
+				return false;
+		}
+
+		return true;
+	}
+
+	bool Hits(const Lite::SceneObject& object, Lite::Vec2 point)
+	{
+		if (object.Kind == Lite::SceneObjectKind::Triangle)
+		{
+			const Lite::Vec2 local[3] = {
+				{ 0.00f, -0.72f },
+				{ -0.78f, 0.58f },
+				{ 0.78f, 0.58f }
+			};
+			Lite::Vec2 world[3];
+			for (int index = 0; index < 3; ++index)
+			{
+				Lite::Vec3 transformed = object.Transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
+				world[index] = { transformed.x, transformed.y };
+			}
+			return Contains(point, world, 3);
+		}
+
+		const Lite::Vec2 local[4] = {
+			{ -0.5f, -0.5f },
+			{ 0.5f, -0.5f },
+			{ 0.5f, 0.5f },
+			{ -0.5f, 0.5f }
+		};
+		Lite::Vec2 world[4];
+		for (int index = 0; index < 4; ++index)
+		{
+			Lite::Vec3 transformed = object.Transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
+			world[index] = { transformed.x, transformed.y };
+		}
+		return Contains(point, world, 4);
+	}
+
+	void ColorField(const char* label, Lite::Vec4& color)
+	{
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted(label);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(-1.0f);
+		ImGui::ColorEdit4(label, &color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoLabel);
+	}
+
 	void DrawPlay(ImDrawList* draw, ImVec2 min, ImVec2 max, ImU32 color)
 	{
 		ImVec2 center { (min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f };
@@ -286,6 +350,46 @@ void EditorLayer::SyncName()
 	m_NamedScene = m_Scene.get();
 	const char* name = m_Scene != nullptr ? m_Scene->GetName().c_str() : "";
 	std::snprintf(m_Name, sizeof(m_Name), "%s", name);
+}
+
+void EditorLayer::SyncObjectFields(const Lite::SceneObject& object)
+{
+	if (m_ObjectEdit == object.Name)
+		return;
+
+	m_ObjectEdit = object.Name;
+	std::snprintf(m_ObjectName, sizeof(m_ObjectName), "%s", object.Name.c_str());
+	std::snprintf(m_ShaderText, sizeof(m_ShaderText), "%s", object.Shader.c_str());
+	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", object.TexturePath.c_str());
+}
+
+void EditorLayer::PickObject(float mouseX, float mouseY)
+{
+	if (m_Scene == nullptr || m_Scene->IsPlaying())
+		return;
+
+	ImVec2 display = ImGui::GetIO().DisplaySize;
+	if (display.x <= 0.0f || display.y <= 0.0f)
+		return;
+
+	float ndcX = (mouseX / display.x) * 2.0f - 1.0f;
+	float ndcY = 1.0f - (mouseY / display.y) * 2.0f;
+	Lite::Vec4 world = m_Camera.GetViewProjection().Inverse() * Lite::Vec4(ndcX, ndcY, 0.0f, 1.0f);
+	if (world.w != 0.0f)
+		world /= world.w;
+
+	const std::vector<Lite::SceneObject>& objects = m_Scene->GetObjects();
+	for (int index = static_cast<int>(objects.size()) - 1; index >= 0; --index)
+	{
+		if (!Hits(objects[static_cast<size_t>(index)], { world.x, world.y }))
+			continue;
+
+		const std::string& name = objects[static_cast<size_t>(index)].Name;
+		if (m_Selection != name)
+			Lite::Console::Log(std::format("Selected: {}", name));
+		m_Selection = name;
+		return;
+	}
 }
 
 void EditorLayer::OnEvent(Lite::Event& event)
@@ -713,7 +817,15 @@ void EditorLayer::DrawScene()
 void EditorLayer::DrawViewport()
 {
 	ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	ImVec2 origin = ImGui::GetCursorScreenPos();
 	ImVec2 size = ImGui::GetContentRegionAvail();
+	ImGui::InvisibleButton("##ViewportPick", size);
+	if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+	{
+		ImVec2 mouse = ImGui::GetIO().MousePos;
+		PickObject(mouse.x, mouse.y);
+	}
+
 	const char* name = m_Scene != nullptr ? m_Scene->GetName().c_str() : "No scene";
 	const char* playback = "stopped";
 	if (m_Scene)
@@ -725,6 +837,7 @@ void EditorLayer::DrawViewport()
 			case Lite::ScenePlayback::Stopped: playback = "stopped"; break;
 		}
 	}
+	ImGui::SetCursorScreenPos(origin);
 	ImGui::TextDisabled("%s  %s  %.0f x %.0f", name, playback, size.x, size.y);
 	ImGui::End();
 }
@@ -733,7 +846,7 @@ void EditorLayer::DrawInspector()
 {
 	ImGui::Begin("Inspector");
 	Lite::Scene* scene = Lite::Scene::GetActive();
-	const Lite::SceneObject* object = scene != nullptr ? scene->Find(m_Selection) : nullptr;
+	Lite::SceneObject* object = scene != nullptr ? scene->Find(m_Selection) : nullptr;
 	if (object == nullptr)
 	{
 		ImGui::TextDisabled("No selection");
@@ -749,16 +862,70 @@ void EditorLayer::DrawInspector()
 		case Lite::SceneObjectKind::Quad: kind = "Quad"; break;
 	}
 
-	const Lite::Vec3& position = object->Transform.Position;
-	const Lite::Vec3& scale = object->Transform.Scale;
-	ImGui::TextUnformatted(object->Name.c_str());
+	SyncObjectFields(*object);
+	bool editing = scene->GetPlayback() != Lite::ScenePlayback::Playing;
+	if (!editing)
+		ImGui::BeginDisabled();
+
+	ImGui::SetNextItemWidth(-1.0f);
+	if (ImGui::InputText("##ObjectName", m_ObjectName, sizeof(m_ObjectName)))
+	{
+		object->Name = m_ObjectName;
+		m_Selection = object->Name;
+		m_ObjectEdit = object->Name;
+	}
+
+	ImGui::TextDisabled("%s", kind);
 	ImGui::Separator();
-	ImGui::Text("Kind      %s", kind);
-	ImGui::Text("Position  %.2f, %.2f, %.2f", position.x, position.y, position.z);
-	ImGui::Text("Rotation  %.2f", object->Transform.GetRotationZ());
-	ImGui::Text("Scale     %.2f, %.2f, %.2f", scale.x, scale.y, scale.z);
+
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted("Shader");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(-1.0f);
+	if (ImGui::InputText("##Shader", m_ShaderText, sizeof(m_ShaderText)))
+		object->Shader = m_ShaderText;
+
+	ImGui::DragFloat3("Position", &object->Transform.Position.x, 0.01f);
+	float rotation = object->Transform.GetRotationZ();
+	if (ImGui::DragFloat("Rotation", &rotation, 0.01f))
+		object->Transform.SetRotationZ(rotation);
+	ImGui::DragFloat3("Scale", &object->Transform.Scale.x, 0.01f);
+
+	if (object->Kind == Lite::SceneObjectKind::Triangle || object->UseCornerColors)
+	{
+		int colors = object->Kind == Lite::SceneObjectKind::Triangle ? 3 : 4;
+		for (int index = 0; index < colors; ++index)
+			ColorField(std::format("Color {}", index + 1).c_str(), object->CornerColors[index]);
+	}
+	else
+	{
+		ColorField("Color", object->Color);
+	}
+
 	if (object->Kind == Lite::SceneObjectKind::Sprite)
-		ImGui::Text("Tiling    %.2f, %.2f", object->Tiling.x, object->Tiling.y);
+	{
+		ImGui::DragFloat2("Tiling", &object->Tiling.x, 0.01f);
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted("Texture");
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(-1.0f);
+		if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
+		{
+			object->TexturePath = m_TextureText;
+			object->Texture = object->TexturePath.empty()
+				? Lite::Ref<Lite::Texture>{}
+				: Lite::AssetRegistry::Get().Load<Lite::Texture>(object->TexturePath);
+		}
+	}
+
+	ImGui::DragFloat("Spin", &object->Spin, 0.01f);
+
+	if (!editing)
+	{
+		ImGui::EndDisabled();
+		ImGui::TextDisabled("Pause to edit");
+	}
+
 	ImGui::End();
 }
 

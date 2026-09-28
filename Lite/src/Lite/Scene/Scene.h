@@ -36,6 +36,7 @@ namespace Lite {
 		Vec2 Tiling { 1.0f, 1.0f };
 		std::string TexturePath;
 		Ref<Texture> Texture;
+		std::string Shader = "Batch";
 		float Spin = 0.0f;
 	};
 
