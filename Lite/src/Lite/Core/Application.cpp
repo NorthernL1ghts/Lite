@@ -4,6 +4,7 @@
 
 #include "Events/WindowEvent.h"
 #include "Lite/ImGui/ImGuiLayer.h"
+#include "Lite/Input/Input.h"
 
 #include <GLFW/glfw3.h>
 
@@ -13,6 +14,7 @@ namespace Lite {
 		: m_Window(Window::Create(props))
 	{
 		m_Window->SetEventCallback([this](Event& event) { OnEvent(event); });
+		Input::SetWindow(m_Window->GetNativeHandle());
 
 		auto imgui = std::make_unique<ImGuiLayer>(static_cast<GLFWwindow*>(m_Window->GetNativeHandle()));
 		m_ImGuiLayer = imgui.get();
