@@ -8,6 +8,7 @@ namespace Lite {
 	namespace {
 
 		float s_Delta = 0.0f;
+		float s_UnscaledDelta = 0.0f;
 		float s_Elapsed = 0.0f;
 		float s_TargetDelta = 0.0f;
 		bool s_Started = false;
@@ -34,14 +35,32 @@ namespace Lite {
 		return 1.0f / s_TargetDelta;
 	}
 
+	float Time::GetFrameRate()
+	{
+		if (s_UnscaledDelta <= 0.0f)
+			return 0.0f;
+
+		return 1.0f / s_UnscaledDelta;
+	}
+
 	float Time::GetDelta()
 	{
 		return s_Delta;
 	}
 
+	float Time::GetDeltaMilliseconds()
+	{
+		return s_Delta * 1000.0f;
+	}
+
 	float Time::GetElapsed()
 	{
 		return s_Elapsed;
+	}
+
+	Timestep Time::GetTimestep()
+	{
+		return Timestep(s_Delta);
 	}
 
 	void Time::Update()
@@ -52,12 +71,17 @@ namespace Lite {
 			s_Last = now;
 			s_Started = true;
 			s_Delta = 0.0f;
+			s_UnscaledDelta = 0.0f;
 			return;
 		}
 
 		std::chrono::duration<float> step = now - s_Last;
 		s_Last = now;
-		s_Delta = step.count();
+		s_UnscaledDelta = step.count();
+		if (s_UnscaledDelta < 0.0f)
+			s_UnscaledDelta = 0.0f;
+
+		s_Delta = s_UnscaledDelta;
 		if (s_Delta > 0.1f)
 			s_Delta = 0.1f;
 

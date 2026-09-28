@@ -76,10 +76,13 @@ namespace Lite {
 
 			if (Renderer2D::IsFrameActive())
 			{
-				for (auto& layer : m_LayerStack)
-					layer->OnUpdate();
+				Timestep timestep = Time::GetTimestep();
 
-				Renderer2D::Draw();
+				for (auto& layer : m_LayerStack)
+					layer->OnUpdate(timestep);
+
+				for (auto& layer : m_LayerStack)
+					layer->OnRender();
 
 				m_ImGuiLayer->Begin();
 				for (auto& layer : m_LayerStack)

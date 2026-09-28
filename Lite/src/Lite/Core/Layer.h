@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Events/Event.h"
+#include "Time.h"
 
 #include <string>
 
@@ -14,7 +15,8 @@ namespace Lite {
 
 		virtual void OnAttach() {}
 		virtual void OnDetach() {}
-		virtual void OnUpdate() {}
+		virtual void OnUpdate(Timestep timestep) { (void)timestep; }
+		virtual void OnRender() {}
 		virtual void OnImGuiRender() {}
 		virtual void OnEvent(Event& event) { (void)event; }
 
