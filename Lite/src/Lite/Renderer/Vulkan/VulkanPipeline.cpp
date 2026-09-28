@@ -1,60 +1,7 @@
 #include "VulkanPipeline.h"
 
-#include <Windows.h>
-
-#include <filesystem>
-#include <fstream>
-#include <vector>
-
-namespace {
-
-	std::filesystem::path ShaderFile(const wchar_t* name)
-	{
-		wchar_t modulePath[MAX_PATH] {};
-		GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
-		return std::filesystem::path(modulePath).parent_path() / "shaders" / name;
-	}
-
-	std::vector<uint32_t> ReadSpirv(const std::filesystem::path& path)
-	{
-		std::ifstream file(path, std::ios::binary | std::ios::ate);
-		if (!file)
-		{
-			LITE_ERROR("Failed to open shader {}", path.string());
-			return {};
-		}
-
-		auto size = static_cast<size_t>(file.tellg());
-		if (size == 0 || size % sizeof(uint32_t) != 0)
-		{
-			LITE_ERROR("Shader {} is not valid SPIR-V", path.string());
-			return {};
-		}
-
-		std::vector<uint32_t> code(size / sizeof(uint32_t));
-		file.seekg(0);
-		file.read(reinterpret_cast<char*>(code.data()), static_cast<std::streamsize>(size));
-		return code;
-	}
-
-	VkShaderModule CreateShader(VkDevice device, const std::vector<uint32_t>& code)
-	{
-		if (code.empty())
-			return VK_NULL_HANDLE;
-
-		VkShaderModuleCreateInfo info {};
-		info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		info.codeSize = code.size() * sizeof(uint32_t);
-		info.pCode = code.data();
-
-		VkShaderModule shader = VK_NULL_HANDLE;
-		if (!Lite::CheckVk(vkCreateShaderModule(device, &info, nullptr, &shader), "create shader module"))
-			return VK_NULL_HANDLE;
-
-		return shader;
-	}
-
-}
+#include "Lite/Assets/AssetRegistry.h"
+#include "Lite/Assets/Shader.h"
 
 namespace Lite {
 
@@ -62,8 +9,13 @@ namespace Lite {
 	{
 		m_Device = device;
 
-		VkShaderModule vertex = CreateShader(device, ReadSpirv(ShaderFile(L"Triangle.vert.spv")));
-		VkShaderModule fragment = CreateShader(device, ReadSpirv(ShaderFile(L"Triangle.frag.spv")));
+		auto vertexShader = AssetRegistry::Get().Load<Shader>("shaders/Triangle.vert.spv");
+		auto fragmentShader = AssetRegistry::Get().Load<Shader>("shaders/Triangle.frag.spv");
+		if (!vertexShader || !fragmentShader)
+			return false;
+
+		VkShaderModule vertex = vertexShader->CreateModule(device);
+		VkShaderModule fragment = fragmentShader->CreateModule(device);
 		if (!vertex || !fragment)
 		{
 			if (vertex)

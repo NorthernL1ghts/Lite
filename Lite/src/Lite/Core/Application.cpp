@@ -4,6 +4,7 @@
 #include "Window.h"
 
 #include "Events/WindowEvent.h"
+#include "Lite/Assets/AssetRegistry.h"
 #include "Lite/ImGui/ImGuiLayer.h"
 #include "Lite/Input/Input.h"
 #include "Lite/Renderer/Renderer2D.h"
@@ -32,6 +33,7 @@ namespace Lite {
 
 		s_Instance = this;
 
+		AssetRegistry::Init();
 		m_Window = Window::Create(m_Props);
 		m_Window->SetEventCallback([this](Event& event) { OnEvent(event); });
 		Input::SetWindow(m_Window->GetNativeHandle());
@@ -53,6 +55,7 @@ namespace Lite {
 		m_LayerStack.Clear();
 		m_ImGuiLayer = nullptr;
 		Renderer2D::Shutdown();
+		AssetRegistry::Shutdown();
 		Input::SetWindow(nullptr);
 		m_Window.reset();
 
