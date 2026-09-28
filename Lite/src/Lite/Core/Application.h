@@ -16,6 +16,8 @@ namespace Lite {
 		void Run();
 
 	private:
+		void OnEvent(Event& event);
+
 		bool m_Running = true;
 		std::unique_ptr<Window> m_Window;
 	};

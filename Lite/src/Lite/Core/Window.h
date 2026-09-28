@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Events/Event.h"
+
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -24,16 +27,27 @@ namespace Lite {
 	class Window
 	{
 	public:
+		using EventCallback = std::function<void(Event&)>;
+
 		explicit Window(const WindowProps& props);
 		~Window();
 
 		void Update();
 		bool IsOpen() const;
 
-		const WindowProps& GetProps() const { return m_Props; }
+		void SetEventCallback(EventCallback callback) { m_Data.Callback = std::move(callback); }
+		const WindowProps& GetProps() const { return m_Data.Props; }
 
 	private:
-		WindowProps m_Props;
+		struct WindowData
+		{
+			WindowProps Props;
+			EventCallback Callback;
+		};
+
+		void SetCallbacks();
+
+		WindowData m_Data;
 		GLFWwindow* m_Window = nullptr;
 		bool m_GlfwInitialized = false;
 	};
