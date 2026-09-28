@@ -49,3 +49,7 @@ target_compile_options(Lite
         /EHsc
         /utf-8
 )
+
+target_precompile_headers(Lite PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/src/Lite/Core/pch.h>"
+)

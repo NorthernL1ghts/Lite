@@ -30,9 +30,8 @@ if(_latest_windows_sdk)
     message(STATUS "Using latest Windows SDK ${_latest_windows_sdk}")
 endif()
 
-# MSVC parallel PDB writes. Language mode is set per target so dependencies
-# such as spdlog keep their own standard.
-add_compile_options(/FS)
+# MSVC parallel PDB writes and file-level parallelism.
+add_compile_options(/FS /MP)
 
 # Keep each config in the same bin folder instead of appending Debug/Release.
 function(lite_bin_dir target folder)
@@ -61,6 +60,7 @@ function(lite_sources target)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cxx"
     )
     list(FILTER sources EXCLUDE REGEX "[/\\\\]vendor[/\\\\]")
+    list(FILTER sources EXCLUDE REGEX "[/\\\\]pch\\.h$")
     target_sources(${target} PRIVATE ${sources})
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" FILES ${sources})
 endfunction()
