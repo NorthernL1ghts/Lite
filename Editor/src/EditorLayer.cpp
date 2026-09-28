@@ -364,7 +364,7 @@ void EditorLayer::SyncEntityFields(Lite::Entity entity)
 
 	m_SyncedId = entity.GetId();
 	std::snprintf(m_ObjectName, sizeof(m_ObjectName), "%s", entity.GetName().c_str());
-	Lite::MaterialComponent* material = entity.GetMaterial();
+	Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>();
 	std::snprintf(m_ShaderText, sizeof(m_ShaderText), "%s", material != nullptr ? material->Shader.c_str() : "");
 	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material != nullptr ? material->TexturePath.c_str() : "");
 }
@@ -376,12 +376,12 @@ void EditorLayer::ApplyPlayCamera(float aspect)
 	if (m_Scene != nullptr && m_Scene->IsPlaying())
 	{
 		Lite::Entity camera = m_Scene->GetPrimaryCamera();
-		if (Lite::TransformComponent* transform = camera.GetTransform())
+		if (Lite::TransformComponent* transform = camera.Get<Lite::TransformComponent>())
 		{
 			view.SetPosition(transform->Local.Position);
 			view.SetRotation(transform->Local.GetRotationZ());
 		}
-		if (Lite::CameraComponent* component = camera.GetCamera())
+		if (Lite::CameraComponent* component = camera.Get<Lite::CameraComponent>())
 			size = component->Size;
 	}
 
@@ -408,8 +408,8 @@ void EditorLayer::PickObject(float mouseX, float mouseY)
 	for (int index = static_cast<int>(entities.size()) - 1; index >= 0; --index)
 	{
 		Lite::Entity entity = entities[static_cast<size_t>(index)];
-		Lite::MeshComponent* mesh = entity.GetMesh();
-		Lite::TransformComponent* transform = entity.GetTransform();
+		Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
+		Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>();
 		if (mesh == nullptr || transform == nullptr)
 			continue;
 		if (!Hits(mesh->Type, transform->Local, { world.x, world.y }))
@@ -843,16 +843,24 @@ void EditorLayer::DrawScene()
 			m_Selected = entity.GetId();
 
 		ImGui::Indent();
-		if (entity.HasTransform())
+		if (entity.Has<Lite::TransformComponent>())
 			ImGui::TextDisabled("Transform");
-		if (entity.HasCamera())
+		if (entity.Has<Lite::CameraComponent>())
 			ImGui::TextDisabled("Camera");
-		if (entity.HasMesh())
+		if (entity.Has<Lite::MeshComponent>())
 			ImGui::TextDisabled("Mesh");
-		if (entity.HasMaterial())
+		if (entity.Has<Lite::MaterialComponent>())
 			ImGui::TextDisabled("Material");
-		if (entity.HasSpin())
+		if (entity.Has<Lite::SpinComponent>())
 			ImGui::TextDisabled("Spin");
+		if (entity.Has<Lite::Rigidbody2DComponent>())
+			ImGui::TextDisabled("Rigidbody 2D");
+		if (entity.Has<Lite::BoxCollider2DComponent>())
+			ImGui::TextDisabled("Box Collider 2D");
+		if (entity.Has<Lite::CircleCollider2DComponent>())
+			ImGui::TextDisabled("Circle Collider 2D");
+		if (entity.Has<Lite::SortingComponent>())
+			ImGui::TextDisabled("Sorting");
 		ImGui::Unindent();
 	}
 	ImGui::End();
@@ -907,7 +915,7 @@ void EditorLayer::DrawInspector()
 	if (ImGui::InputText("##ObjectName", m_ObjectName, sizeof(m_ObjectName)))
 		entity.SetName(m_ObjectName);
 
-	if (Lite::TransformComponent* transform = entity.GetTransform())
+	if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
 	{
 		ImGui::SeparatorText("Transform");
 		ImGui::DragFloat3("Position", &transform->Local.Position.x, 0.01f);
@@ -917,7 +925,7 @@ void EditorLayer::DrawInspector()
 		ImGui::DragFloat3("Scale", &transform->Local.Scale.x, 0.01f);
 	}
 
-	if (Lite::CameraComponent* camera = entity.GetCamera())
+	if (Lite::CameraComponent* camera = entity.Get<Lite::CameraComponent>())
 	{
 		ImGui::SeparatorText("Camera");
 		ImGui::DragFloat("Size", &camera->Size, 0.01f, 0.25f, 12.0f);
@@ -932,7 +940,7 @@ void EditorLayer::DrawInspector()
 		}
 	}
 
-	if (Lite::MeshComponent* mesh = entity.GetMesh())
+	if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
 	{
 		ImGui::SeparatorText("Mesh");
 		const char* types[] = { "Quad", "Triangle", "Sprite" };
@@ -941,7 +949,7 @@ void EditorLayer::DrawInspector()
 			mesh->Type = static_cast<Lite::MeshType>(current);
 	}
 
-	if (Lite::MaterialComponent* material = entity.GetMaterial())
+	if (Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>())
 	{
 		ImGui::SeparatorText("Material");
 		ImGui::AlignTextToFramePadding();
@@ -951,7 +959,7 @@ void EditorLayer::DrawInspector()
 		if (ImGui::InputText("##Shader", m_ShaderText, sizeof(m_ShaderText)))
 			material->Shader = m_ShaderText;
 
-		Lite::MeshComponent* mesh = entity.GetMesh();
+		Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
 		bool vertexColors = material->UseVertexColors || (mesh != nullptr && mesh->Type == Lite::MeshType::Triangle);
 		if (ImGui::Checkbox("Vertex colors", &material->UseVertexColors))
 			vertexColors = material->UseVertexColors || (mesh != nullptr && mesh->Type == Lite::MeshType::Triangle);
@@ -984,10 +992,75 @@ void EditorLayer::DrawInspector()
 		}
 	}
 
-	if (Lite::SpinComponent* spin = entity.GetSpin())
+	if (Lite::SpinComponent* spin = entity.Get<Lite::SpinComponent>())
 	{
 		ImGui::SeparatorText("Spin");
 		ImGui::DragFloat("Rate", &spin->Rate, 0.01f);
+	}
+
+	if (Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>())
+	{
+		ImGui::SeparatorText("Rigidbody 2D");
+		const char* types[] = { "Static", "Kinematic", "Dynamic" };
+		int current = static_cast<int>(body->Type);
+		if (ImGui::Combo("Body", &current, types, 3))
+			body->Type = static_cast<Lite::BodyType>(current);
+		ImGui::DragFloat("Mass", &body->Mass, 0.01f, 0.0f, 1000.0f);
+		ImGui::DragFloat("Gravity", &body->GravityScale, 0.01f);
+		ImGui::DragFloat2("Velocity", &body->LinearVelocity.x, 0.01f);
+		ImGui::DragFloat("Angular", &body->AngularVelocity, 0.01f);
+		ImGui::Checkbox("Freeze rotation", &body->FreezeRotation);
+	}
+
+	if (Lite::BoxCollider2DComponent* box = entity.Get<Lite::BoxCollider2DComponent>())
+	{
+		ImGui::SeparatorText("Box Collider 2D");
+		ImGui::DragFloat2("Box size", &box->Size.x, 0.01f, 0.0f, 100.0f);
+		ImGui::DragFloat2("Box offset", &box->Offset.x, 0.01f);
+		ImGui::Checkbox("Box trigger", &box->IsTrigger);
+	}
+
+	if (Lite::CircleCollider2DComponent* circle = entity.Get<Lite::CircleCollider2DComponent>())
+	{
+		ImGui::SeparatorText("Circle Collider 2D");
+		ImGui::DragFloat("Radius", &circle->Radius, 0.01f, 0.0f, 100.0f);
+		ImGui::DragFloat2("Circle offset", &circle->Offset.x, 0.01f);
+		ImGui::Checkbox("Circle trigger", &circle->IsTrigger);
+	}
+
+	if (Lite::SortingComponent* sorting = entity.Get<Lite::SortingComponent>())
+	{
+		ImGui::SeparatorText("Sorting");
+		ImGui::DragInt("Order", &sorting->Order);
+	}
+
+	if (editing)
+	{
+		ImGui::Separator();
+		static int addIndex = 0;
+		const char* components[] = {
+			"Transform", "Camera", "Mesh", "Material", "Spin",
+			"Rigidbody 2D", "Box Collider 2D", "Circle Collider 2D", "Sorting"
+		};
+		ImGui::SetNextItemWidth(-90.0f);
+		ImGui::Combo("##AddComponent", &addIndex, components, IM_ARRAYSIZE(components));
+		ImGui::SameLine();
+		if (ImGui::Button("Add"))
+		{
+			switch (addIndex)
+			{
+				case 0: entity.Add<Lite::TransformComponent>(); break;
+				case 1: entity.Add<Lite::CameraComponent>(); break;
+				case 2: entity.Add<Lite::MeshComponent>(); break;
+				case 3: entity.Add<Lite::MaterialComponent>(); break;
+				case 4: entity.Add<Lite::SpinComponent>(); break;
+				case 5: entity.Add<Lite::Rigidbody2DComponent>(); break;
+				case 6: entity.Add<Lite::BoxCollider2DComponent>(); break;
+				case 7: entity.Add<Lite::CircleCollider2DComponent>(); break;
+				case 8: entity.Add<Lite::SortingComponent>(); break;
+				default: break;
+			}
+		}
 	}
 
 	if (!editing)

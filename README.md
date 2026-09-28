@@ -20,7 +20,7 @@ scripts\build.bat
 
 The build uses the compiler's latest C++ mode and the newest Windows SDK installed on the machine. `Lite.dll` is built in `build/bin/lite`. After Sandbox and Editor link, CMake copies it into `build/bin/sandbox` and `build/bin/editor`.
 
-`LITE_WARN` logs from the engine. `LITE_CLIENT_WARN` logs from the application. Editor opens the Sandbox example stopped. The File menu creates and opens scenes, and Save Scene writes any file name to any folder. The play and pause symbols on the menu bar run the open scene, and F5 and F6 do the same. Scenes are entities with components such as Transform, Camera, Mesh, Material, and Spin. While the scene is stopped or paused, click an entity to edit those components. Press I for instrumentation.
+`LITE_WARN` logs from the engine. `LITE_CLIENT_WARN` logs from the application. Editor opens the Sandbox example stopped. The File menu creates and opens scenes, and Save Scene writes any file name to any folder. The play and pause symbols on the menu bar run the open scene, and F5 and F6 do the same. Scenes are entities. Add a component with `entity.Add<TransformComponent>()`, and the same `Add`, `Get`, `Has`, and `Remove` calls work for Camera, Mesh, Material, Spin, Rigidbody 2D, Box Collider 2D, Circle Collider 2D, and Sorting. While the scene is stopped or paused, click an entity to edit those components. Press I for instrumentation.
 
 ## License
 

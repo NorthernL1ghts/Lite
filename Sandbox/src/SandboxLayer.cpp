@@ -35,7 +35,7 @@ void SandboxLayer::OnUpdate(Lite::Timestep timestep)
 		return;
 
 	Lite::Entity camera = m_Scene->GetPrimaryCamera();
-	Lite::TransformComponent* transform = camera.GetTransform();
+	Lite::TransformComponent* transform = camera.Get<Lite::TransformComponent>();
 	float rotation = transform != nullptr ? transform->Local.GetRotationZ() : m_Camera.GetRotation();
 	float step = 1.6f * timestep.GetSeconds();
 	if (Lite::Input::IsKeyPressed(Lite::Key::Q))
@@ -59,8 +59,8 @@ void SandboxLayer::OnRender()
 	VkExtent2D extent = Lite::Renderer::GetExtent();
 	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
 	Lite::Entity camera = m_Scene->GetPrimaryCamera();
-	Lite::CameraComponent* component = camera.GetCamera();
-	Lite::TransformComponent* transform = camera.GetTransform();
+	Lite::CameraComponent* component = camera.Get<Lite::CameraComponent>();
+	Lite::TransformComponent* transform = camera.Get<Lite::TransformComponent>();
 	Lite::OrthographicCamera view;
 	if (transform != nullptr)
 	{
@@ -94,7 +94,7 @@ void SandboxLayer::OnEvent(Lite::Event& event)
 		if (steps == 0.0f)
 			return false;
 
-		Lite::CameraComponent* component = m_Scene ? m_Scene->GetPrimaryCamera().GetCamera() : nullptr;
+		Lite::CameraComponent* component = m_Scene ? m_Scene->GetPrimaryCamera().Get<Lite::CameraComponent>() : nullptr;
 		float& size = component != nullptr ? component->Size : m_ViewSize;
 		size *= std::pow(0.85f, steps);
 		if (size < 0.25f)

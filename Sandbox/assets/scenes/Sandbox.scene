@@ -26,6 +26,19 @@ tiling 8.0000 8.0000
 texture assets/Checkerboard.png
 vertex-colors 1
 colors 0.1600 0.2800 0.6200 1.0000 0.1200 0.5200 0.5800 1.0000 0.9300 0.5800 0.2400 1.0000 0.5200 0.2600 0.7200 1.0000
+component sorting
+order -10
+component rigidbody2d
+type static
+mass 1.0000
+gravity 1.0000
+velocity 0.0000 0.0000
+angular 0.0000
+freeze 1
+component box-collider2d
+size 1.0000 1.0000
+offset 0.0000 0.0000
+trigger 0
 entity
 name Triangle
 component transform
@@ -40,6 +53,12 @@ color 1.0000 1.0000 1.0000 1.0000
 tiling 1.0000 1.0000
 vertex-colors 1
 colors 0.9300 0.2200 0.2800 1.0000 0.0800 0.7800 0.4200 1.0000 0.1600 0.3600 0.9600 1.0000 1.0000 1.0000 1.0000 1.0000
+component sorting
+order 0
+component circle-collider2d
+radius 0.7000
+offset 0.0000 0.0000
+trigger 0
 entity
 name Quad
 component transform
@@ -54,3 +73,16 @@ color 0.8600 0.1600 0.1800 1.0000
 tiling 1.0000 1.0000
 component spin
 rate 1.1500
+component sorting
+order 1
+component rigidbody2d
+type kinematic
+mass 1.0000
+gravity 0.0000
+velocity 0.0000 0.0000
+angular 0.0000
+freeze 0
+component box-collider2d
+size 1.0000 1.0000
+offset 0.0000 0.0000
+trigger 0

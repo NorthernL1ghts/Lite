@@ -61,6 +61,68 @@ namespace Lite {
 		float Rate = 0.0f;
 	};
 
+	enum class BodyType
+	{
+		Static,
+		Kinematic,
+		Dynamic
+	};
+
+	struct Rigidbody2DComponent
+	{
+		BodyType Type = BodyType::Dynamic;
+		float Mass = 1.0f;
+		float GravityScale = 1.0f;
+		Vec2 LinearVelocity {};
+		float AngularVelocity = 0.0f;
+		bool FreezeRotation = false;
+	};
+
+	struct BoxCollider2DComponent
+	{
+		Vec2 Size { 1.0f, 1.0f };
+		Vec2 Offset {};
+		bool IsTrigger = false;
+	};
+
+	struct CircleCollider2DComponent
+	{
+		float Radius = 0.5f;
+		Vec2 Offset {};
+		bool IsTrigger = false;
+	};
+
+	struct SortingComponent
+	{
+		int Order = 0;
+	};
+
+	enum class ComponentId : uint8_t
+	{
+		Transform,
+		Camera,
+		Mesh,
+		Material,
+		Spin,
+		Rigidbody2D,
+		BoxCollider2D,
+		CircleCollider2D,
+		Sorting
+	};
+
+	template<typename T>
+	struct ComponentInfo;
+
+	template<> struct ComponentInfo<TransformComponent> { static constexpr ComponentId Id = ComponentId::Transform; };
+	template<> struct ComponentInfo<CameraComponent> { static constexpr ComponentId Id = ComponentId::Camera; };
+	template<> struct ComponentInfo<MeshComponent> { static constexpr ComponentId Id = ComponentId::Mesh; };
+	template<> struct ComponentInfo<MaterialComponent> { static constexpr ComponentId Id = ComponentId::Material; };
+	template<> struct ComponentInfo<SpinComponent> { static constexpr ComponentId Id = ComponentId::Spin; };
+	template<> struct ComponentInfo<Rigidbody2DComponent> { static constexpr ComponentId Id = ComponentId::Rigidbody2D; };
+	template<> struct ComponentInfo<BoxCollider2DComponent> { static constexpr ComponentId Id = ComponentId::BoxCollider2D; };
+	template<> struct ComponentInfo<CircleCollider2DComponent> { static constexpr ComponentId Id = ComponentId::CircleCollider2D; };
+	template<> struct ComponentInfo<SortingComponent> { static constexpr ComponentId Id = ComponentId::Sorting; };
+
 	class Scene;
 
 	class LITE_API Entity
@@ -76,23 +138,17 @@ namespace Lite {
 		std::string GetName() const;
 		void SetName(std::string name);
 
-		bool HasTransform();
-		bool HasCamera();
-		bool HasMesh();
-		bool HasMaterial();
-		bool HasSpin();
+		template<typename T>
+		bool Has();
 
-		TransformComponent* GetTransform();
-		CameraComponent* GetCamera();
-		MeshComponent* GetMesh();
-		MaterialComponent* GetMaterial();
-		SpinComponent* GetSpin();
+		template<typename T>
+		T* Get();
 
-		TransformComponent& AddTransform();
-		CameraComponent& AddCamera();
-		MeshComponent& AddMesh();
-		MaterialComponent& AddMaterial();
-		SpinComponent& AddSpin();
+		template<typename T>
+		T& Add();
+
+		template<typename T>
+		void Remove();
 
 	private:
 		Scene* m_Scene = nullptr;
@@ -150,7 +206,11 @@ namespace Lite {
 			Camera,
 			Mesh,
 			Material,
-			Spin
+			Spin,
+			Rigidbody2D,
+			BoxCollider2D,
+			CircleCollider2D,
+			Sorting
 		};
 
 		struct Record
@@ -162,10 +222,17 @@ namespace Lite {
 			std::optional<MeshComponent> Mesh;
 			std::optional<MaterialComponent> Material;
 			std::optional<SpinComponent> Spin;
+			std::optional<Rigidbody2DComponent> Rigidbody2D;
+			std::optional<BoxCollider2DComponent> BoxCollider2D;
+			std::optional<CircleCollider2DComponent> CircleCollider2D;
+			std::optional<SortingComponent> Sorting;
 		};
 
 		Record* FindRecord(uint32_t id);
 		const Record* FindRecord(uint32_t id) const;
+		void* AddComponent(ComponentId id, uint32_t entity);
+		void* GetComponent(ComponentId id, uint32_t entity);
+		void RemoveComponent(ComponentId id, uint32_t entity);
 		bool Read(std::istream& input);
 		void Write(std::ostream& output) const;
 		void ResolveTextures();
@@ -177,5 +244,32 @@ namespace Lite {
 		bool m_Loaded = false;
 		ScenePlayback m_Playback = ScenePlayback::Stopped;
 	};
+
+	template<typename T>
+	bool Entity::Has()
+	{
+		return Get<T>() != nullptr;
+	}
+
+	template<typename T>
+	T* Entity::Get()
+	{
+		if (m_Scene == nullptr)
+			return nullptr;
+		return static_cast<T*>(m_Scene->GetComponent(ComponentInfo<T>::Id, m_Id));
+	}
+
+	template<typename T>
+	T& Entity::Add()
+	{
+		return *static_cast<T*>(m_Scene->AddComponent(ComponentInfo<T>::Id, m_Id));
+	}
+
+	template<typename T>
+	void Entity::Remove()
+	{
+		if (m_Scene != nullptr)
+			m_Scene->RemoveComponent(ComponentInfo<T>::Id, m_Id);
+	}
 
 }

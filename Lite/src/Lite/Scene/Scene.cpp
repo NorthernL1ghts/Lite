@@ -6,6 +6,7 @@
 #include "Lite/Core/FileSystem.h"
 #include "Lite/Renderer/Renderer2D.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -99,80 +100,95 @@ namespace Lite {
 			record->Name = std::move(name);
 	}
 
-	bool Entity::HasTransform() { return GetTransform() != nullptr; }
-	bool Entity::HasCamera() { return GetCamera() != nullptr; }
-	bool Entity::HasMesh() { return GetMesh() != nullptr; }
-	bool Entity::HasMaterial() { return GetMaterial() != nullptr; }
-	bool Entity::HasSpin() { return GetSpin() != nullptr; }
-
-	TransformComponent* Entity::GetTransform()
+	void* Scene::AddComponent(ComponentId id, uint32_t entity)
 	{
-		Scene::Record* record = m_Scene != nullptr ? m_Scene->FindRecord(m_Id) : nullptr;
-		return record != nullptr && record->Transform ? &record->Transform.value() : nullptr;
+		Record* record = FindRecord(entity);
+		if (record == nullptr)
+			return nullptr;
+
+		switch (id)
+		{
+			case ComponentId::Transform:
+				if (!record->Transform)
+					record->Transform = TransformComponent{};
+				return &record->Transform.value();
+			case ComponentId::Camera:
+				if (!record->Camera)
+					record->Camera = CameraComponent{};
+				return &record->Camera.value();
+			case ComponentId::Mesh:
+				if (!record->Mesh)
+					record->Mesh = MeshComponent{};
+				return &record->Mesh.value();
+			case ComponentId::Material:
+				if (!record->Material)
+					record->Material = MaterialComponent{};
+				return &record->Material.value();
+			case ComponentId::Spin:
+				if (!record->Spin)
+					record->Spin = SpinComponent{};
+				return &record->Spin.value();
+			case ComponentId::Rigidbody2D:
+				if (!record->Rigidbody2D)
+					record->Rigidbody2D = Rigidbody2DComponent{};
+				return &record->Rigidbody2D.value();
+			case ComponentId::BoxCollider2D:
+				if (!record->BoxCollider2D)
+					record->BoxCollider2D = BoxCollider2DComponent{};
+				return &record->BoxCollider2D.value();
+			case ComponentId::CircleCollider2D:
+				if (!record->CircleCollider2D)
+					record->CircleCollider2D = CircleCollider2DComponent{};
+				return &record->CircleCollider2D.value();
+			case ComponentId::Sorting:
+				if (!record->Sorting)
+					record->Sorting = SortingComponent{};
+				return &record->Sorting.value();
+		}
+
+		return nullptr;
 	}
 
-	CameraComponent* Entity::GetCamera()
+	void* Scene::GetComponent(ComponentId id, uint32_t entity)
 	{
-		Scene::Record* record = m_Scene != nullptr ? m_Scene->FindRecord(m_Id) : nullptr;
-		return record != nullptr && record->Camera ? &record->Camera.value() : nullptr;
+		Record* record = FindRecord(entity);
+		if (record == nullptr)
+			return nullptr;
+
+		switch (id)
+		{
+			case ComponentId::Transform: return record->Transform ? &record->Transform.value() : nullptr;
+			case ComponentId::Camera: return record->Camera ? &record->Camera.value() : nullptr;
+			case ComponentId::Mesh: return record->Mesh ? &record->Mesh.value() : nullptr;
+			case ComponentId::Material: return record->Material ? &record->Material.value() : nullptr;
+			case ComponentId::Spin: return record->Spin ? &record->Spin.value() : nullptr;
+			case ComponentId::Rigidbody2D: return record->Rigidbody2D ? &record->Rigidbody2D.value() : nullptr;
+			case ComponentId::BoxCollider2D: return record->BoxCollider2D ? &record->BoxCollider2D.value() : nullptr;
+			case ComponentId::CircleCollider2D: return record->CircleCollider2D ? &record->CircleCollider2D.value() : nullptr;
+			case ComponentId::Sorting: return record->Sorting ? &record->Sorting.value() : nullptr;
+		}
+
+		return nullptr;
 	}
 
-	MeshComponent* Entity::GetMesh()
+	void Scene::RemoveComponent(ComponentId id, uint32_t entity)
 	{
-		Scene::Record* record = m_Scene != nullptr ? m_Scene->FindRecord(m_Id) : nullptr;
-		return record != nullptr && record->Mesh ? &record->Mesh.value() : nullptr;
-	}
+		Record* record = FindRecord(entity);
+		if (record == nullptr)
+			return;
 
-	MaterialComponent* Entity::GetMaterial()
-	{
-		Scene::Record* record = m_Scene != nullptr ? m_Scene->FindRecord(m_Id) : nullptr;
-		return record != nullptr && record->Material ? &record->Material.value() : nullptr;
-	}
-
-	SpinComponent* Entity::GetSpin()
-	{
-		Scene::Record* record = m_Scene != nullptr ? m_Scene->FindRecord(m_Id) : nullptr;
-		return record != nullptr && record->Spin ? &record->Spin.value() : nullptr;
-	}
-
-	TransformComponent& Entity::AddTransform()
-	{
-		Scene::Record* record = m_Scene->FindRecord(m_Id);
-		if (!record->Transform)
-			record->Transform = TransformComponent{};
-		return *record->Transform;
-	}
-
-	CameraComponent& Entity::AddCamera()
-	{
-		Scene::Record* record = m_Scene->FindRecord(m_Id);
-		if (!record->Camera)
-			record->Camera = CameraComponent{};
-		return *record->Camera;
-	}
-
-	MeshComponent& Entity::AddMesh()
-	{
-		Scene::Record* record = m_Scene->FindRecord(m_Id);
-		if (!record->Mesh)
-			record->Mesh = MeshComponent{};
-		return *record->Mesh;
-	}
-
-	MaterialComponent& Entity::AddMaterial()
-	{
-		Scene::Record* record = m_Scene->FindRecord(m_Id);
-		if (!record->Material)
-			record->Material = MaterialComponent{};
-		return *record->Material;
-	}
-
-	SpinComponent& Entity::AddSpin()
-	{
-		Scene::Record* record = m_Scene->FindRecord(m_Id);
-		if (!record->Spin)
-			record->Spin = SpinComponent{};
-		return *record->Spin;
+		switch (id)
+		{
+			case ComponentId::Transform: record->Transform.reset(); break;
+			case ComponentId::Camera: record->Camera.reset(); break;
+			case ComponentId::Mesh: record->Mesh.reset(); break;
+			case ComponentId::Material: record->Material.reset(); break;
+			case ComponentId::Spin: record->Spin.reset(); break;
+			case ComponentId::Rigidbody2D: record->Rigidbody2D.reset(); break;
+			case ComponentId::BoxCollider2D: record->BoxCollider2D.reset(); break;
+			case ComponentId::CircleCollider2D: record->CircleCollider2D.reset(); break;
+			case ComponentId::Sorting: record->Sorting.reset(); break;
+		}
 	}
 
 	Scene::Scene(std::string name)
@@ -214,8 +230,8 @@ namespace Lite {
 		Record record;
 		record.Id = m_NextId++;
 		record.Name = std::move(name);
-		record.Transform = TransformComponent{};
 		m_Records.push_back(std::move(record));
+		AddComponent(ComponentId::Transform, m_Records.back().Id);
 		return Entity(this, m_Records.back().Id);
 	}
 
@@ -329,24 +345,48 @@ namespace Lite {
 
 		for (Record& record : m_Records)
 		{
-			if (!record.Spin || !record.Transform || record.Spin->Rate == 0.0f)
+			if (record.Spin && record.Transform && record.Spin->Rate != 0.0f)
+			{
+				Transform& transform = record.Transform->Local;
+				transform.SetRotationZ(transform.GetRotationZ() + record.Spin->Rate * seconds);
+			}
+
+			if (!record.Rigidbody2D || !record.Transform || record.Rigidbody2D->Type == BodyType::Static)
 				continue;
 
+			Rigidbody2DComponent& body = *record.Rigidbody2D;
 			Transform& transform = record.Transform->Local;
-			transform.SetRotationZ(transform.GetRotationZ() + record.Spin->Rate * seconds);
+			if (body.Type == BodyType::Dynamic)
+				body.LinearVelocity.y -= 9.81f * body.GravityScale * seconds;
+
+			transform.Position.x += body.LinearVelocity.x * seconds;
+			transform.Position.y += body.LinearVelocity.y * seconds;
+			if (!body.FreezeRotation)
+				transform.SetRotationZ(transform.GetRotationZ() + body.AngularVelocity * seconds);
 		}
 	}
 
 	void Scene::Render() const
 	{
+		std::vector<const Record*> draw;
 		for (const Record& record : m_Records)
 		{
-			if (!record.Mesh || !record.Transform || !record.Material)
-				continue;
+			if (record.Mesh && record.Transform && record.Material)
+				draw.push_back(&record);
+		}
 
-			const Transform& transform = record.Transform->Local;
-			const MaterialComponent& material = *record.Material;
-			switch (record.Mesh->Type)
+		std::stable_sort(draw.begin(), draw.end(), [](const Record* left, const Record* right)
+		{
+			int leftOrder = left->Sorting ? left->Sorting->Order : 0;
+			int rightOrder = right->Sorting ? right->Sorting->Order : 0;
+			return leftOrder < rightOrder;
+		});
+
+		for (const Record* record : draw)
+		{
+			const Transform& transform = record->Transform->Local;
+			const MaterialComponent& material = *record->Material;
+			switch (record->Mesh->Type)
 			{
 				case MeshType::Sprite:
 					if (material.UseVertexColors)
@@ -447,6 +487,30 @@ namespace Lite {
 					section = Section::Spin;
 					if (!current->Spin)
 						current->Spin = SpinComponent{};
+				}
+				else if (component == "rigidbody2d")
+				{
+					section = Section::Rigidbody2D;
+					if (!current->Rigidbody2D)
+						current->Rigidbody2D = Rigidbody2DComponent{};
+				}
+				else if (component == "box-collider2d")
+				{
+					section = Section::BoxCollider2D;
+					if (!current->BoxCollider2D)
+						current->BoxCollider2D = BoxCollider2DComponent{};
+				}
+				else if (component == "circle-collider2d")
+				{
+					section = Section::CircleCollider2D;
+					if (!current->CircleCollider2D)
+						current->CircleCollider2D = CircleCollider2DComponent{};
+				}
+				else if (component == "sorting")
+				{
+					section = Section::Sorting;
+					if (!current->Sorting)
+						current->Sorting = SortingComponent{};
 				}
 				continue;
 			}
@@ -569,7 +633,74 @@ namespace Lite {
 						current->Spin = SpinComponent{};
 					current->Spin->Rate = rate;
 				}
+				continue;
 			}
+
+			if (section == Section::Rigidbody2D && current->Rigidbody2D)
+			{
+				Rigidbody2DComponent& body = *current->Rigidbody2D;
+				if (key == "type")
+				{
+					std::string type;
+					stream >> type;
+					if (type == "static")
+						body.Type = BodyType::Static;
+					else if (type == "kinematic")
+						body.Type = BodyType::Kinematic;
+					else
+						body.Type = BodyType::Dynamic;
+				}
+				else if (key == "mass")
+					stream >> body.Mass;
+				else if (key == "gravity")
+					stream >> body.GravityScale;
+				else if (key == "velocity")
+					stream >> body.LinearVelocity.x >> body.LinearVelocity.y;
+				else if (key == "angular")
+					stream >> body.AngularVelocity;
+				else if (key == "freeze")
+				{
+					int freeze = 0;
+					stream >> freeze;
+					body.FreezeRotation = freeze != 0;
+				}
+				continue;
+			}
+
+			if (section == Section::BoxCollider2D && current->BoxCollider2D)
+			{
+				BoxCollider2DComponent& box = *current->BoxCollider2D;
+				if (key == "size")
+					stream >> box.Size.x >> box.Size.y;
+				else if (key == "offset")
+					stream >> box.Offset.x >> box.Offset.y;
+				else if (key == "trigger")
+				{
+					int trigger = 0;
+					stream >> trigger;
+					box.IsTrigger = trigger != 0;
+				}
+				continue;
+			}
+
+			if (section == Section::CircleCollider2D && current->CircleCollider2D)
+			{
+				CircleCollider2DComponent& circle = *current->CircleCollider2D;
+				if (key == "radius")
+					stream >> circle.Radius;
+				else if (key == "offset")
+					stream >> circle.Offset.x >> circle.Offset.y;
+				else if (key == "trigger")
+				{
+					int trigger = 0;
+					stream >> trigger;
+					circle.IsTrigger = trigger != 0;
+				}
+				continue;
+			}
+
+			if (section == Section::Sorting && current->Sorting && key == "order")
+				stream >> current->Sorting->Order;
 		}
 
 		if (m_Name.empty())
@@ -638,6 +769,43 @@ namespace Lite {
 			{
 				output << "component spin\n";
 				output << std::format("rate {:.4f}\n", record.Spin->Rate);
+			}
+			if (record.Rigidbody2D)
+			{
+				const char* type = "dynamic";
+				if (record.Rigidbody2D->Type == BodyType::Static)
+					type = "static";
+				else if (record.Rigidbody2D->Type == BodyType::Kinematic)
+					type = "kinematic";
+				const Rigidbody2DComponent& body = *record.Rigidbody2D;
+				output << "component rigidbody2d\n";
+				output << std::format("type {}\n", type);
+				output << std::format("mass {:.4f}\n", body.Mass);
+				output << std::format("gravity {:.4f}\n", body.GravityScale);
+				output << std::format("velocity {:.4f} {:.4f}\n", body.LinearVelocity.x, body.LinearVelocity.y);
+				output << std::format("angular {:.4f}\n", body.AngularVelocity);
+				output << std::format("freeze {}\n", body.FreezeRotation ? 1 : 0);
+			}
+			if (record.BoxCollider2D)
+			{
+				const BoxCollider2DComponent& box = *record.BoxCollider2D;
+				output << "component box-collider2d\n";
+				output << std::format("size {:.4f} {:.4f}\n", box.Size.x, box.Size.y);
+				output << std::format("offset {:.4f} {:.4f}\n", box.Offset.x, box.Offset.y);
+				output << std::format("trigger {}\n", box.IsTrigger ? 1 : 0);
+			}
+			if (record.CircleCollider2D)
+			{
+				const CircleCollider2DComponent& circle = *record.CircleCollider2D;
+				output << "component circle-collider2d\n";
+				output << std::format("radius {:.4f}\n", circle.Radius);
+				output << std::format("offset {:.4f} {:.4f}\n", circle.Offset.x, circle.Offset.y);
+				output << std::format("trigger {}\n", circle.IsTrigger ? 1 : 0);
+			}
+			if (record.Sorting)
+			{
+				output << "component sorting\n";
+				output << std::format("order {}\n", record.Sorting->Order);
 			}
 		}
 	}
