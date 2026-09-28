@@ -1,6 +1,7 @@
 #include "Application.h"
 #include "Assert.h"
 #include "Logger.h"
+#include "Time.h"
 #include "Window.h"
 
 #include "Events/WindowEvent.h"
@@ -69,6 +70,7 @@ namespace Lite {
 	{
 		while (m_Running && m_Window->IsOpen())
 		{
+			Time::Update();
 			m_Window->PollEvents();
 			Renderer2D::BeginFrame();
 
