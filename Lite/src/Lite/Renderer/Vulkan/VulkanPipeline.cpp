@@ -62,8 +62,8 @@ namespace Lite {
 	{
 		m_Device = device;
 
-		VkShaderModule vertex = CreateShader(device, ReadSpirv(ShaderFile(L"Quad.vert.spv")));
-		VkShaderModule fragment = CreateShader(device, ReadSpirv(ShaderFile(L"Quad.frag.spv")));
+		VkShaderModule vertex = CreateShader(device, ReadSpirv(ShaderFile(L"Triangle.vert.spv")));
+		VkShaderModule fragment = CreateShader(device, ReadSpirv(ShaderFile(L"Triangle.frag.spv")));
 		if (!vertex || !fragment)
 		{
 			if (vertex)
@@ -139,8 +139,15 @@ namespace Lite {
 		dynamic.dynamicStateCount = 2;
 		dynamic.pDynamicStates = dynamicStates;
 
+		VkPushConstantRange pushConstant {};
+		pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		pushConstant.offset = 0;
+		pushConstant.size = sizeof(float);
+
 		VkPipelineLayoutCreateInfo layoutInfo {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		layoutInfo.pushConstantRangeCount = 1;
+		layoutInfo.pPushConstantRanges = &pushConstant;
 		if (!CheckVk(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_Layout), "create pipeline layout"))
 		{
 			vkDestroyShaderModule(device, vertex, nullptr);
@@ -192,6 +199,11 @@ namespace Lite {
 	void VulkanPipeline::Bind(VkCommandBuffer commandBuffer, VkExtent2D extent) const
 	{
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
+
+		float aspect = extent.height > 0
+			? static_cast<float>(extent.width) / static_cast<float>(extent.height)
+			: 1.0f;
+		vkCmdPushConstants(commandBuffer, m_Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float), &aspect);
 
 		VkViewport viewport {};
 		viewport.width = static_cast<float>(extent.width);

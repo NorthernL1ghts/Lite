@@ -37,8 +37,8 @@ if(NOT Vulkan_GLSLC_EXECUTABLE)
 endif()
 
 set(LITE_SHADER_SOURCES
-    src/Lite/Renderer/Shaders/Quad.vert
-    src/Lite/Renderer/Shaders/Quad.frag
+    src/Lite/Renderer/Shaders/Triangle.vert
+    src/Lite/Renderer/Shaders/Triangle.frag
 )
 target_sources(Lite PRIVATE ${LITE_SHADER_SOURCES})
 set_source_files_properties(${LITE_SHADER_SOURCES} PROPERTIES
@@ -47,8 +47,8 @@ set_source_files_properties(${LITE_SHADER_SOURCES} PROPERTIES
 
 add_custom_command(TARGET Lite POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Lite>/shaders"
-    COMMAND "${Vulkan_GLSLC_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/src/Lite/Renderer/Shaders/Quad.vert" -o "$<TARGET_FILE_DIR:Lite>/shaders/Quad.vert.spv"
-    COMMAND "${Vulkan_GLSLC_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/src/Lite/Renderer/Shaders/Quad.frag" -o "$<TARGET_FILE_DIR:Lite>/shaders/Quad.frag.spv"
+    COMMAND "${Vulkan_GLSLC_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/src/Lite/Renderer/Shaders/Triangle.vert" -o "$<TARGET_FILE_DIR:Lite>/shaders/Triangle.vert.spv"
+    COMMAND "${Vulkan_GLSLC_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/src/Lite/Renderer/Shaders/Triangle.frag" -o "$<TARGET_FILE_DIR:Lite>/shaders/Triangle.frag.spv"
     COMMENT "Compiling Vulkan shaders"
     VERBATIM
 )
