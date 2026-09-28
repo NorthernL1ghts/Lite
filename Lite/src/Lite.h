@@ -3,6 +3,8 @@
 // Public engine header. Include from exactly one client translation unit
 // so the entry point is defined once.
 #include "Lite/Core/Logger.h"
+#include "Lite/Core/Layer.h"
+#include "Lite/Core/LayerStack.h"
 #include "Lite/Core/Events/Event.h"
 #include "Lite/Core/Events/KeyEvent.h"
 #include "Lite/Core/Events/MouseEvent.h"
