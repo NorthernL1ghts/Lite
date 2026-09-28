@@ -65,6 +65,7 @@ namespace Lite {
 		void Render() const;
 
 		bool Save();
+		bool SaveAs(std::string_view path);
 		static Scope<Scene> Open(std::string_view path);
 		static std::vector<std::string> List();
 

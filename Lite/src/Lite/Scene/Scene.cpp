@@ -30,36 +30,6 @@ namespace Lite {
 			return std::string(value.substr(begin, end - begin));
 		}
 
-		std::string SafeName(std::string_view name)
-		{
-			std::string safe;
-			safe.reserve(name.size());
-			for (char character : name)
-			{
-				switch (character)
-				{
-					case '<':
-					case '>':
-					case ':':
-					case '"':
-					case '/':
-					case '\\':
-					case '|':
-					case '?':
-					case '*':
-						continue;
-					default:
-						safe.push_back(character);
-						break;
-				}
-			}
-
-			safe = Trim(safe);
-			if (safe.empty())
-				safe = "Untitled";
-			return safe;
-		}
-
 		const char* KindName(SceneObjectKind kind)
 		{
 			switch (kind)
@@ -374,26 +344,50 @@ namespace Lite {
 
 	bool Scene::Save()
 	{
-		std::string relative = std::format("assets/scenes/{}.scene", SafeName(m_Name));
-		std::filesystem::path full = ResolvePath(relative);
+		if (m_Path.empty())
+			return false;
+
+		return SaveAs(m_Path);
+	}
+
+	bool Scene::SaveAs(std::string_view path)
+	{
+		std::filesystem::path full { std::string(path) };
+		if (full.empty())
+		{
+			Console::Log("Failed to save scene: empty path");
+			return false;
+		}
+
+		if (!full.is_absolute())
+			full = FileSystem::ExecutableDirectory() / full;
+		if (full.extension().empty())
+			full.replace_extension(".scene");
+		full = full.lexically_normal();
+
 		std::error_code error;
-		std::filesystem::create_directories(full.parent_path(), error);
+		if (!full.parent_path().empty())
+			std::filesystem::create_directories(full.parent_path(), error);
+
 		std::ofstream file(full, std::ios::trunc);
 		if (!file)
 		{
-			Console::Log(std::format("Failed to save scene: {}", relative));
+			Console::Log(std::format("Failed to save scene: {}", full.string()));
 			return false;
 		}
 
+		std::string previousName = m_Name;
+		m_Name = full.stem().string();
 		Write(file);
 		if (!file)
 		{
-			Console::Log(std::format("Failed to save scene: {}", relative));
+			m_Name = std::move(previousName);
+			Console::Log(std::format("Failed to save scene: {}", full.string()));
 			return false;
 		}
 
-		m_Path = relative;
-		Console::Log(std::format("Scene saved: {}", relative));
+		m_Path = full.string();
+		Console::Log(std::format("Scene saved: {}", m_Path));
 		return true;
 	}
 

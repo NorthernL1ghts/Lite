@@ -2,6 +2,7 @@
 
 #include "Lite/Core/Events/KeyEvent.h"
 #include "Lite/Core/Events/MouseEvent.h"
+#include "Lite/Core/FileSystem.h"
 #include "Lite/Core/Logger.h"
 #include "Lite/Core/Profiler.h"
 #include "Lite/Core/Time.h"
@@ -15,6 +16,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -279,15 +281,6 @@ void EditorLayer::OpenScene(const std::string& path)
 	SyncName();
 }
 
-void EditorLayer::SaveScene()
-{
-	if (!m_Scene)
-		return;
-
-	m_Scene->SetName(m_Name);
-	m_Scene->Save();
-}
-
 void EditorLayer::SyncName()
 {
 	m_NamedScene = m_Scene.get();
@@ -319,7 +312,8 @@ void EditorLayer::OnEvent(Lite::Event& event)
 
 		if (control && key.GetKeyCode() == Lite::Key::S)
 		{
-			SaveScene();
+			if (m_Scene)
+				m_ShowSave = true;
 			return true;
 		}
 
@@ -381,8 +375,8 @@ void EditorLayer::DrawMenu()
 			NewScene();
 		if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
 			m_ShowOpen = true;
-		if (ImGui::MenuItem("Save", "Ctrl+S", false, m_Scene != nullptr))
-			SaveScene();
+		if (ImGui::MenuItem("Save Scene...", "Ctrl+S", false, m_Scene != nullptr))
+			m_ShowSave = true;
 		ImGui::EndMenu();
 	}
 
@@ -415,55 +409,231 @@ void EditorLayer::DrawMenu()
 	ImGui::PopStyleVar();
 }
 
-void EditorLayer::DrawOpenDialog()
+void EditorLayer::OpenBrowser()
 {
-	if (m_ShowOpen)
+	std::filesystem::path directory = Lite::FileSystem::ExecutableDirectory() / "assets" / "scenes";
+	std::string fileName = m_Scene != nullptr ? m_Scene->GetName() : "Untitled";
+	if (m_Scene != nullptr && !m_Scene->GetPath().empty())
 	{
-		m_OpenPath = m_Scene != nullptr ? m_Scene->GetPath() : std::string{};
-		ImGui::OpenPopup("Open Scene");
-		m_ShowOpen = false;
+		std::filesystem::path current(m_Scene->GetPath());
+		if (!current.is_absolute())
+			current = Lite::FileSystem::ExecutableDirectory() / current;
+		if (current.has_parent_path())
+			directory = current.parent_path();
+		if (!current.stem().empty())
+			fileName = current.stem().string();
 	}
 
-	ImGui::SetNextWindowSize(ImVec2(460.0f, 380.0f), ImGuiCond_Appearing);
-	if (!ImGui::BeginPopupModal("Open Scene", nullptr, ImGuiWindowFlags_NoResize))
-		return;
+	std::error_code error;
+	if (!std::filesystem::is_directory(directory, error))
+		directory = Lite::FileSystem::ExecutableDirectory();
 
-	ImGui::TextDisabled("assets/scenes");
-	ImGui::BeginChild("##SceneFiles", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.0f), ImGuiChildFlags_Borders);
-	const std::vector<std::string> scenes = Lite::Scene::List();
-	if (scenes.empty())
-		ImGui::TextDisabled("No scenes");
+	m_BrowserDirectory = directory.string();
+	std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
+	std::snprintf(m_FileName, sizeof(m_FileName), "%s", fileName.c_str());
+	m_FocusFile = true;
+}
 
-	for (const std::string& path : scenes)
+void EditorLayer::ApplyDirectoryText()
+{
+	std::filesystem::path typed(m_DirectoryText);
+	if (typed.empty())
 	{
-		std::string label = std::filesystem::path(path).stem().string();
-		if (!ImGui::Selectable(label.c_str(), m_OpenPath == path, ImGuiSelectableFlags_AllowDoubleClick))
-			continue;
+		m_BrowserDirectory.clear();
+		return;
+	}
 
-		m_OpenPath = path;
-		if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+	std::error_code error;
+	if (std::filesystem::is_directory(typed, error))
+	{
+		m_BrowserDirectory = std::filesystem::absolute(typed, error).string();
+		std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
+		return;
+	}
+
+	if (std::filesystem::is_regular_file(typed, error))
+	{
+		m_BrowserDirectory = std::filesystem::absolute(typed.parent_path(), error).string();
+		std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
+		std::snprintf(m_FileName, sizeof(m_FileName), "%s", typed.stem().string().c_str());
+	}
+}
+
+std::string EditorLayer::BrowserSelection() const
+{
+	std::filesystem::path entered(m_FileName);
+	if (entered.empty())
+		return {};
+
+	if (!entered.is_absolute())
+	{
+		if (m_BrowserDirectory.empty())
+			return {};
+		entered = std::filesystem::path(m_BrowserDirectory) / entered;
+	}
+
+	if (entered.extension().empty())
+		entered.replace_extension(".scene");
+
+	return entered.lexically_normal().string();
+}
+
+void EditorLayer::DrawFileBrowser(bool save)
+{
+	ImGuiInputTextFlags directoryFlags = ImGuiInputTextFlags_EnterReturnsTrue;
+	ImGui::SetNextItemWidth(-1.0f);
+	if (ImGui::InputText("##Directory", m_DirectoryText, sizeof(m_DirectoryText), directoryFlags) || ImGui::IsItemDeactivatedAfterEdit())
+		ApplyDirectoryText();
+
+	ImGui::BeginChild(save ? "##SaveFiles" : "##OpenFiles", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.0f), ImGuiChildFlags_Borders);
+
+	if (m_BrowserDirectory.empty())
+	{
+		for (char letter = 'A'; letter <= 'Z'; ++letter)
 		{
-			OpenScene(path);
-			ImGui::CloseCurrentPopup();
+			std::string root = std::string(1, letter) + ":\\";
+			std::error_code error;
+			if (!std::filesystem::exists(root, error))
+				continue;
+			if (ImGui::Selectable(root.c_str()))
+			{
+				m_BrowserDirectory = root;
+				std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
+			}
 		}
 	}
+	else
+	{
+		std::filesystem::path current(m_BrowserDirectory);
+		if (ImGui::Selectable(".."))
+		{
+			std::filesystem::path parent = current.parent_path();
+			if (parent.empty() || parent == current)
+				m_BrowserDirectory.clear();
+			else
+				m_BrowserDirectory = parent.string();
+			std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
+		}
+
+		struct BrowserEntry
+		{
+			std::string Label;
+			std::filesystem::path Path;
+			bool Directory = false;
+		};
+
+		std::vector<BrowserEntry> entries;
+		std::error_code error;
+		for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(current, error))
+		{
+			std::error_code fileError;
+			bool directory = entry.is_directory(fileError);
+			if (fileError)
+				continue;
+			if (!directory && entry.path().extension() != ".scene")
+				continue;
+
+			BrowserEntry item;
+			item.Directory = directory;
+			item.Path = entry.path();
+			item.Label = directory ? entry.path().filename().string() + "/" : entry.path().filename().string();
+			entries.push_back(std::move(item));
+		}
+
+		std::sort(entries.begin(), entries.end(), [](const BrowserEntry& left, const BrowserEntry& right)
+		{
+			if (left.Directory != right.Directory)
+				return left.Directory;
+			return left.Label < right.Label;
+		});
+
+		for (const BrowserEntry& entry : entries)
+		{
+			bool selected = !entry.Directory && entry.Path.stem().string() == m_FileName;
+			if (!ImGui::Selectable(entry.Label.c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick))
+				continue;
+
+			if (entry.Directory)
+			{
+				m_BrowserDirectory = entry.Path.string();
+				std::snprintf(m_DirectoryText, sizeof(m_DirectoryText), "%s", m_BrowserDirectory.c_str());
+				continue;
+			}
+
+			std::snprintf(m_FileName, sizeof(m_FileName), "%s", entry.Path.stem().string().c_str());
+			if (!save && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			{
+				OpenScene(entry.Path.string());
+				ImGui::CloseCurrentPopup();
+			}
+		}
+	}
+
 	ImGui::EndChild();
 
-	char openName[128] {};
-	if (!m_OpenPath.empty())
-		std::snprintf(openName, sizeof(openName), "%s", std::filesystem::path(m_OpenPath).stem().string().c_str());
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted("Name");
+	ImGui::SameLine();
+	if (m_FocusFile)
+		ImGui::SetKeyboardFocusHere();
 	ImGui::SetNextItemWidth(-1.0f);
-	ImGui::InputText("##OpenName", openName, sizeof(openName), ImGuiInputTextFlags_ReadOnly);
+	bool confirm = ImGui::InputText("##FileName", m_FileName, sizeof(m_FileName), ImGuiInputTextFlags_EnterReturnsTrue);
+	m_FocusFile = false;
 
-	if (ImGui::Button("Open", ImVec2(96.0f, 0.0f)) && !m_OpenPath.empty())
+	const char* action = save ? "Save" : "Open";
+	if ((ImGui::Button(action, ImVec2(96.0f, 0.0f)) || confirm))
 	{
-		OpenScene(m_OpenPath);
-		ImGui::CloseCurrentPopup();
+		std::string path = BrowserSelection();
+		if (!path.empty())
+		{
+			if (save && m_Scene != nullptr && m_Scene->SaveAs(path))
+			{
+				SyncName();
+				ImGui::CloseCurrentPopup();
+			}
+			else if (!save)
+			{
+				OpenScene(path);
+				ImGui::CloseCurrentPopup();
+			}
+		}
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Cancel", ImVec2(96.0f, 0.0f)))
 		ImGui::CloseCurrentPopup();
+}
 
+void EditorLayer::DrawOpenDialog()
+{
+	if (m_ShowOpen)
+	{
+		OpenBrowser();
+		ImGui::OpenPopup("Open Scene");
+		m_ShowOpen = false;
+	}
+
+	ImGui::SetNextWindowSize(ImVec2(560.0f, 460.0f), ImGuiCond_Appearing);
+	if (!ImGui::BeginPopupModal("Open Scene", nullptr, ImGuiWindowFlags_NoResize))
+		return;
+
+	DrawFileBrowser(false);
+	ImGui::EndPopup();
+}
+
+void EditorLayer::DrawSaveDialog()
+{
+	if (m_ShowSave)
+	{
+		OpenBrowser();
+		ImGui::OpenPopup("Save Scene");
+		m_ShowSave = false;
+	}
+
+	ImGui::SetNextWindowSize(ImVec2(560.0f, 460.0f), ImGuiCond_Appearing);
+	if (!ImGui::BeginPopupModal("Save Scene", nullptr, ImGuiWindowFlags_NoResize))
+		return;
+
+	DrawFileBrowser(true);
 	ImGui::EndPopup();
 }
 
@@ -502,6 +672,7 @@ void EditorLayer::OnImGuiRender()
 	if (m_ShowInfo)
 		DrawInstrumentation();
 	DrawOpenDialog();
+	DrawSaveDialog();
 }
 
 void EditorLayer::DrawScene()

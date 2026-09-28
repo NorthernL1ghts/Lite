@@ -21,6 +21,11 @@ public:
 private:
 	void DrawMenu();
 	void DrawOpenDialog();
+	void DrawSaveDialog();
+	void OpenBrowser();
+	void DrawFileBrowser(bool save);
+	void ApplyDirectoryText();
+	std::string BrowserSelection() const;
 	void DrawScene();
 	void DrawViewport();
 	void DrawInspector();
@@ -29,7 +34,6 @@ private:
 
 	void NewScene();
 	void OpenScene(const std::string& path);
-	void SaveScene();
 	void SyncName();
 
 	Lite::OrthographicCamera m_Camera;
@@ -38,8 +42,12 @@ private:
 	Lite::Scene* m_NamedScene = nullptr;
 	char m_Name[128] {};
 	std::string m_Selection = "Triangle";
-	std::string m_OpenPath;
+	std::string m_BrowserDirectory;
+	char m_DirectoryText[512] {};
+	char m_FileName[256] {};
 	bool m_ShowOpen = false;
+	bool m_ShowSave = false;
+	bool m_FocusFile = false;
 	bool m_ShowInfo = false;
 	bool m_InfoPlaced = false;
 };
