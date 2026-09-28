@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Lite/Core/Base.h"
-#include "Renderer.h"
 #include "Vulkan/VulkanInstance.h"
 #include "Vulkan/VulkanPhysicalDevice.h"
 #include "Vulkan/VulkanDevice.h"
@@ -15,7 +14,7 @@
 
 namespace Lite {
 
-	class LITE_API Renderer2D
+	class LITE_API Renderer
 	{
 	public:
 		static void Init(void* window);
@@ -25,6 +24,22 @@ namespace Lite {
 		static void EndFrame();
 		static void OnResize(int width, int height);
 		static bool IsFrameActive();
+
+		static VkCommandBuffer GetCommandBuffer();
+		static VkInstance GetInstance();
+		static VkPhysicalDevice GetPhysicalDevice();
+		static VkDevice GetDevice();
+		static VkQueue GetGraphicsQueue();
+		static uint32_t GetGraphicsQueueFamily();
+		static VkRenderPass GetRenderPass();
+		static uint32_t GetImageCount();
+		static uint32_t GetMinImageCount();
+		static uint32_t GetIndexCount();
+		static VkExtent2D GetExtent();
+
+		static VulkanPipeline& GetPipeline();
+		static VulkanBuffer& GetVertexBuffer();
+		static VulkanBuffer& GetIndexBuffer();
 	};
 
 }

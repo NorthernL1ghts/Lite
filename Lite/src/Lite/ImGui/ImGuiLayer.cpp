@@ -2,8 +2,7 @@
 
 #include "Lite/Core/Events/Event.h"
 #include "Lite/Core/Logger.h"
-#include "Lite/Platform/Vulkan/VulkanContext.h"
-#include "Lite/Renderer/Renderer2D.h"
+#include "Lite/Renderer/Renderer.h"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -27,8 +26,7 @@ namespace Lite {
 
 	void ImGuiLayer::OnAttach()
 	{
-		auto& vulkan = Renderer2D::GetVulkanContext();
-		if (!vulkan.GetDevice())
+		if (!Renderer::GetDevice())
 		{
 			LITE_ERROR("ImGui was not started because Vulkan is not ready");
 			return;
@@ -47,15 +45,15 @@ namespace Lite {
 
 		ImGui_ImplVulkan_InitInfo info {};
 		info.ApiVersion = VK_API_VERSION_1_3;
-		info.Instance = vulkan.GetInstance();
-		info.PhysicalDevice = vulkan.GetPhysicalDevice();
-		info.Device = vulkan.GetDevice();
-		info.QueueFamily = vulkan.GetGraphicsQueueFamily();
-		info.Queue = vulkan.GetGraphicsQueue();
+		info.Instance = Renderer::GetInstance();
+		info.PhysicalDevice = Renderer::GetPhysicalDevice();
+		info.Device = Renderer::GetDevice();
+		info.QueueFamily = Renderer::GetGraphicsQueueFamily();
+		info.Queue = Renderer::GetGraphicsQueue();
 		info.DescriptorPoolSize = 128;
-		info.MinImageCount = vulkan.GetMinImageCount();
-		info.ImageCount = vulkan.GetImageCount();
-		info.PipelineInfoMain.RenderPass = vulkan.GetRenderPass();
+		info.MinImageCount = Renderer::GetMinImageCount();
+		info.ImageCount = Renderer::GetImageCount();
+		info.PipelineInfoMain.RenderPass = Renderer::GetRenderPass();
 		info.PipelineInfoMain.Subpass = 0;
 		info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 		info.MinAllocationSize = 1024 * 1024;
@@ -77,7 +75,7 @@ namespace Lite {
 		if (!m_Ready)
 			return;
 
-		vkDeviceWaitIdle(Renderer2D::GetVulkanContext().GetDevice());
+		vkDeviceWaitIdle(Renderer::GetDevice());
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
@@ -129,7 +127,7 @@ namespace Lite {
 			return;
 
 		ImGui::Render();
-		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), Renderer2D::GetVulkanContext().GetCommandBuffer());
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), Renderer::GetCommandBuffer());
 	}
 
 }

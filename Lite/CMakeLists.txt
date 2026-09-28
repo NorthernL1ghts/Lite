@@ -54,9 +54,9 @@ target_link_libraries(Lite
     PUBLIC
         spdlog::spdlog
         glm::glm
+        Vulkan::Vulkan
     PRIVATE
         glfw
-        Vulkan::Vulkan
 )
 
 target_compile_definitions(Lite

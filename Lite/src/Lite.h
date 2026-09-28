@@ -7,6 +7,7 @@
 #include "Lite/Core/LayerStack.h"
 #include "Lite/Input/Input.h"
 #include "Lite/Math/Math.h"
+#include "Lite/Renderer/Renderer.h"
 #include "Lite/Renderer/Renderer2D.h"
 #include "Lite/Core/Events/Event.h"
 #include "Lite/Core/Events/KeyEvent.h"
