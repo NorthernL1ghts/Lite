@@ -1,6 +1,7 @@
 #include "Renderer.h"
 
 #include "Framebuffer.h"
+#include "ShaderProgram.h"
 #include "VertexArray.h"
 
 #include "Lite/Assets/Shader.h"
@@ -29,7 +30,7 @@ namespace {
 		Lite::VulkanSwapchain Swapchain;
 		Lite::VulkanRenderPass RenderPass;
 		Lite::Framebuffer Frames;
-		Lite::VulkanPipeline Pipeline;
+		Lite::ShaderProgram Shader;
 		Lite::VertexArray Geometry;
 		Lite::VulkanCommandBuffer Commands;
 		Lite::VulkanSync Sync;
@@ -40,7 +41,6 @@ namespace {
 		bool FramebufferResized = false;
 		bool ContextReady = false;
 		bool Ready = false;
-		Lite::Mat4 ViewProjection = Lite::Mat4::Identity();
 	};
 
 	RendererState s_Renderer;
@@ -127,14 +127,14 @@ namespace Lite {
 		if (!s_Renderer.ContextReady)
 			return false;
 
-		if (s_Renderer.Pipeline.Get())
+		if (s_Renderer.Shader.IsReady())
 		{
 			s_Renderer.Device.WaitIdle();
-			s_Renderer.Pipeline.Destroy();
+			s_Renderer.Shader.Destroy();
 			s_Renderer.Ready = false;
 		}
 
-		if (!s_Renderer.Pipeline.Create(s_Renderer.Device.Get(), s_Renderer.RenderPass.Get(), vertex, fragment))
+		if (!s_Renderer.Shader.Create(vertex, fragment))
 			return false;
 
 		s_Renderer.Ready = true;
@@ -144,12 +144,12 @@ namespace Lite {
 
 	void Renderer::SetViewProjection(const Mat4& viewProjection)
 	{
-		s_Renderer.ViewProjection = viewProjection;
+		s_Renderer.Shader.SetViewProjection(viewProjection);
 	}
 
 	const Mat4& Renderer::GetViewProjection()
 	{
-		return s_Renderer.ViewProjection;
+		return s_Renderer.Shader.GetViewProjection();
 	}
 
 	void Renderer::Shutdown()
@@ -160,7 +160,7 @@ namespace Lite {
 		s_Renderer.Sync.Destroy();
 		s_Renderer.Commands.Destroy();
 		s_Renderer.Geometry.Destroy();
-		s_Renderer.Pipeline.Destroy();
+		s_Renderer.Shader.Destroy();
 		s_Renderer.Frames.Destroy();
 		s_Renderer.RenderPass.Destroy();
 		s_Renderer.Swapchain.Destroy();
@@ -176,7 +176,7 @@ namespace Lite {
 		s_Renderer.FramebufferResized = false;
 		s_Renderer.ContextReady = false;
 		s_Renderer.Ready = false;
-		s_Renderer.ViewProjection = Mat4::Identity();
+		s_Renderer.Shader.SetViewProjection(Mat4::Identity());
 	}
 
 	void Renderer::BeginFrame()
@@ -356,9 +356,14 @@ namespace Lite {
 		return s_Renderer.Swapchain.GetExtent();
 	}
 
-	VulkanPipeline& Renderer::GetPipeline()
+	uint32_t Renderer::GetFrameIndex()
 	{
-		return s_Renderer.Pipeline;
+		return s_Renderer.CurrentFrame;
+	}
+
+	ShaderProgram& Renderer::GetShader()
+	{
+		return s_Renderer.Shader;
 	}
 
 	VertexArray& Renderer::GetVertexArray()

@@ -4,7 +4,7 @@
 
 namespace Lite {
 
-	bool VulkanPipeline::Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader)
+	bool VulkanPipeline::Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader, VkDescriptorSetLayout uniformLayout)
 	{
 		m_Device = device;
 
@@ -85,15 +85,10 @@ namespace Lite {
 		dynamic.dynamicStateCount = 2;
 		dynamic.pDynamicStates = dynamicStates;
 
-		VkPushConstantRange pushConstant {};
-		pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		pushConstant.offset = 0;
-		pushConstant.size = sizeof(Mat4);
-
 		VkPipelineLayoutCreateInfo layoutInfo {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		layoutInfo.pushConstantRangeCount = 1;
-		layoutInfo.pPushConstantRanges = &pushConstant;
+		layoutInfo.setLayoutCount = uniformLayout ? 1 : 0;
+		layoutInfo.pSetLayouts = uniformLayout ? &uniformLayout : nullptr;
 		if (!CheckVk(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_Layout), "create pipeline layout"))
 		{
 			vkDestroyShaderModule(device, vertex, nullptr);
@@ -142,11 +137,9 @@ namespace Lite {
 		}
 	}
 
-	void VulkanPipeline::Bind(VkCommandBuffer commandBuffer, VkExtent2D extent, const Mat4& viewProjection) const
+	void VulkanPipeline::Bind(VkCommandBuffer commandBuffer, VkExtent2D extent) const
 	{
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
-
-		vkCmdPushConstants(commandBuffer, m_Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Mat4), viewProjection.Data());
 
 		VkViewport viewport {};
 		viewport.width = static_cast<float>(extent.width);
