@@ -8,6 +8,8 @@
 
 namespace Lite {
 
+	class ImGuiLayer;
+
 	class LITE_API Application
 	{
 	public:
@@ -26,6 +28,7 @@ namespace Lite {
 
 		bool m_Running = true;
 		std::unique_ptr<Window> m_Window;
+		ImGuiLayer* m_ImGuiLayer = nullptr;
 		LayerStack m_LayerStack;
 	};
 

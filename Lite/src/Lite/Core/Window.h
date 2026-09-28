@@ -30,11 +30,14 @@ namespace Lite {
 
 		virtual ~Window() = default;
 
-		virtual void Update() = 0;
+		virtual void PollEvents() = 0;
+		virtual void Clear() = 0;
+		virtual void SwapBuffers() = 0;
 		virtual bool IsOpen() const = 0;
 
 		virtual void SetEventCallback(EventCallback callback) = 0;
 		virtual const WindowProps& GetProps() const = 0;
+		virtual void* GetNativeHandle() const = 0;
 
 		static std::unique_ptr<Window> Create(const WindowProps& props);
 	};

@@ -3,6 +3,9 @@
 #include "Window.h"
 
 #include "Events/WindowEvent.h"
+#include "Lite/ImGui/ImGuiLayer.h"
+
+#include <GLFW/glfw3.h>
 
 namespace Lite {
 
@@ -10,6 +13,11 @@ namespace Lite {
 		: m_Window(Window::Create(props))
 	{
 		m_Window->SetEventCallback([this](Event& event) { OnEvent(event); });
+
+		auto imgui = std::make_unique<ImGuiLayer>(static_cast<GLFWwindow*>(m_Window->GetNativeHandle()));
+		m_ImGuiLayer = imgui.get();
+		PushOverlay(std::move(imgui));
+
 		LITE_INFO("Application created");
 	}
 
@@ -22,10 +30,18 @@ namespace Lite {
 	{
 		while (m_Running && m_Window->IsOpen())
 		{
+			m_Window->PollEvents();
+			m_Window->Clear();
+
 			for (auto& layer : m_LayerStack)
 				layer->OnUpdate();
 
-			m_Window->Update();
+			m_ImGuiLayer->Begin();
+			for (auto& layer : m_LayerStack)
+				layer->OnImGuiRender();
+			m_ImGuiLayer->End();
+
+			m_Window->SwapBuffers();
 		}
 	}
 

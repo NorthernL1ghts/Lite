@@ -1,5 +1,7 @@
 #include <Lite.h>
 
+#include <imgui.h>
+
 namespace {
 
 	class SandboxLayer final : public Lite::Layer
@@ -24,6 +26,11 @@ namespace {
 		{
 			if (event.GetType() == Lite::EventType::KeyPressed)
 				LITE_CLIENT_TRACE("{}", event.ToString());
+		}
+
+		void OnImGuiRender() override
+		{
+			ImGui::ShowDemoWindow();
 		}
 	};
 

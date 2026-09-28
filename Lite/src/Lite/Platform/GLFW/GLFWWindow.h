@@ -12,11 +12,14 @@ namespace Lite {
 		explicit GLFWWindow(const WindowProps& props);
 		~GLFWWindow() override;
 
-		void Update() override;
+		void PollEvents() override;
+		void Clear() override;
+		void SwapBuffers() override;
 		bool IsOpen() const override;
 
 		void SetEventCallback(EventCallback callback) override;
 		const WindowProps& GetProps() const override { return m_Data.Props; }
+		void* GetNativeHandle() const override { return m_Window; }
 
 	private:
 		struct WindowData

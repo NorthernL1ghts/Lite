@@ -4,3 +4,7 @@
 [submodule "Lite/src/vendor/glfw"]
 	path = Lite/src/vendor/glfw
 	url = https://github.com/glfw/glfw.git
+[submodule "Lite/src/vendor/imgui"]
+	path = Lite/src/vendor/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking
