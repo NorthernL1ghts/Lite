@@ -1,10 +1,8 @@
 #include "Renderer.h"
 
 #include "Framebuffer.h"
-#include "ShaderProgram.h"
 #include "VertexArray.h"
 
-#include "Lite/Assets/Shader.h"
 #include "Lite/Core/Logger.h"
 
 #include <GLFW/glfw3.h>
@@ -30,7 +28,6 @@ namespace {
 		Lite::VulkanSwapchain Swapchain;
 		Lite::VulkanRenderPass RenderPass;
 		Lite::Framebuffer Frames;
-		Lite::ShaderProgram Shader;
 		Lite::VertexArray Geometry;
 		Lite::VulkanCommandBuffer Commands;
 		Lite::VulkanSync Sync;
@@ -41,6 +38,7 @@ namespace {
 		bool FramebufferResized = false;
 		bool ContextReady = false;
 		bool Ready = false;
+		Lite::Mat4 ViewProjection = Lite::Mat4::Identity();
 	};
 
 	RendererState s_Renderer;
@@ -119,37 +117,18 @@ namespace Lite {
 			return;
 
 		s_Renderer.ContextReady = true;
-		LITE_INFO("Renderer context ready");
-	}
-
-	bool Renderer::SetShaders(const Shader& vertex, const Shader& fragment)
-	{
-		if (!s_Renderer.ContextReady)
-			return false;
-
-		if (s_Renderer.Shader.IsReady())
-		{
-			s_Renderer.Device.WaitIdle();
-			s_Renderer.Shader.Destroy();
-			s_Renderer.Ready = false;
-		}
-
-		if (!s_Renderer.Shader.Create(vertex, fragment))
-			return false;
-
 		s_Renderer.Ready = true;
-		LITE_INFO("Renderer shaders ready");
-		return true;
+		LITE_INFO("Renderer context ready");
 	}
 
 	void Renderer::SetViewProjection(const Mat4& viewProjection)
 	{
-		s_Renderer.Shader.SetViewProjection(viewProjection);
+		s_Renderer.ViewProjection = viewProjection;
 	}
 
 	const Mat4& Renderer::GetViewProjection()
 	{
-		return s_Renderer.Shader.GetViewProjection();
+		return s_Renderer.ViewProjection;
 	}
 
 	void Renderer::Shutdown()
@@ -160,7 +139,6 @@ namespace Lite {
 		s_Renderer.Sync.Destroy();
 		s_Renderer.Commands.Destroy();
 		s_Renderer.Geometry.Destroy();
-		s_Renderer.Shader.Destroy();
 		s_Renderer.Frames.Destroy();
 		s_Renderer.RenderPass.Destroy();
 		s_Renderer.Swapchain.Destroy();
@@ -176,7 +154,7 @@ namespace Lite {
 		s_Renderer.FramebufferResized = false;
 		s_Renderer.ContextReady = false;
 		s_Renderer.Ready = false;
-		s_Renderer.Shader.SetViewProjection(Mat4::Identity());
+		s_Renderer.ViewProjection = Mat4::Identity();
 	}
 
 	void Renderer::BeginFrame()
@@ -359,11 +337,6 @@ namespace Lite {
 	uint32_t Renderer::GetFrameIndex()
 	{
 		return s_Renderer.CurrentFrame;
-	}
-
-	ShaderProgram& Renderer::GetShader()
-	{
-		return s_Renderer.Shader;
 	}
 
 	VertexArray& Renderer::GetVertexArray()

@@ -7,10 +7,11 @@
 
 namespace Lite {
 
-	bool UniformBuffer::Create(uint32_t size)
+	bool UniformBuffer::Create(uint32_t size, uint32_t set, VkShaderStageFlags stages)
 	{
 		m_Device = Renderer::GetDevice();
 		m_Size = size;
+		m_Set = set;
 		m_Data.assign(size, 0);
 
 		for (uint32_t frame = 0; frame < VulkanSync::FramesInFlight; ++frame)
@@ -26,7 +27,7 @@ namespace Lite {
 		binding.binding = 0;
 		binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		binding.descriptorCount = 1;
-		binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		binding.stageFlags = stages;
 
 		VkDescriptorSetLayoutCreateInfo layoutInfo {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -83,7 +84,7 @@ namespace Lite {
 			vkUpdateDescriptorSets(m_Device, 1, &write, 0, nullptr);
 		}
 
-		LITE_INFO("Uniform buffer ready ({} bytes, {} frames)", size, VulkanSync::FramesInFlight);
+		LITE_INFO("Uniform buffer ready (set {}, {} bytes, {} frames)", set, size, VulkanSync::FramesInFlight);
 		return true;
 	}
 
@@ -96,6 +97,7 @@ namespace Lite {
 		}
 
 		m_Sets.fill(VK_NULL_HANDLE);
+		m_Set = 0;
 
 		if (m_Layout)
 		{
@@ -122,7 +124,7 @@ namespace Lite {
 	void UniformBuffer::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout) const
 	{
 		uint32_t frame = Renderer::GetFrameIndex();
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &m_Sets[frame], 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, m_Set, 1, &m_Sets[frame], 0, nullptr);
 	}
 
 }

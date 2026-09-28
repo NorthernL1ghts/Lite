@@ -9,7 +9,7 @@ namespace Lite {
 	class VulkanPipeline
 	{
 	public:
-		bool Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader, VkDescriptorSetLayout uniformLayout);
+		bool Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader, VkDescriptorSetLayout cameraLayout, VkDescriptorSetLayout materialLayout);
 		void Destroy();
 		void Bind(VkCommandBuffer commandBuffer, VkExtent2D extent) const;
 

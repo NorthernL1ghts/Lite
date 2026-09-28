@@ -2,6 +2,7 @@
 
 #include "Lite/Assets/Shader.h"
 #include "Lite/Core/Layer.h"
+#include "Lite/Renderer/Material.h"
 #include "Lite/Renderer/OrthographicCamera.h"
 
 #include <memory>
@@ -21,4 +22,5 @@ private:
 	Lite::OrthographicCamera m_Camera;
 	std::shared_ptr<Lite::Shader> m_VertexShader;
 	std::shared_ptr<Lite::Shader> m_FragmentShader;
+	std::shared_ptr<Lite::Material> m_Material;
 };

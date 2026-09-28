@@ -12,8 +12,6 @@
 
 namespace Lite {
 
-	class Shader;
-	class ShaderProgram;
 	class VertexArray;
 
 	class LITE_API Renderer
@@ -21,7 +19,6 @@ namespace Lite {
 	public:
 		static void Init(void* window);
 		static void Shutdown();
-		static bool SetShaders(const Shader& vertex, const Shader& fragment);
 		static void SetViewProjection(const Mat4& viewProjection);
 		static const Mat4& GetViewProjection();
 
@@ -43,7 +40,6 @@ namespace Lite {
 		static VkExtent2D GetExtent();
 		static uint32_t GetFrameIndex();
 
-		static ShaderProgram& GetShader();
 		static VertexArray& GetVertexArray();
 	};
 

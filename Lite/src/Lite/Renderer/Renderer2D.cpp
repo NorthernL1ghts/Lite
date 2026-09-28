@@ -1,19 +1,13 @@
 #include "Renderer2D.h"
 
+#include "Material.h"
 #include "RendererAPI.h"
-
-#include "Lite/Assets/Shader.h"
 
 namespace Lite {
 
 	void Renderer2D::Init(void* window)
 	{
 		Renderer::Init(window);
-	}
-
-	bool Renderer2D::SetShaders(const Shader& vertex, const Shader& fragment)
-	{
-		return Renderer::SetShaders(vertex, fragment);
 	}
 
 	void Renderer2D::SetViewProjection(const Mat4& viewProjection)
@@ -31,11 +25,12 @@ namespace Lite {
 		Renderer::BeginFrame();
 	}
 
-	void Renderer2D::Draw()
+	void Renderer2D::Draw(Material& material)
 	{
 		if (!Renderer::IsFrameActive())
 			return;
 
+		material.Bind();
 		RendererAPI::DrawIndexed(Renderer::GetVertexArray());
 	}
 

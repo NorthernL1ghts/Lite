@@ -24,7 +24,14 @@ void SandboxLayer::OnAttach()
 		return;
 	}
 
-	Lite::Renderer2D::SetShaders(*m_VertexShader, *m_FragmentShader);
+	m_Material = Lite::Material::Create(*m_VertexShader, *m_FragmentShader);
+	if (!m_Material)
+	{
+		LITE_CLIENT_ERROR("Failed to create the triangle material");
+		return;
+	}
+
+	m_Material->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 	m_Camera.SetProjection(2.0f, 16.0f / 9.0f);
 	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
 }
@@ -46,11 +53,13 @@ void SandboxLayer::OnRender()
 	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
 	m_Camera.SetProjection(2.0f, aspect);
 	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
-	Lite::Renderer2D::Draw();
+	if (m_Material)
+		Lite::Renderer2D::Draw(*m_Material);
 }
 
 void SandboxLayer::OnDetach()
 {
+	m_Material.reset();
 	m_VertexShader.reset();
 	m_FragmentShader.reset();
 	LITE_CLIENT_INFO("Layer detached");

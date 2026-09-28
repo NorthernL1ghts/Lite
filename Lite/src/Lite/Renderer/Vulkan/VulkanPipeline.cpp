@@ -4,7 +4,7 @@
 
 namespace Lite {
 
-	bool VulkanPipeline::Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader, VkDescriptorSetLayout uniformLayout)
+	bool VulkanPipeline::Create(VkDevice device, VkRenderPass renderPass, const Shader& vertexShader, const Shader& fragmentShader, VkDescriptorSetLayout cameraLayout, VkDescriptorSetLayout materialLayout)
 	{
 		m_Device = device;
 
@@ -85,10 +85,11 @@ namespace Lite {
 		dynamic.dynamicStateCount = 2;
 		dynamic.pDynamicStates = dynamicStates;
 
+		VkDescriptorSetLayout setLayouts[] = { cameraLayout, materialLayout };
 		VkPipelineLayoutCreateInfo layoutInfo {};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		layoutInfo.setLayoutCount = uniformLayout ? 1 : 0;
-		layoutInfo.pSetLayouts = uniformLayout ? &uniformLayout : nullptr;
+		layoutInfo.setLayoutCount = 2;
+		layoutInfo.pSetLayouts = setLayouts;
 		if (!CheckVk(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_Layout), "create pipeline layout"))
 		{
 			vkDestroyShaderModule(device, vertex, nullptr);

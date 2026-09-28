@@ -5,12 +5,12 @@
 
 namespace Lite {
 
-	bool ShaderProgram::Create(const Shader& vertex, const Shader& fragment)
+	bool ShaderProgram::Create(const Shader& vertex, const Shader& fragment, VkDescriptorSetLayout materialLayout)
 	{
-		if (!m_Uniforms.Create(sizeof(CameraUniform)))
+		if (!m_Uniforms.Create(sizeof(CameraUniform), 0, VK_SHADER_STAGE_VERTEX_BIT))
 			return false;
 
-		if (!m_Pipeline.Create(Renderer::GetDevice(), Renderer::GetRenderPass(), vertex, fragment, m_Uniforms.GetLayout()))
+		if (!m_Pipeline.Create(Renderer::GetDevice(), Renderer::GetRenderPass(), vertex, fragment, m_Uniforms.GetLayout(), materialLayout))
 		{
 			m_Uniforms.Destroy();
 			return false;
@@ -28,17 +28,12 @@ namespace Lite {
 	void ShaderProgram::Bind()
 	{
 		CameraUniform uniform;
-		uniform.ViewProjection = m_ViewProjection;
+		uniform.ViewProjection = Renderer::GetViewProjection();
 		m_Uniforms.SetData(&uniform, sizeof(uniform));
 
 		VkCommandBuffer commandBuffer = Renderer::GetCommandBuffer();
 		m_Pipeline.Bind(commandBuffer, Renderer::GetExtent());
 		m_Uniforms.Bind(commandBuffer, m_Pipeline.GetLayout());
-	}
-
-	void ShaderProgram::SetViewProjection(const Mat4& viewProjection)
-	{
-		m_ViewProjection = viewProjection;
 	}
 
 }
