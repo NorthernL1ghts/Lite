@@ -18,5 +18,6 @@ public:
 private:
 	Lite::OrthographicCamera m_Camera;
 	float m_ViewSize = 2.0f;
+	float m_QuadRotation = 0.0f;
 	Lite::Ref<Lite::Texture> m_Checkerboard;
 };

@@ -19,7 +19,8 @@ void main()
 	vec2 sampleUv = uv * max(material.tiling, vec2(1.0));
 	vec4 tint = color * material.color;
 	vec4 texel = texture(textures[nonuniformEXT(textureIndex)], sampleUv);
+	float shade = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
+	vec3 graded = mix(tint.rgb * 0.28, tint.rgb, shade);
 	float alpha = texel.a * tint.a;
-	vec3 rgb = texel.rgb * tint.rgb * alpha;
-	outColor = vec4(rgb, alpha);
+	outColor = vec4(graded * alpha, alpha);
 }

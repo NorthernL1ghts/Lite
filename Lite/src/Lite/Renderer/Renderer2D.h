@@ -19,6 +19,7 @@ namespace Lite {
 		static void BeginFrame();
 		static void DrawQuad(const Transform& transform, const Vec4& color);
 		static void DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling = Vec2(1.0f, 1.0f), const Vec4& tint = Vec4(1.0f, 1.0f, 1.0f, 1.0f));
+		static void DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& bottomLeft, const Vec4& bottomRight, const Vec4& topRight, const Vec4& topLeft);
 		static void DrawTriangle(const Transform& transform, const Vec4& first, const Vec4& second, const Vec4& third);
 		static void Flush();
 		static void EndFrame();

@@ -178,7 +178,7 @@ namespace Lite {
 			return static_cast<float>(s_SlotCount++);
 		}
 
-		void PushQuad(const Transform& transform, const Vec4& color, const Vec2& tiling, float textureIndex)
+		void PushQuad(const Transform& transform, const Vec4 colors[4], const Vec2& tiling, float textureIndex)
 		{
 			const Vec2 corners[4] = {
 				{ -0.5f, -0.5f },
@@ -197,6 +197,7 @@ namespace Lite {
 			for (int corner = 0; corner < 4; ++corner)
 			{
 				Vec3 world = transform.TransformPoint({ corners[corner].x, corners[corner].y, 0.0f });
+				const Vec4& color = colors[corner];
 				s_Vertices.push_back({
 					world.x, world.y,
 					color.x, color.y, color.z, color.w,
@@ -304,10 +305,17 @@ namespace Lite {
 		if (s_Vertices.size() + 4 > MaxVertices || s_Indices.size() + 6 > MaxIndices)
 			Flush();
 
-		PushQuad(transform, color, { 1.0f, 1.0f }, TextureSlot({}));
+		const Vec4 colors[4] = { color, color, color, color };
+		PushQuad(transform, colors, { 1.0f, 1.0f }, TextureSlot({}));
 	}
 
 	void Renderer2D::DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& tint)
+	{
+		const Vec4 colors[4] = { tint, tint, tint, tint };
+		DrawQuad(transform, texture, tiling, colors[0], colors[1], colors[2], colors[3]);
+	}
+
+	void Renderer2D::DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& bottomLeft, const Vec4& bottomRight, const Vec4& topRight, const Vec4& topLeft)
 	{
 		if (!s_Ready || !Renderer::IsFrameActive())
 			return;
@@ -315,7 +323,8 @@ namespace Lite {
 		if (s_Vertices.size() + 4 > MaxVertices || s_Indices.size() + 6 > MaxIndices)
 			Flush();
 
-		PushQuad(transform, tint, tiling, TextureSlot(texture));
+		const Vec4 colors[4] = { bottomLeft, bottomRight, topRight, topLeft };
+		PushQuad(transform, colors, tiling, TextureSlot(texture));
 	}
 
 	void Renderer2D::DrawTriangle(const Transform& transform, const Vec4& first, const Vec4& second, const Vec4& third)

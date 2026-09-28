@@ -38,6 +38,8 @@ void SandboxLayer::OnUpdate(Lite::Timestep timestep)
 	if (Lite::Input::IsKeyPressed(Lite::Key::E))
 		rotation -= step;
 	m_Camera.SetRotation(rotation);
+
+	m_QuadRotation += 1.15f * timestep.GetSeconds();
 }
 
 void SandboxLayer::OnRender()
@@ -50,7 +52,14 @@ void SandboxLayer::OnRender()
 
 	Lite::Transform background;
 	background.Scale = { 8.0f, 8.0f, 1.0f };
-	Lite::Renderer2D::DrawQuad(background, m_Checkerboard, { 8.0f, 8.0f });
+	Lite::Renderer2D::DrawQuad(
+		background,
+		m_Checkerboard,
+		{ 8.0f, 8.0f },
+		{ 0.16f, 0.28f, 0.62f, 1.0f },
+		{ 0.12f, 0.52f, 0.58f, 1.0f },
+		{ 0.93f, 0.58f, 0.24f, 1.0f },
+		{ 0.52f, 0.26f, 0.72f, 1.0f });
 
 	Lite::Transform triangle;
 	Lite::Renderer2D::DrawTriangle(
@@ -60,8 +69,9 @@ void SandboxLayer::OnRender()
 		{ 0.16f, 0.36f, 0.96f, 1.0f });
 
 	Lite::Transform redQuad;
-	redQuad.Position = { 0.78f, 0.58f, 0.0f };
-	redQuad.Scale = { 0.34f, 0.34f, 1.0f };
+	redQuad.Position = { 1.22f, -0.48f, 0.0f };
+	redQuad.Scale = { 0.62f, 0.62f, 1.0f };
+	redQuad.SetRotationZ(m_QuadRotation);
 	Lite::Renderer2D::DrawQuad(redQuad, { 0.86f, 0.16f, 0.18f, 1.0f });
 }
 
