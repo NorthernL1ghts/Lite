@@ -39,12 +39,18 @@ if not defined GENERATOR (
     exit /b 1
 )
 
+where cmake >nul 2>&1
+if errorlevel 1 (
+    echo cmake was not found on PATH.
+    exit /b 1
+)
+
 echo Configuring with %GENERATOR% into build\ ...
 cmake -S . -B build -G "%GENERATOR%" -A x64
 if errorlevel 1 exit /b 1
 
 echo Building %CONFIG% ...
-cmake --build build --config %CONFIG%
+cmake --build build --config %CONFIG% --parallel
 if errorlevel 1 exit /b 1
 
 echo Opening Sandbox in a new window...

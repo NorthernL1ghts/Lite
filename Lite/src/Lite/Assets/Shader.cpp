@@ -2,22 +2,19 @@
 
 #include "Lite/Core/FileSystem.h"
 #include "Lite/Core/Logger.h"
+#include "Lite/Core/String.h"
 #include "Lite/Renderer/Vulkan/VulkanUtils.h"
 
-#include <cctype>
 #include <cstring>
 
 namespace {
 
 	Lite::ShaderStage StageFromPath(const std::filesystem::path& path)
 	{
-		std::string name = path.filename().string();
-		for (char& character : name)
-			character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
-
-		if (name.find(".vert") != std::string::npos)
+		std::string name = Lite::ToLower(path.filename().string());
+		if (name.contains(".vert"))
 			return Lite::ShaderStage::Vertex;
-		if (name.find(".frag") != std::string::npos)
+		if (name.contains(".frag"))
 			return Lite::ShaderStage::Fragment;
 
 		return Lite::ShaderStage::Unknown;

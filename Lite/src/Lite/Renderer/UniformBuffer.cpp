@@ -114,11 +114,12 @@ namespace Lite {
 
 	void UniformBuffer::SetData(const void* data, uint32_t size, uint32_t offset)
 	{
-		if (!data || size == 0 || offset + size > m_Size)
+		if (!data || size == 0 || size > m_Size || offset > m_Size - size)
 			return;
 
 		std::memcpy(m_Data.data() + offset, data, size);
-		m_Buffers[Renderer::GetFrameIndex()].Upload(m_Data.data(), m_Size);
+		if (!m_Buffers[Renderer::GetFrameIndex()].Upload(m_Data.data(), m_Size))
+			return;
 	}
 
 	void UniformBuffer::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout) const

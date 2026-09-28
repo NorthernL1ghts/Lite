@@ -5,8 +5,7 @@
 
 #include "Lite/Core/Assert.h"
 #include "Lite/Core/FileSystem.h"
-
-#include <cctype>
+#include "Lite/Core/String.h"
 
 namespace Lite {
 
@@ -88,12 +87,7 @@ namespace Lite {
 
 	std::string AssetRegistry::Key(std::string_view path) const
 	{
-		std::filesystem::path relative(path);
-		std::string key = relative.generic_string();
-		for (char& character : key)
-			character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
-
-		return key;
+		return ToLower(std::filesystem::path(path).generic_string());
 	}
 
 	std::filesystem::path AssetRegistry::Resolve(std::string_view path) const

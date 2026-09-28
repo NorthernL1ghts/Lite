@@ -8,42 +8,34 @@ namespace Lite {
 	{
 		m_Device = device;
 
-		VkBufferCreateInfo info {};
-		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		info.size = size;
-		info.usage = usage;
-		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-		if (!CheckVk(vkCreateBuffer(device, &info, nullptr, &m_Buffer), "create buffer"))
-			return false;
-
-		VkMemoryRequirements requirements {};
-		vkGetBufferMemoryRequirements(device, m_Buffer, &requirements);
-
-		uint32_t memoryType = FindMemoryType(
+		AllocatedBuffer allocated {};
+		if (!CreateBuffer(
+			device,
 			physicalDevice,
-			requirements.memoryTypeBits,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		if (memoryType == UINT32_MAX)
+			size,
+			usage,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			allocated,
+			"create buffer"))
 			return false;
 
-		VkMemoryAllocateInfo allocateInfo {};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocateInfo.allocationSize = requirements.size;
-		allocateInfo.memoryTypeIndex = memoryType;
-
-		if (!CheckVk(vkAllocateMemory(device, &allocateInfo, nullptr, &m_Memory), "allocate buffer memory"))
-			return false;
-
-		return CheckVk(vkBindBufferMemory(device, m_Buffer, m_Memory, 0), "bind buffer memory");
+		m_Buffer = allocated.Buffer;
+		m_Memory = allocated.Memory;
+		return true;
 	}
 
-	void VulkanBuffer::Upload(const void* data, VkDeviceSize size)
+	bool VulkanBuffer::Upload(const void* data, VkDeviceSize size)
 	{
+		if (!data || size == 0)
+			return false;
+
 		void* mapped = nullptr;
-		vkMapMemory(m_Device, m_Memory, 0, size, 0, &mapped);
+		if (!CheckVk(vkMapMemory(m_Device, m_Memory, 0, size, 0, &mapped), "map buffer") || !mapped)
+			return false;
+
 		std::memcpy(mapped, data, static_cast<size_t>(size));
 		vkUnmapMemory(m_Device, m_Memory);
+		return true;
 	}
 
 	void VulkanBuffer::Destroy()

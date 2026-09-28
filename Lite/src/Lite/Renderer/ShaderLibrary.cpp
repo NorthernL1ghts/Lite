@@ -3,19 +3,15 @@
 #include "Lite/Assets/AssetRegistry.h"
 #include "Lite/Core/Assert.h"
 #include "Lite/Core/Logger.h"
+#include "Lite/Core/String.h"
 
-#include <cctype>
 #include <filesystem>
 
 namespace Lite {
 
 	std::string ShaderLibrary::Key(std::string_view name) const
 	{
-		std::string key(name);
-		for (char& character : key)
-			character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
-
-		return key;
+		return ToLower(name);
 	}
 
 	std::string ShaderLibrary::NameFromPath(std::string_view path) const

@@ -14,7 +14,7 @@ namespace Lite {
 		void Destroy();
 
 		VkCommandBuffer Begin(uint32_t frame);
-		void End(uint32_t frame);
+		bool End(uint32_t frame);
 		VkCommandBuffer Get(uint32_t frame) const { return m_Buffers[frame]; }
 
 	private:

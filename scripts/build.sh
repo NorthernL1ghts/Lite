@@ -48,11 +48,16 @@ case "$major" in
         ;;
 esac
 
+if ! command -v cmake >/dev/null 2>&1; then
+    echo "cmake was not found on PATH." >&2
+    exit 1
+fi
+
 echo "Configuring with ${generator} into build/ ..."
 cmake -S . -B build -G "$generator" -A x64
 
 echo "Building ${config} ..."
-cmake --build build --config "$config"
+cmake --build build --config "$config" --parallel
 
 echo "Opening Sandbox in a new window..."
 root="$(pwd)"

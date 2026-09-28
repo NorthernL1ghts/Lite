@@ -14,10 +14,10 @@ namespace Lite {
 
 		bool Create(VkDevice device, uint32_t frames, uint32_t imageCount);
 		void Destroy();
-		void ResetImages(uint32_t imageCount);
+		bool ResetImages(uint32_t imageCount);
 
 		bool Wait(uint32_t frame) const;
-		void Reset(uint32_t frame) const;
+		bool Reset(uint32_t frame) const;
 		bool WaitImage(uint32_t imageIndex) const;
 		void TrackImage(uint32_t imageIndex, uint32_t frame);
 

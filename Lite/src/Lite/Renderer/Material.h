@@ -12,7 +12,7 @@ namespace Lite {
 	class LITE_API Material
 	{
 	public:
-		static Ref<Material> Create(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture = {});
+		[[nodiscard]] static Ref<Material> Create(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture = {});
 
 		~Material();
 

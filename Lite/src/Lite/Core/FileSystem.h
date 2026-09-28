@@ -11,9 +11,9 @@ namespace Lite {
 	class LITE_API FileSystem
 	{
 	public:
-		static std::filesystem::path ExecutableDirectory();
-		static bool Exists(const std::filesystem::path& path);
-		static std::vector<uint8_t> ReadBinary(const std::filesystem::path& path);
+		[[nodiscard]] static std::filesystem::path ExecutableDirectory();
+		[[nodiscard]] static bool Exists(const std::filesystem::path& path);
+		[[nodiscard]] static std::vector<uint8_t> ReadBinary(const std::filesystem::path& path);
 	};
 
 }

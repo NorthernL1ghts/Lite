@@ -9,7 +9,12 @@ namespace Lite {
 		if (!m_Buffer.Create(Renderer::GetDevice(), Renderer::GetPhysicalDevice(), size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT))
 			return false;
 
-		m_Buffer.Upload(data, size);
+		if (!m_Buffer.Upload(data, size))
+		{
+			m_Buffer.Destroy();
+			return false;
+		}
+
 		return true;
 	}
 
@@ -29,7 +34,12 @@ namespace Lite {
 		if (!m_Buffer.Create(Renderer::GetDevice(), Renderer::GetPhysicalDevice(), size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT))
 			return false;
 
-		m_Buffer.Upload(indices, size);
+		if (!m_Buffer.Upload(indices, size))
+		{
+			m_Buffer.Destroy();
+			return false;
+		}
+
 		m_Count = count;
 		return true;
 	}

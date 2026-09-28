@@ -8,7 +8,7 @@ namespace Lite {
 	{
 	public:
 		bool Create(VkDevice device, VkPhysicalDevice physicalDevice, VkDeviceSize size, VkBufferUsageFlags usage);
-		void Upload(const void* data, VkDeviceSize size);
+		bool Upload(const void* data, VkDeviceSize size);
 		void Destroy();
 
 		void BindVertex(VkCommandBuffer commandBuffer) const;

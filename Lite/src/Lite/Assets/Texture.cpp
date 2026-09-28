@@ -5,6 +5,7 @@
 #include "Lite/Renderer/Vulkan/VulkanUtils.h"
 
 #include <cstring>
+#include <limits>
 #include <objbase.h>
 #include <vector>
 #include <wincodec.h>
@@ -45,11 +46,13 @@ namespace {
 		UINT imageHeight = 0;
 		if (SUCCEEDED(result))
 			result = converter->GetSize(&imageWidth, &imageHeight);
-		if (SUCCEEDED(result) && imageWidth > 0 && imageHeight > 0)
+
+		const uint64_t byteCount = static_cast<uint64_t>(imageWidth) * imageHeight * 4u;
+		if (SUCCEEDED(result) && imageWidth > 0 && imageHeight > 0 && imageWidth <= (UINT_MAX / 4u) && byteCount <= std::numeric_limits<UINT>::max())
 		{
 			width = imageWidth;
 			height = imageHeight;
-			pixels.resize(static_cast<size_t>(width) * height * 4u);
+			pixels.resize(static_cast<size_t>(byteCount));
 			result = converter->CopyPixels(nullptr, width * 4u, static_cast<UINT>(pixels.size()), pixels.data());
 			decoded = SUCCEEDED(result);
 		}
@@ -69,36 +72,30 @@ namespace {
 
 	bool UploadImage(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, const std::vector<uint8_t>& pixels, VkImage& image, VkDeviceMemory& memory)
 	{
-		VkBuffer staging = VK_NULL_HANDLE;
-		VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
-		VkDeviceSize size = pixels.size();
-
-		VkBufferCreateInfo bufferInfo {};
-		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferInfo.size = size;
-		bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-		if (!Lite::CheckVk(vkCreateBuffer(device, &bufferInfo, nullptr, &staging), "create texture staging buffer"))
+		const uint64_t byteCount = static_cast<uint64_t>(width) * height * 4u;
+		if (width == 0 || height == 0 || byteCount != pixels.size())
 			return false;
 
-		VkMemoryRequirements stagingRequirements {};
-		vkGetBufferMemoryRequirements(device, staging, &stagingRequirements);
-		uint32_t stagingType = Lite::FindMemoryType(physicalDevice, stagingRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		Lite::AllocatedBuffer staging {};
+		if (!Lite::CreateBuffer(
+			device,
+			physicalDevice,
+			pixels.size(),
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			staging,
+			"create texture staging buffer"))
+			return false;
 
-		VkMemoryAllocateInfo stagingAllocate {};
-		stagingAllocate.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		stagingAllocate.allocationSize = stagingRequirements.size;
-		stagingAllocate.memoryTypeIndex = stagingType;
-		bool ready = stagingType != UINT32_MAX
-			&& Lite::CheckVk(vkAllocateMemory(device, &stagingAllocate, nullptr, &stagingMemory), "allocate texture staging memory")
-			&& Lite::CheckVk(vkBindBufferMemory(device, staging, stagingMemory, 0), "bind texture staging memory");
-
-		if (ready)
+		void* mapped = nullptr;
+		if (!Lite::CheckVk(vkMapMemory(device, staging.Memory, 0, pixels.size(), 0, &mapped), "map texture staging") || !mapped)
 		{
-			void* mapped = nullptr;
-			vkMapMemory(device, stagingMemory, 0, size, 0, &mapped);
-			std::memcpy(mapped, pixels.data(), static_cast<size_t>(size));
-			vkUnmapMemory(device, stagingMemory);
+			Lite::DestroyBuffer(device, staging);
+			return false;
 		}
+
+		std::memcpy(mapped, pixels.data(), pixels.size());
+		vkUnmapMemory(device, staging.Memory);
 
 		VkImageCreateInfo imageInfo {};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -111,93 +108,45 @@ namespace {
 		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		ready = ready && Lite::CheckVk(vkCreateImage(device, &imageInfo, nullptr, &image), "create texture image");
-
-		VkMemoryRequirements imageRequirements {};
-		if (ready)
-			vkGetImageMemoryRequirements(device, image, &imageRequirements);
-		uint32_t imageType = ready ? Lite::FindMemoryType(physicalDevice, imageRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) : UINT32_MAX;
-
-		VkMemoryAllocateInfo imageAllocate {};
-		imageAllocate.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		imageAllocate.allocationSize = imageRequirements.size;
-		imageAllocate.memoryTypeIndex = imageType;
-		ready = ready && imageType != UINT32_MAX
-			&& Lite::CheckVk(vkAllocateMemory(device, &imageAllocate, nullptr, &memory), "allocate texture memory")
-			&& Lite::CheckVk(vkBindImageMemory(device, image, memory, 0), "bind texture memory");
-
-		VkCommandPool pool = VK_NULL_HANDLE;
-		VkCommandPoolCreateInfo poolInfo {};
-		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-		poolInfo.queueFamilyIndex = Lite::Renderer::GetGraphicsQueueFamily();
-		ready = ready && Lite::CheckVk(vkCreateCommandPool(device, &poolInfo, nullptr, &pool), "create texture command pool");
-
-		VkCommandBuffer command = VK_NULL_HANDLE;
-		VkCommandBufferAllocateInfo allocateInfo {};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocateInfo.commandPool = pool;
-		allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocateInfo.commandBufferCount = 1;
-		ready = ready && Lite::CheckVk(vkAllocateCommandBuffers(device, &allocateInfo, &command), "allocate texture command");
+		bool ready = Lite::CheckVk(vkCreateImage(device, &imageInfo, nullptr, &image), "create texture image");
 
 		if (ready)
 		{
-			VkCommandBufferBeginInfo begin {};
-			begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-			vkBeginCommandBuffer(command, &begin);
-
-			VkImageMemoryBarrier toTransfer {};
-			toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			toTransfer.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toTransfer.image = image;
-			toTransfer.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			toTransfer.subresourceRange.levelCount = 1;
-			toTransfer.subresourceRange.layerCount = 1;
-			vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toTransfer);
-
-			VkBufferImageCopy region {};
-			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.imageSubresource.layerCount = 1;
-			region.imageExtent = { width, height, 1 };
-			vkCmdCopyBufferToImage(command, staging, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-			VkImageMemoryBarrier toSample {};
-			toSample.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			toSample.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			toSample.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			toSample.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			toSample.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			toSample.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toSample.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			toSample.image = image;
-			toSample.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			toSample.subresourceRange.levelCount = 1;
-			toSample.subresourceRange.layerCount = 1;
-			vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toSample);
-
-			vkEndCommandBuffer(command);
-
-			VkSubmitInfo submit {};
-			submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			submit.commandBufferCount = 1;
-			submit.pCommandBuffers = &command;
-			ready = Lite::CheckVk(vkQueueSubmit(Lite::Renderer::GetGraphicsQueue(), 1, &submit, VK_NULL_HANDLE), "submit texture upload")
-				&& Lite::CheckVk(vkQueueWaitIdle(Lite::Renderer::GetGraphicsQueue()), "wait for texture upload");
+			VkMemoryRequirements imageRequirements {};
+			vkGetImageMemoryRequirements(device, image, &imageRequirements);
+			ready = Lite::AllocateMemory(device, physicalDevice, imageRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memory, "allocate texture memory")
+				&& Lite::CheckVk(vkBindImageMemory(device, image, memory, 0), "bind texture memory");
 		}
 
-		if (pool)
-			vkDestroyCommandPool(device, pool, nullptr);
-		if (staging)
-			vkDestroyBuffer(device, staging, nullptr);
-		if (stagingMemory)
-			vkFreeMemory(device, stagingMemory, nullptr);
+		if (ready)
+		{
+			ready = Lite::SubmitOnce(device, Lite::Renderer::GetGraphicsQueueFamily(), Lite::Renderer::GetGraphicsQueue(), [&](VkCommandBuffer command)
+			{
+				VkImageMemoryBarrier toTransfer = Lite::ImageBarrier(
+					image,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					0,
+					VK_ACCESS_TRANSFER_WRITE_BIT);
+				vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toTransfer);
 
+				VkBufferImageCopy region {};
+				region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				region.imageSubresource.layerCount = 1;
+				region.imageExtent = { width, height, 1 };
+				vkCmdCopyBufferToImage(command, staging.Buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+				VkImageMemoryBarrier toSample = Lite::ImageBarrier(
+					image,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT);
+				vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toSample);
+			}, "submit texture upload");
+		}
+
+		Lite::DestroyBuffer(device, staging);
 		return ready;
 	}
 

@@ -38,18 +38,21 @@ namespace Lite {
 	VkCommandBuffer VulkanCommandBuffer::Begin(uint32_t frame)
 	{
 		VkCommandBuffer commandBuffer = m_Buffers[frame];
-		vkResetCommandBuffer(commandBuffer, 0);
+		if (!CheckVk(vkResetCommandBuffer(commandBuffer, 0), "reset command buffer"))
+			return VK_NULL_HANDLE;
 
 		VkCommandBufferBeginInfo info {};
 		info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-		CheckVk(vkBeginCommandBuffer(commandBuffer, &info), "begin command buffer");
+		if (!CheckVk(vkBeginCommandBuffer(commandBuffer, &info), "begin command buffer"))
+			return VK_NULL_HANDLE;
+
 		return commandBuffer;
 	}
 
-	void VulkanCommandBuffer::End(uint32_t frame)
+	bool VulkanCommandBuffer::End(uint32_t frame)
 	{
-		CheckVk(vkEndCommandBuffer(m_Buffers[frame]), "end command buffer");
+		return CheckVk(vkEndCommandBuffer(m_Buffers[frame]), "end command buffer");
 	}
 
 }

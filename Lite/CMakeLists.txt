@@ -48,6 +48,11 @@ set_source_files_properties(${LITE_IMGUI_SOURCES} PROPERTIES
 target_compile_definitions(Lite
     PUBLIC
         "IMGUI_USER_CONFIG=\"Lite/ImGui/ImGuiConfig.h\""
+        LITE_PLATFORM_WINDOWS
+        Lite=Lite
+    PRIVATE
+        BUILD_DLL
+        LITE_BUILD_DLL
 )
 
 target_link_libraries(Lite
@@ -59,27 +64,8 @@ target_link_libraries(Lite
         glfw
 )
 
-target_compile_definitions(Lite
-    PUBLIC
-        LITE_PLATFORM_WINDOWS
-        Lite=Lite
-    PRIVATE
-        BUILD_DLL
-        LITE_BUILD_DLL
-)
-
 lite_bin_dir(Lite lite)
-
-target_compile_options(Lite
-    PRIVATE
-        /std:c++latest
-        /W4
-        /wd4251
-        /permissive-
-        /Zc:__cplusplus
-        /EHsc
-        /utf-8
-)
+lite_compile_flags(Lite)
 
 target_precompile_headers(Lite PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/src/Lite/Core/pch.h>"

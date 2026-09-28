@@ -15,9 +15,9 @@ namespace Lite {
 		void Add(const std::string& name, const Ref<Shader>& shader);
 		void Add(const Ref<Shader>& shader);
 
-		Ref<Shader> Load(std::string_view path);
-		Ref<Shader> Load(const std::string& name, std::string_view path);
-		Ref<Shader> Get(std::string_view name) const;
+		[[nodiscard]] Ref<Shader> Load(std::string_view path);
+		[[nodiscard]] Ref<Shader> Load(const std::string& name, std::string_view path);
+		[[nodiscard]] Ref<Shader> Get(std::string_view name) const;
 		bool Exists(std::string_view name) const;
 
 		void Clear();

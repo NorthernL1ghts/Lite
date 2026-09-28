@@ -36,6 +36,39 @@ namespace {
 
 	RendererState s_Renderer;
 
+	bool PresentRecovered(uint32_t frame, VkFence fence)
+	{
+		VkSemaphore imageAvailable = s_Renderer.Sync.ImageAvailable(frame);
+		VkSemaphore renderFinished = s_Renderer.Sync.RenderFinished(s_Renderer.ImageIndex);
+		VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+		VkSubmitInfo submit {};
+		submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submit.waitSemaphoreCount = 1;
+		submit.pWaitSemaphores = &imageAvailable;
+		submit.pWaitDstStageMask = &waitStage;
+		submit.signalSemaphoreCount = 1;
+		submit.pSignalSemaphores = &renderFinished;
+		if (!Lite::CheckVk(vkQueueSubmit(s_Renderer.Device.GetGraphicsQueue(), 1, &submit, fence), "recover frame"))
+			return false;
+
+		VkSwapchainKHR swapchain = s_Renderer.Swapchain.Get();
+		VkPresentInfoKHR presentInfo {};
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &renderFinished;
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &swapchain;
+		presentInfo.pImageIndices = &s_Renderer.ImageIndex;
+
+		VkResult present = vkQueuePresentKHR(s_Renderer.Device.GetGraphicsQueue(), &presentInfo);
+		if (present == VK_ERROR_OUT_OF_DATE_KHR || present == VK_SUBOPTIMAL_KHR || !Lite::CheckVk(present, "present recovered frame"))
+			s_Renderer.FramebufferResized = true;
+
+		s_Renderer.CurrentFrame = (frame + 1) % Lite::VulkanSync::FramesInFlight;
+		return true;
+	}
+
 	bool RecreateSwapchain()
 	{
 		int width = 0;
@@ -60,7 +93,9 @@ namespace {
 			extent))
 			return false;
 
-		s_Renderer.Sync.ResetImages(s_Renderer.Swapchain.GetImageCount());
+		if (!s_Renderer.Sync.ResetImages(s_Renderer.Swapchain.GetImageCount()))
+			return false;
+
 		LITE_INFO("Swapchain resized ({}x{})", extent.width, extent.height);
 		return true;
 	}
@@ -190,15 +225,24 @@ namespace Lite {
 
 		if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR)
 		{
-			CheckVk(acquire, "acquire swapchain image");
-			return;
+			if (!CheckVk(acquire, "acquire swapchain image"))
+				return;
 		}
 
 		s_Renderer.Sync.WaitImage(s_Renderer.ImageIndex);
 		s_Renderer.Sync.TrackImage(s_Renderer.ImageIndex, frame);
-		s_Renderer.Sync.Reset(frame);
+		if (!s_Renderer.Sync.Reset(frame))
+		{
+			PresentRecovered(frame, VK_NULL_HANDLE);
+			return;
+		}
 
 		VkCommandBuffer commandBuffer = s_Renderer.Commands.Begin(frame);
+		if (!commandBuffer)
+		{
+			PresentRecovered(frame, s_Renderer.Sync.InFlight(frame));
+			return;
+		}
 		s_Renderer.RenderPass.Begin(
 			commandBuffer,
 			s_Renderer.Frames.Get(s_Renderer.ImageIndex),
@@ -219,7 +263,11 @@ namespace Lite {
 		VkCommandBuffer commandBuffer = s_Renderer.Commands.Get(frame);
 		s_Renderer.RenderPass.End(commandBuffer);
 		s_Renderer.FrameActive = false;
-		s_Renderer.Commands.End(frame);
+		if (!s_Renderer.Commands.End(frame))
+		{
+			PresentRecovered(frame, s_Renderer.Sync.InFlight(frame));
+			return;
+		}
 
 		VkSemaphore imageAvailable = s_Renderer.Sync.ImageAvailable(frame);
 		VkSemaphore renderFinished = s_Renderer.Sync.RenderFinished(s_Renderer.ImageIndex);
@@ -250,8 +298,8 @@ namespace Lite {
 		VkResult present = vkQueuePresentKHR(s_Renderer.Device.GetGraphicsQueue(), &presentInfo);
 		if (present == VK_ERROR_OUT_OF_DATE_KHR || present == VK_SUBOPTIMAL_KHR || s_Renderer.FramebufferResized)
 			s_Renderer.FramebufferResized = true;
-		else
-			CheckVk(present, "present frame");
+		else if (!CheckVk(present, "present frame"))
+			s_Renderer.FramebufferResized = true;
 
 		s_Renderer.CurrentFrame = (frame + 1) % VulkanSync::FramesInFlight;
 	}

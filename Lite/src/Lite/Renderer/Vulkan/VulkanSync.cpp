@@ -49,7 +49,7 @@ namespace Lite {
 		m_ImageFences.clear();
 	}
 
-	void VulkanSync::ResetImages(uint32_t imageCount)
+	bool VulkanSync::ResetImages(uint32_t imageCount)
 	{
 		m_ImageFences.assign(imageCount, VK_NULL_HANDLE);
 
@@ -60,7 +60,12 @@ namespace Lite {
 		VkSemaphoreCreateInfo semaphoreInfo {};
 		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 		for (uint32_t index = 0; index < imageCount; ++index)
-			vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinished[index]);
+		{
+			if (!CheckVk(vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinished[index]), "recreate render semaphore"))
+				return false;
+		}
+
+		return true;
 	}
 
 	bool VulkanSync::Wait(uint32_t frame) const
@@ -68,9 +73,9 @@ namespace Lite {
 		return CheckVk(vkWaitForFences(m_Device, 1, &m_InFlight[frame], VK_TRUE, UINT64_MAX), "wait for frame fence");
 	}
 
-	void VulkanSync::Reset(uint32_t frame) const
+	bool VulkanSync::Reset(uint32_t frame) const
 	{
-		vkResetFences(m_Device, 1, &m_InFlight[frame]);
+		return CheckVk(vkResetFences(m_Device, 1, &m_InFlight[frame]), "reset frame fence");
 	}
 
 	bool VulkanSync::WaitImage(uint32_t imageIndex) const

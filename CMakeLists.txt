@@ -65,6 +65,56 @@ function(lite_sources target)
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" FILES ${sources})
 endfunction()
 
+# C++23 via /std:c++latest. Do not also set CMAKE_CXX_STANDARD.
+function(lite_compile_flags target)
+    target_compile_options(${target} PRIVATE
+        /std:c++latest
+        /W4
+        /wd4251
+        /permissive-
+        /Zc:__cplusplus
+        /Zc:preprocessor
+        /EHsc
+        /utf-8
+    )
+endfunction()
+
+function(lite_require_glslc)
+    if(EXISTS "${Vulkan_GLSLC_EXECUTABLE}")
+        return()
+    endif()
+
+    find_package(Vulkan QUIET)
+    if(NOT EXISTS "${Vulkan_GLSLC_EXECUTABLE}")
+        find_program(Vulkan_GLSLC_EXECUTABLE glslc HINTS "$ENV{VULKAN_SDK}/Bin")
+    endif()
+    if(NOT EXISTS "${Vulkan_GLSLC_EXECUTABLE}")
+        message(FATAL_ERROR "glslc was not found. Install the Vulkan SDK.")
+    endif()
+endfunction()
+
+function(lite_compile_shaders target output_dir)
+    lite_require_glslc()
+
+    set(commands)
+    foreach(shader IN LISTS ARGN)
+        set(shader_path "${shader}")
+        cmake_path(ABSOLUTE_PATH shader_path BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" NORMALIZE)
+        cmake_path(GET shader FILENAME shader_name)
+        list(APPEND commands
+            COMMAND "${Vulkan_GLSLC_EXECUTABLE}" "${shader_path}" -o "${output_dir}/${shader_name}.spv"
+        )
+    endforeach()
+
+    add_custom_command(
+        TARGET ${target}
+        POST_BUILD
+        ${commands}
+        COMMENT "Compiling shaders"
+        VERBATIM
+    )
+endfunction()
+
 add_subdirectory(Lite)
 add_subdirectory(Sandbox)
 
