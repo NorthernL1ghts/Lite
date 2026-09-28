@@ -9,7 +9,47 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
+#include <format>
+#include <string_view>
+
 namespace Lite {
+
+	namespace {
+
+		const ImVec4 kHeaderColor { 0.73f, 0.86f, 1.0f, 1.0f };
+		const ImVec4 kLabelColor { 0.58f, 0.61f, 0.66f, 1.0f };
+
+		void PanelHeader(const char* title)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, kHeaderColor);
+			ImGui::TextUnformatted(title);
+			ImGui::PopStyleColor();
+			ImGui::Separator();
+			ImGui::Dummy(ImVec2(0.0f, 4.0f));
+		}
+
+		void Property(const char* label, std::string_view value)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, kLabelColor);
+			ImGui::TextUnformatted(label);
+			ImGui::PopStyleColor();
+			ImGui::PushTextWrapPos(0.0f);
+			ImGui::TextUnformatted(value.data(), value.data() + value.size());
+			ImGui::PopTextWrapPos();
+			ImGui::Dummy(ImVec2(0.0f, 6.0f));
+		}
+
+		void Stat(const char* label, std::string_view value)
+		{
+			ImGui::BeginGroup();
+			ImGui::PushStyleColor(ImGuiCol_Text, kLabelColor);
+			ImGui::TextUnformatted(label);
+			ImGui::PopStyleColor();
+			ImGui::TextUnformatted(value.data(), value.data() + value.size());
+			ImGui::EndGroup();
+		}
+
+	}
 
 	ImGuiLayer::ImGuiLayer(GLFWwindow* window)
 		: Layer("ImGui")
@@ -41,6 +81,18 @@ namespace Lite {
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 		ImGui::StyleColorsDark();
+		ImGuiStyle& style = ImGui::GetStyle();
+		style.WindowRounding = 0.0f;
+		style.ChildRounding = 4.0f;
+		style.FrameRounding = 3.0f;
+		style.GrabRounding = 3.0f;
+		style.WindowPadding = ImVec2(14.0f, 12.0f);
+		style.FramePadding = ImVec2(6.0f, 4.0f);
+		style.ItemSpacing = ImVec2(8.0f, 4.0f);
+		style.WindowBorderSize = 0.0f;
+		style.DockingSeparatorSize = 1.0f;
+		style.Colors[ImGuiCol_WindowBg] = ImVec4(0.10f, 0.10f, 0.11f, 1.0f);
+		style.Colors[ImGuiCol_Separator] = ImVec4(0.28f, 0.32f, 0.38f, 1.0f);
 
 		ImGui_ImplGlfw_InitForVulkan(m_Window, true);
 
@@ -119,22 +171,29 @@ namespace Lite {
 		ImGui::Begin("DockSpace", nullptr, windowFlags);
 		ImGui::PopStyleVar(3);
 
-		ImGuiID dockspaceId = ImGui::GetID("LiteEditor");
-		ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+		ImGuiID dockspaceId = ImGui::GetID("LiteEditorSides");
+		ImGuiDockNodeFlags dockFlags = static_cast<ImGuiDockNodeFlags>(
+			static_cast<int>(ImGuiDockNodeFlags_PassthruCentralNode) | static_cast<int>(ImGuiDockNodeFlags_AutoHideTabBar));
+		ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockFlags);
 
-		if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
+		ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
+		if (node == nullptr || !node->IsSplitNode())
 		{
 			ImGui::DockBuilderRemoveNode(dockspaceId);
 			ImGuiDockNodeFlags nodeFlags = static_cast<ImGuiDockNodeFlags>(
-				static_cast<int>(ImGuiDockNodeFlags_PassthruCentralNode) | static_cast<int>(ImGuiDockNodeFlags_DockSpace));
+				static_cast<int>(dockFlags) | static_cast<int>(ImGuiDockNodeFlags_DockSpace));
 			ImGui::DockBuilderAddNode(dockspaceId, nodeFlags);
 			ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->Size);
 
 			ImGuiID center = dockspaceId;
+			ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.26f, nullptr, &center);
 			ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.28f, nullptr, &center);
-			ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.22f, nullptr, &center);
+			ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.13f, nullptr, &center);
+			ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.42f, nullptr, &left);
 
-			ImGui::DockBuilderDockWindow("Renderer", right);
+			ImGui::DockBuilderDockWindow("GPU", left);
+			ImGui::DockBuilderDockWindow("Swapchain", leftBottom);
+			ImGui::DockBuilderDockWindow("Draw", right);
 			ImGui::DockBuilderDockWindow("Stats", bottom);
 			ImGui::DockBuilderFinish(dockspaceId);
 		}
@@ -166,30 +225,39 @@ namespace Lite {
 			default: break;
 		}
 
-		ImGui::Begin("Renderer");
-		ImGui::SeparatorText("GPU");
-		ImGui::LabelText("Name", "%s", properties.deviceName);
-		ImGui::LabelText("Type", "%s", deviceType);
-		ImGui::LabelText("API", "%s", version(properties.apiVersion).c_str());
-		ImGui::LabelText("Driver", "%s", version(properties.driverVersion).c_str());
-		ImGui::LabelText("Max texture", "%u", properties.limits.maxImageDimension2D);
+		ImGui::Begin("GPU");
+		PanelHeader("GPU");
+		Property("Name", properties.deviceName);
+		Property("Type", deviceType);
+		Property("API", version(properties.apiVersion));
+		Property("Driver", version(properties.driverVersion));
+		Property("Max texture", std::format("{}", properties.limits.maxImageDimension2D));
+		Property("Max framebuffer", std::format("{} x {}", properties.limits.maxFramebufferWidth, properties.limits.maxFramebufferHeight));
+		ImGui::End();
 
-		ImGui::SeparatorText("Swapchain");
-		ImGui::LabelText("Extent", "%u x %u", extent.width, extent.height);
-		ImGui::LabelText("Images", "%u", Renderer::GetImageCount());
-		ImGui::LabelText("Min images", "%u", Renderer::GetMinImageCount());
-		ImGui::LabelText("Frames in flight", "%u", VulkanSync::FramesInFlight);
-		ImGui::LabelText("Queue family", "%u", Renderer::GetGraphicsQueueFamily());
+		ImGui::Begin("Swapchain");
+		PanelHeader("Swapchain");
+		Property("Extent", std::format("{} x {}", extent.width, extent.height));
+		Property("Images", std::format("{}", Renderer::GetImageCount()));
+		Property("Min images", std::format("{}", Renderer::GetMinImageCount()));
+		Property("Frames in flight", std::format("{}", VulkanSync::FramesInFlight));
+		Property("Queue family", std::format("{}", Renderer::GetGraphicsQueueFamily()));
+		ImGui::End();
 
-		ImGui::SeparatorText("Draw");
-		ImGui::LabelText("Frame active", "%s", Renderer::IsFrameActive() ? "yes" : "no");
-		ImGui::LabelText("Index count", "%u", Renderer::GetIndexCount());
+		ImGui::Begin("Draw");
+		PanelHeader("Draw");
+		Property("Frame active", Renderer::IsFrameActive() ? "yes" : "no");
+		Property("Index count", std::format("{}", Renderer::GetIndexCount()));
+		Property("Samples", "1");
 		ImGui::End();
 
 		const ImGuiIO& io = ImGui::GetIO();
+		float frameMs = io.Framerate > 0.0f ? 1000.0f / io.Framerate : 0.0f;
 		ImGui::Begin("Stats");
-		ImGui::LabelText("FPS", "%.1f", io.Framerate);
-		ImGui::LabelText("Frame time", "%.3f ms", io.Framerate > 0.0f ? 1000.0f / io.Framerate : 0.0f);
+		PanelHeader("Stats");
+		Stat("FPS", std::format("{:.1f}", io.Framerate));
+		ImGui::SameLine(0.0f, 36.0f);
+		Stat("Frame time", std::format("{:.3f} ms", frameMs));
 		ImGui::End();
 	}
 
