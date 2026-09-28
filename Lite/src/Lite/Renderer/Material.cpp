@@ -23,6 +23,7 @@ namespace Lite {
 	bool Material::Init(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture)
 	{
 		m_Texture = texture;
+		m_UsesTexture = static_cast<bool>(texture);
 
 		if (!m_Uniforms.Create(sizeof(MaterialUniform), 1, VK_SHADER_STAGE_FRAGMENT_BIT))
 			return false;
@@ -55,6 +56,28 @@ namespace Lite {
 	void Material::SetTiling(const Vec2& tiling)
 	{
 		m_Tiling = tiling;
+	}
+
+	void Material::SetUniform(const MaterialUniform& uniform)
+	{
+		m_Color = uniform.Color;
+		m_Tiling = uniform.Tiling;
+	}
+
+	MaterialUniform Material::GetUniform() const
+	{
+		MaterialUniform uniform;
+		uniform.Color = m_Color;
+		uniform.Tiling = m_Tiling;
+		return uniform;
+	}
+
+	void Material::SetTexture(const Ref<Texture>& texture)
+	{
+		if (!m_UsesTexture || !texture)
+			return;
+
+		m_Texture = texture;
 	}
 
 	void Material::Bind()

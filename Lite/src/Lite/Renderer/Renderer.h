@@ -19,6 +19,9 @@ namespace Lite {
 		static void Shutdown();
 		static void SetViewProjection(const Mat4& viewProjection);
 		static const Mat4& GetViewProjection();
+		static void SetTransform(const Transform& transform);
+		static void SetModel(const Mat4& model);
+		static const Mat4& GetModel();
 
 		static void BeginFrame();
 		static void EndFrame();

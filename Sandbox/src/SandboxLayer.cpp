@@ -46,10 +46,10 @@ namespace {
 	bool CreateBackground(Lite::VertexArray& mesh)
 	{
 		const float vertices[] = {
-			-4.0f, -4.0f, 0.0f, 0.0f,
-			 4.0f, -4.0f, 1.0f, 0.0f,
-			 4.0f,  4.0f, 1.0f, 1.0f,
-			-4.0f,  4.0f, 0.0f, 1.0f
+			-0.5f, -0.5f, 0.0f, 0.0f,
+			 0.5f, -0.5f, 1.0f, 0.0f,
+			 0.5f,  0.5f, 1.0f, 1.0f,
+			-0.5f,  0.5f, 0.0f, 1.0f
 		};
 		const uint16_t indices[] = { 0, 1, 2, 2, 3, 0 };
 		return mesh.Create(vertices, sizeof(vertices), indices, 6);
@@ -93,9 +93,12 @@ void SandboxLayer::OnAttach()
 		return;
 	}
 
-	m_BackgroundMaterial->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-	m_BackgroundMaterial->SetTiling({ 8.0f, 8.0f });
-	m_TriangleMaterial->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+	m_BackgroundSprite.Transform.Scale = { 8.0f, 8.0f, 1.0f };
+	m_BackgroundSprite.Uniform.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+	m_BackgroundSprite.Uniform.Tiling = { 8.0f, 8.0f };
+	m_BackgroundSprite.Texture = m_Checkerboard;
+
+	m_TriangleSprite.Uniform.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	m_Camera.SetProjection(m_ViewSize, 16.0f / 9.0f);
 	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
 }
@@ -119,9 +122,9 @@ void SandboxLayer::OnRender()
 	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
 
 	if (m_BackgroundMaterial)
-		Lite::Renderer2D::Draw(m_Background, *m_BackgroundMaterial);
+		Lite::Renderer2D::Draw(m_Background, *m_BackgroundMaterial, m_BackgroundSprite);
 	if (m_TriangleMaterial)
-		Lite::Renderer2D::Draw(m_Triangle, *m_TriangleMaterial);
+		Lite::Renderer2D::Draw(m_Triangle, *m_TriangleMaterial, m_TriangleSprite);
 }
 
 void SandboxLayer::OnDetach()

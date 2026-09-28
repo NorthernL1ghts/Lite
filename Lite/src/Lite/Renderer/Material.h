@@ -25,6 +25,10 @@ namespace Lite {
 		const Vec4& GetColor() const { return m_Color; }
 		void SetTiling(const Vec2& tiling);
 		const Vec2& GetTiling() const { return m_Tiling; }
+		void SetUniform(const MaterialUniform& uniform);
+		MaterialUniform GetUniform() const;
+		void SetTexture(const Ref<Texture>& texture);
+		const Ref<Texture>& GetTexture() const { return m_Texture; }
 
 		void Bind();
 
@@ -37,6 +41,7 @@ namespace Lite {
 		ShaderProgram m_Shader;
 		UniformBuffer m_Uniforms;
 		Ref<Texture> m_Texture;
+		bool m_UsesTexture = false;
 		Vec4 m_Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 		Vec2 m_Tiling = { 1.0f, 1.0f };
 	};

@@ -5,6 +5,7 @@
 #include "Lite/Core/Layer.h"
 #include "Lite/Renderer/Material.h"
 #include "Lite/Renderer/OrthographicCamera.h"
+#include "Lite/Renderer/Renderer2D.h"
 #include "Lite/Renderer/VertexArray.h"
 
 class SandboxLayer final : public Lite::Layer
@@ -30,4 +31,6 @@ private:
 	Lite::Ref<Lite::Texture> m_Checkerboard;
 	Lite::Ref<Lite::Material> m_TriangleMaterial;
 	Lite::Ref<Lite::Material> m_BackgroundMaterial;
+	Lite::Sprite m_TriangleSprite;
+	Lite::Sprite m_BackgroundSprite;
 };

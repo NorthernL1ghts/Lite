@@ -15,6 +15,7 @@ namespace Lite {
 	struct CameraUniform
 	{
 		Mat4 ViewProjection = Mat4::Identity();
+		Mat4 Model = Mat4::Identity();
 	};
 
 	struct MaterialUniform
@@ -23,6 +24,9 @@ namespace Lite {
 		Vec2 Tiling = { 1.0f, 1.0f };
 		Vec2 Padding {};
 	};
+
+	static_assert(sizeof(CameraUniform) == sizeof(Mat4) * 2);
+	static_assert(sizeof(MaterialUniform) == 32);
 
 	class LITE_API UniformBuffer
 	{

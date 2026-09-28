@@ -29,6 +29,7 @@ namespace Lite {
 	{
 		CameraUniform uniform;
 		uniform.ViewProjection = Renderer::GetViewProjection();
+		uniform.Model = Renderer::GetModel();
 		m_Uniforms.SetData(&uniform, sizeof(uniform));
 
 		VkCommandBuffer commandBuffer = Renderer::GetCommandBuffer();

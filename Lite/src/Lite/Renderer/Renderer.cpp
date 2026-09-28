@@ -32,6 +32,7 @@ namespace {
 		uint32_t TriangleCount = 0;
 		uint32_t IndexCount = 0;
 		Lite::Mat4 ViewProjection = Lite::Mat4::Identity();
+		Lite::Mat4 Model = Lite::Mat4::Identity();
 	};
 
 	RendererState s_Renderer;
@@ -150,6 +151,21 @@ namespace Lite {
 		return s_Renderer.ViewProjection;
 	}
 
+	void Renderer::SetTransform(const Transform& transform)
+	{
+		s_Renderer.Model = transform.GetMatrix();
+	}
+
+	void Renderer::SetModel(const Mat4& model)
+	{
+		s_Renderer.Model = model;
+	}
+
+	const Mat4& Renderer::GetModel()
+	{
+		return s_Renderer.Model;
+	}
+
 	void Renderer::Shutdown()
 	{
 		if (s_Renderer.Device.Get())
@@ -173,6 +189,7 @@ namespace Lite {
 		s_Renderer.ContextReady = false;
 		s_Renderer.Ready = false;
 		s_Renderer.ViewProjection = Mat4::Identity();
+		s_Renderer.Model = Mat4::Identity();
 	}
 
 	void Renderer::BeginFrame()
@@ -182,6 +199,7 @@ namespace Lite {
 		s_Renderer.QuadCount = 0;
 		s_Renderer.TriangleCount = 0;
 		s_Renderer.IndexCount = 0;
+		s_Renderer.Model = Mat4::Identity();
 		if (!s_Renderer.Ready)
 			return;
 
