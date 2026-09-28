@@ -32,13 +32,36 @@ namespace Lite {
 		Transform Local;
 	};
 
+	enum class CameraProjection
+	{
+		Orthographic,
+		Perspective
+	};
+
 	struct CameraComponent
 	{
+		CameraProjection Projection = CameraProjection::Orthographic;
 		float Size = 2.0f;
+		float FieldOfView = 1.04719758f;
 		float Near = -1.0f;
 		float Far = 1.0f;
 		bool Primary = false;
 	};
+
+	inline Mat4 CameraProjectionMatrix(const CameraComponent& camera, float aspect)
+	{
+		if (camera.Projection == CameraProjection::Perspective)
+		{
+			float zNear = camera.Near > 0.0f ? camera.Near : 0.1f;
+			float zFar = camera.Far > zNear ? camera.Far : zNear + 100.0f;
+			float fov = camera.FieldOfView > 0.0f ? camera.FieldOfView : 1.04719758f;
+			return Mat4::Perspective(fov, aspect, zNear, zFar);
+		}
+
+		float halfHeight = camera.Size * 0.5f;
+		float halfWidth = halfHeight * aspect;
+		return Mat4::Orthographic(-halfWidth, halfWidth, -halfHeight, halfHeight, camera.Near, camera.Far);
+	}
 
 	struct MeshComponent
 	{
@@ -186,6 +209,7 @@ namespace Lite {
 
 		bool Save();
 		bool SaveAs(std::string_view path);
+		static std::string Locate(std::string_view relativeToProject);
 		static Scope<Scene> Open(std::string_view path);
 		static std::vector<std::string> List();
 

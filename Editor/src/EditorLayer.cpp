@@ -175,6 +175,49 @@ namespace {
 		return true;
 	}
 
+	const char* CameraLabel(const Lite::CameraComponent& camera)
+	{
+		return camera.Projection == Lite::CameraProjection::Perspective ? "Perspective Camera" : "Orthographic Camera";
+	}
+
+	const char* MeshLabel(Lite::MeshType type)
+	{
+		switch (type)
+		{
+			case Lite::MeshType::Triangle: return "Triangle";
+			case Lite::MeshType::Sprite: return "Sprite";
+			default: return "Quad";
+		}
+	}
+
+	const char* BodyLabel(Lite::BodyType type)
+	{
+		switch (type)
+		{
+			case Lite::BodyType::Static: return "Static Rigidbody";
+			case Lite::BodyType::Kinematic: return "Kinematic Rigidbody";
+			default: return "Dynamic Rigidbody";
+		}
+	}
+
+	Lite::Mat4 FitToWindow(const Lite::Mat4& viewProjection, float viewportX, float viewportY, float viewportW, float viewportH, float windowW, float windowH)
+	{
+		if (windowW <= 1.0f || windowH <= 1.0f || viewportW <= 1.0f || viewportH <= 1.0f)
+			return viewProjection;
+
+		float left = (viewportX / windowW) * 2.0f - 1.0f;
+		float right = ((viewportX + viewportW) / windowW) * 2.0f - 1.0f;
+		float top = 1.0f - (viewportY / windowH) * 2.0f;
+		float bottom = 1.0f - ((viewportY + viewportH) / windowH) * 2.0f;
+
+		Lite::Mat4 fit = Lite::Mat4::Identity();
+		fit[0][0] = (right - left) * 0.5f;
+		fit[1][1] = (top - bottom) * 0.5f;
+		fit[3][0] = (right + left) * 0.5f;
+		fit[3][1] = (top + bottom) * 0.5f;
+		return fit * viewProjection;
+	}
+
 	bool Hits(Lite::MeshType type, const Lite::Transform& transform, Lite::Vec2 point)
 	{
 		if (type == Lite::MeshType::Triangle)
@@ -275,7 +318,10 @@ EditorLayer::EditorLayer()
 
 void EditorLayer::OnAttach()
 {
-	OpenScene("assets/scenes/Sandbox.scene");
+	std::string scenePath = Lite::Scene::Locate("Sandbox/assets/scenes/Sandbox.scene");
+	if (scenePath.empty())
+		scenePath = "assets/scenes/Sandbox.scene";
+	OpenScene(scenePath);
 	if (!m_Scene)
 		NewScene();
 
@@ -317,9 +363,7 @@ void EditorLayer::OnRender()
 	if (!m_Scene)
 		return;
 
-	VkExtent2D extent = Lite::Renderer::GetExtent();
-	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
-	ApplyPlayCamera(aspect);
+	ApplyPlayCamera();
 	m_Scene->Render();
 }
 
@@ -369,24 +413,44 @@ void EditorLayer::SyncEntityFields(Lite::Entity entity)
 	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material != nullptr ? material->TexturePath.c_str() : "");
 }
 
-void EditorLayer::ApplyPlayCamera(float aspect)
+void EditorLayer::SaveScene()
 {
-	Lite::OrthographicCamera view = m_Camera;
-	float size = m_ViewSize;
-	if (m_Scene != nullptr && m_Scene->IsPlaying())
+	if (m_Scene == nullptr)
+		return;
+
+	if (m_Scene->GetPath().empty())
+		m_ShowSave = true;
+	else if (m_Scene->Save())
+		SyncName();
+}
+
+void EditorLayer::ApplyPlayCamera()
+{
+	float aspect = 16.0f / 9.0f;
+	if (m_ViewportH > 1.0f)
+		aspect = m_ViewportW / m_ViewportH;
+	else
 	{
-		Lite::Entity camera = m_Scene->GetPrimaryCamera();
-		if (Lite::TransformComponent* transform = camera.Get<Lite::TransformComponent>())
-		{
-			view.SetPosition(transform->Local.Position);
-			view.SetRotation(transform->Local.GetRotationZ());
-		}
-		if (Lite::CameraComponent* component = camera.Get<Lite::CameraComponent>())
-			size = component->Size;
+		VkExtent2D extent = Lite::Renderer::GetExtent();
+		if (extent.height > 0)
+			aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 	}
 
-	view.SetProjection(size, aspect);
-	Lite::Renderer2D::SetViewProjection(view.GetViewProjection());
+	Lite::Transform transform = m_Camera.GetTransform();
+	Lite::CameraComponent camera;
+	camera.Size = m_ViewSize;
+	if (m_Scene != nullptr && m_Scene->IsPlaying())
+	{
+		Lite::Entity entity = m_Scene->GetPrimaryCamera();
+		if (Lite::TransformComponent* component = entity.Get<Lite::TransformComponent>())
+			transform = component->Local;
+		if (Lite::CameraComponent* component = entity.Get<Lite::CameraComponent>())
+			camera = *component;
+	}
+
+	Lite::Mat4 viewProjection = Lite::CameraProjectionMatrix(camera, aspect) * transform.GetViewMatrix();
+	m_ViewProjection = FitToWindow(viewProjection, m_ViewportX, m_ViewportY, m_ViewportW, m_ViewportH, m_WindowW, m_WindowH);
+	Lite::Renderer2D::SetViewProjection(m_ViewProjection);
 }
 
 void EditorLayer::PickObject(float mouseX, float mouseY)
@@ -394,30 +458,56 @@ void EditorLayer::PickObject(float mouseX, float mouseY)
 	if (m_Scene == nullptr || m_Scene->IsPlaying())
 		return;
 
-	ImVec2 display = ImGui::GetIO().DisplaySize;
-	if (display.x <= 0.0f || display.y <= 0.0f)
+	if (m_WindowW <= 1.0f || m_WindowH <= 1.0f)
 		return;
 
-	float ndcX = (mouseX / display.x) * 2.0f - 1.0f;
-	float ndcY = 1.0f - (mouseY / display.y) * 2.0f;
-	Lite::Vec4 world = m_Camera.GetViewProjection().Inverse() * Lite::Vec4(ndcX, ndcY, 0.0f, 1.0f);
+	float ndcX = (mouseX / m_WindowW) * 2.0f - 1.0f;
+	float ndcY = 1.0f - (mouseY / m_WindowH) * 2.0f;
+	Lite::Vec4 world = m_ViewProjection.Inverse() * Lite::Vec4(ndcX, ndcY, 0.0f, 1.0f);
 	if (world.w != 0.0f)
 		world /= world.w;
 
-	std::vector<Lite::Entity> entities = m_Scene->GetEntities();
-	for (int index = static_cast<int>(entities.size()) - 1; index >= 0; --index)
+	struct Candidate
 	{
-		Lite::Entity entity = entities[static_cast<size_t>(index)];
-		Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
-		Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>();
+		Lite::Entity Entity;
+		int Order = 0;
+		size_t Index = 0;
+	};
+
+	std::vector<Lite::Entity> entities = m_Scene->GetEntities();
+	std::vector<Candidate> candidates;
+	candidates.reserve(entities.size());
+	for (size_t index = 0; index < entities.size(); ++index)
+	{
+		Lite::Entity entity = entities[index];
+		if (entity.Get<Lite::MeshComponent>() == nullptr || entity.Get<Lite::TransformComponent>() == nullptr)
+			continue;
+
+		int order = 0;
+		if (Lite::SortingComponent* sorting = entity.Get<Lite::SortingComponent>())
+			order = sorting->Order;
+		candidates.push_back({ entity, order, index });
+	}
+
+	std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate& left, const Candidate& right)
+	{
+		if (left.Order != right.Order)
+			return left.Order > right.Order;
+		return left.Index > right.Index;
+	});
+
+	for (Candidate& candidate : candidates)
+	{
+		Lite::MeshComponent* mesh = candidate.Entity.Get<Lite::MeshComponent>();
+		Lite::TransformComponent* transform = candidate.Entity.Get<Lite::TransformComponent>();
 		if (mesh == nullptr || transform == nullptr)
 			continue;
 		if (!Hits(mesh->Type, transform->Local, { world.x, world.y }))
 			continue;
 
-		if (m_Selected != entity.GetId())
-			Lite::Console::Log(std::format("Selected: {}", entity.GetName()));
-		m_Selected = entity.GetId();
+		if (m_Selected != candidate.Entity.GetId())
+			Lite::Console::Log(std::format("Selected: {}", candidate.Entity.GetName()));
+		m_Selected = candidate.Entity.GetId();
 		return;
 	}
 }
@@ -446,8 +536,7 @@ void EditorLayer::OnEvent(Lite::Event& event)
 
 		if (control && key.GetKeyCode() == Lite::Key::S)
 		{
-			if (m_Scene)
-				m_ShowSave = true;
+			SaveScene();
 			return true;
 		}
 
@@ -509,7 +598,9 @@ void EditorLayer::DrawMenu()
 			NewScene();
 		if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
 			m_ShowOpen = true;
-		if (ImGui::MenuItem("Save Scene...", "Ctrl+S", false, m_Scene != nullptr))
+		if (ImGui::MenuItem("Save Scene", "Ctrl+S", false, m_Scene != nullptr))
+			SaveScene();
+		if (ImGui::MenuItem("Save Scene As...", nullptr, false, m_Scene != nullptr))
 			m_ShowSave = true;
 		ImGui::EndMenu();
 	}
@@ -545,18 +636,26 @@ void EditorLayer::DrawMenu()
 
 void EditorLayer::OpenBrowser()
 {
-	std::filesystem::path directory = Lite::FileSystem::ExecutableDirectory() / "assets" / "scenes";
+	std::filesystem::path directory;
 	std::string fileName = m_Scene != nullptr ? m_Scene->GetName() : "Untitled";
 	if (m_Scene != nullptr && !m_Scene->GetPath().empty())
 	{
 		std::filesystem::path current(m_Scene->GetPath());
-		if (!current.is_absolute())
-			current = Lite::FileSystem::ExecutableDirectory() / current;
 		if (current.has_parent_path())
 			directory = current.parent_path();
 		if (!current.stem().empty())
 			fileName = current.stem().string();
 	}
+
+	if (directory.empty())
+	{
+		std::string scenes = Lite::Scene::Locate("Sandbox/assets/scenes");
+		if (!scenes.empty())
+			directory = scenes;
+	}
+
+	if (directory.empty())
+		directory = Lite::FileSystem::ExecutableDirectory() / "assets" / "scenes";
 
 	std::error_code error;
 	if (!std::filesystem::is_directory(directory, error))
@@ -773,6 +872,10 @@ void EditorLayer::DrawSaveDialog()
 
 void EditorLayer::OnImGuiRender()
 {
+	ImGuiIO& io = ImGui::GetIO();
+	m_WindowW = io.DisplaySize.x;
+	m_WindowH = io.DisplaySize.y;
+
 	DrawMenu();
 
 	ImGuiWindowFlags hostFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
@@ -836,6 +939,8 @@ void EditorLayer::DrawScene()
 		case Lite::ScenePlayback::Stopped: playback = "stopped"; break;
 	}
 	ImGui::TextDisabled("%s  %s", m_Scene->GetName().c_str(), playback);
+	if (!m_Scene->GetPath().empty())
+		ImGui::TextWrapped("%s", m_Scene->GetPath().c_str());
 	for (Lite::Entity entity : m_Scene->GetEntities())
 	{
 		std::string label = std::format("{}##entity{}", entity.GetName(), entity.GetId());
@@ -845,16 +950,16 @@ void EditorLayer::DrawScene()
 		ImGui::Indent();
 		if (entity.Has<Lite::TransformComponent>())
 			ImGui::TextDisabled("Transform");
-		if (entity.Has<Lite::CameraComponent>())
-			ImGui::TextDisabled("Camera");
-		if (entity.Has<Lite::MeshComponent>())
-			ImGui::TextDisabled("Mesh");
+		if (Lite::CameraComponent* camera = entity.Get<Lite::CameraComponent>())
+			ImGui::TextDisabled("%s", CameraLabel(*camera));
+		if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
+			ImGui::TextDisabled("%s", MeshLabel(mesh->Type));
 		if (entity.Has<Lite::MaterialComponent>())
 			ImGui::TextDisabled("Material");
 		if (entity.Has<Lite::SpinComponent>())
 			ImGui::TextDisabled("Spin");
-		if (entity.Has<Lite::Rigidbody2DComponent>())
-			ImGui::TextDisabled("Rigidbody 2D");
+		if (Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>())
+			ImGui::TextDisabled("%s", BodyLabel(body->Type));
 		if (entity.Has<Lite::BoxCollider2DComponent>())
 			ImGui::TextDisabled("Box Collider 2D");
 		if (entity.Has<Lite::CircleCollider2DComponent>())
@@ -871,6 +976,10 @@ void EditorLayer::DrawViewport()
 	ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 	ImVec2 origin = ImGui::GetCursorScreenPos();
 	ImVec2 size = ImGui::GetContentRegionAvail();
+	m_ViewportX = origin.x;
+	m_ViewportY = origin.y;
+	m_ViewportW = size.x;
+	m_ViewportH = size.y;
 	ImGui::InvisibleButton("##ViewportPick", size);
 	if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
 	{
@@ -927,8 +1036,27 @@ void EditorLayer::DrawInspector()
 
 	if (Lite::CameraComponent* camera = entity.Get<Lite::CameraComponent>())
 	{
-		ImGui::SeparatorText("Camera");
-		ImGui::DragFloat("Size", &camera->Size, 0.01f, 0.25f, 12.0f);
+		ImGui::SeparatorText(CameraLabel(*camera));
+		const char* projections[] = { "Orthographic", "Perspective" };
+		int projection = static_cast<int>(camera->Projection);
+		if (ImGui::Combo("Projection", &projection, projections, 2))
+		{
+			camera->Projection = static_cast<Lite::CameraProjection>(projection);
+			if (camera->Projection == Lite::CameraProjection::Perspective && camera->Near <= 0.0f)
+			{
+				camera->Near = 0.1f;
+				if (camera->Far <= camera->Near)
+					camera->Far = 100.0f;
+			}
+		}
+		if (camera->Projection == Lite::CameraProjection::Orthographic)
+			ImGui::DragFloat("Size", &camera->Size, 0.01f, 0.25f, 12.0f);
+		else
+		{
+			float degrees = camera->FieldOfView * (180.0f / 3.14159265f);
+			if (ImGui::DragFloat("Field of view", &degrees, 0.1f, 1.0f, 179.0f))
+				camera->FieldOfView = degrees * (3.14159265f / 180.0f);
+		}
 		ImGui::DragFloat("Near", &camera->Near, 0.01f);
 		ImGui::DragFloat("Far", &camera->Far, 0.01f);
 		bool primary = camera->Primary;
@@ -942,7 +1070,7 @@ void EditorLayer::DrawInspector()
 
 	if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
 	{
-		ImGui::SeparatorText("Mesh");
+		ImGui::SeparatorText(MeshLabel(mesh->Type));
 		const char* types[] = { "Quad", "Triangle", "Sprite" };
 		int current = static_cast<int>(mesh->Type);
 		if (ImGui::Combo("Type", &current, types, 3))
@@ -1000,7 +1128,7 @@ void EditorLayer::DrawInspector()
 
 	if (Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>())
 	{
-		ImGui::SeparatorText("Rigidbody 2D");
+		ImGui::SeparatorText(BodyLabel(body->Type));
 		const char* types[] = { "Static", "Kinematic", "Dynamic" };
 		int current = static_cast<int>(body->Type);
 		if (ImGui::Combo("Body", &current, types, 3))
@@ -1039,7 +1167,7 @@ void EditorLayer::DrawInspector()
 		ImGui::Separator();
 		static int addIndex = 0;
 		const char* components[] = {
-			"Transform", "Camera", "Mesh", "Material", "Spin",
+			"Transform", "Orthographic Camera", "Quad", "Material", "Spin",
 			"Rigidbody 2D", "Box Collider 2D", "Circle Collider 2D", "Sorting"
 		};
 		ImGui::SetNextItemWidth(-90.0f);

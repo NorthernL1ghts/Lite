@@ -7,7 +7,9 @@ position 0.0000 0.0000 0.0000
 rotation 0.0000
 scale 1.0000 1.0000 1.0000
 component camera
+projection orthographic
 size 2.0000
+fov 1.0472
 near -1.0000
 far 1.0000
 primary 1
@@ -25,9 +27,7 @@ color 1.0000 1.0000 1.0000 1.0000
 tiling 8.0000 8.0000
 texture assets/Checkerboard.png
 vertex-colors 1
-colors 0.1600 0.2800 0.6200 1.0000 0.1200 0.5200 0.5800 1.0000 0.9300 0.5800 0.2400 1.0000 0.5200 0.2600 0.7200 1.0000
-component sorting
-order -10
+colors 0.1600 0.2800 0.6200 1.0000 0.1200 0.5200 0.5800 1.0000 0.9300 0.5800 0.2400 1.0000 0.4599 0.2252 0.6403 1.0000
 component rigidbody2d
 type static
 mass 1.0000
@@ -39,6 +39,8 @@ component box-collider2d
 size 1.0000 1.0000
 offset 0.0000 0.0000
 trigger 0
+component sorting
+order -10
 entity
 name Triangle
 component transform
@@ -53,12 +55,12 @@ color 1.0000 1.0000 1.0000 1.0000
 tiling 1.0000 1.0000
 vertex-colors 1
 colors 0.9300 0.2200 0.2800 1.0000 0.0800 0.7800 0.4200 1.0000 0.1600 0.3600 0.9600 1.0000 1.0000 1.0000 1.0000 1.0000
-component sorting
-order 0
 component circle-collider2d
 radius 0.7000
 offset 0.0000 0.0000
 trigger 0
+component sorting
+order 0
 entity
 name Quad
 component transform
@@ -71,10 +73,9 @@ component material
 shader Batch
 color 0.8600 0.1600 0.1800 1.0000
 tiling 1.0000 1.0000
+vertex-colors 0
 component spin
 rate 1.1500
-component sorting
-order 1
 component rigidbody2d
 type kinematic
 mass 1.0000
@@ -86,3 +87,5 @@ component box-collider2d
 size 1.0000 1.0000
 offset 0.0000 0.0000
 trigger 0
+component sorting
+order 1

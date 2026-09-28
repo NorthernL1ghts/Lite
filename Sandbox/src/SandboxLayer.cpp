@@ -18,7 +18,10 @@ void SandboxLayer::OnAttach()
 {
 	LITE_CLIENT_INFO("Layer attached");
 
-	m_Scene = Lite::Scene::Open("assets/scenes/Sandbox.scene");
+	std::string scenePath = Lite::Scene::Locate("Sandbox/assets/scenes/Sandbox.scene");
+	if (scenePath.empty())
+		scenePath = "assets/scenes/Sandbox.scene";
+	m_Scene = Lite::Scene::Open(scenePath);
 	if (m_Scene)
 	{
 		Lite::Scene::SetActive(m_Scene.get());
@@ -61,14 +64,14 @@ void SandboxLayer::OnRender()
 	Lite::Entity camera = m_Scene->GetPrimaryCamera();
 	Lite::CameraComponent* component = camera.Get<Lite::CameraComponent>();
 	Lite::TransformComponent* transform = camera.Get<Lite::TransformComponent>();
-	Lite::OrthographicCamera view;
+	Lite::Transform viewTransform = m_Camera.GetTransform();
 	if (transform != nullptr)
-	{
-		view.SetPosition(transform->Local.Position);
-		view.SetRotation(transform->Local.GetRotationZ());
-	}
-	view.SetProjection(component != nullptr ? component->Size : m_ViewSize, aspect);
-	Lite::Renderer2D::SetViewProjection(view.GetViewProjection());
+		viewTransform = transform->Local;
+	Lite::CameraComponent viewCamera;
+	viewCamera.Size = m_ViewSize;
+	if (component != nullptr)
+		viewCamera = *component;
+	Lite::Renderer2D::SetViewProjection(Lite::CameraProjectionMatrix(viewCamera, aspect) * viewTransform.GetViewMatrix());
 	m_Scene->Render();
 }
 

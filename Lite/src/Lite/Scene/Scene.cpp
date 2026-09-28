@@ -65,6 +65,25 @@ namespace Lite {
 			return FileSystem::ExecutableDirectory() / file;
 		}
 
+		std::filesystem::path WalkFor(const std::filesystem::path& start, const std::filesystem::path& relative)
+		{
+			std::filesystem::path cursor = start;
+			for (int step = 0; step < 8 && !cursor.empty(); ++step)
+			{
+				std::filesystem::path candidate = cursor / relative;
+				std::error_code error;
+				if (std::filesystem::is_regular_file(candidate, error) || std::filesystem::is_directory(candidate, error))
+					return candidate;
+
+				std::filesystem::path parent = cursor.parent_path();
+				if (parent.empty() || parent == cursor)
+					break;
+				cursor = parent;
+			}
+
+			return {};
+		}
+
 		void ReadVec3(std::istream& stream, Vec3& value)
 		{
 			stream >> value.x >> value.y >> value.z;
@@ -303,7 +322,10 @@ namespace Lite {
 			return;
 
 		m_Loaded = true;
-		Console::Log(std::format("Scene loaded: {}", m_Name));
+		if (m_Path.empty())
+			Console::Log(std::format("Scene loaded: {}", m_Name));
+		else
+			Console::Log(std::format("Scene loaded: {} ({})", m_Name, m_Path));
 		for (const Record& record : m_Records)
 			Console::Log(std::format("  {}", record.Name));
 	}
@@ -553,6 +575,16 @@ namespace Lite {
 					stream >> current->Camera->Near;
 				else if (key == "far")
 					stream >> current->Camera->Far;
+				else if (key == "projection")
+				{
+					std::string projection;
+					stream >> projection;
+					current->Camera->Projection = projection == "perspective"
+						? CameraProjection::Perspective
+						: CameraProjection::Orthographic;
+				}
+				else if (key == "fov")
+					stream >> current->Camera->FieldOfView;
 				else if (key == "primary")
 				{
 					int primary = 0;
@@ -737,7 +769,9 @@ namespace Lite {
 			if (record.Camera)
 			{
 				output << "component camera\n";
+				output << std::format("projection {}\n", record.Camera->Projection == CameraProjection::Perspective ? "perspective" : "orthographic");
 				output << std::format("size {:.4f}\n", record.Camera->Size);
+				output << std::format("fov {:.4f}\n", record.Camera->FieldOfView);
 				output << std::format("near {:.4f}\n", record.Camera->Near);
 				output << std::format("far {:.4f}\n", record.Camera->Far);
 				output << std::format("primary {}\n", record.Camera->Primary ? 1 : 0);
@@ -867,9 +901,22 @@ namespace Lite {
 			return false;
 		}
 
-		m_Path = full.string();
+		std::error_code canonicalError;
+		std::filesystem::path canonical = std::filesystem::weakly_canonical(full, canonicalError);
+		m_Path = (canonicalError ? full.lexically_normal() : canonical).string();
 		Console::Log(std::format("Scene saved: {}", m_Path));
 		return true;
+	}
+
+	std::string Scene::Locate(std::string_view relativeToProject)
+	{
+		std::filesystem::path relative(relativeToProject);
+		std::error_code error;
+		std::filesystem::path current = std::filesystem::current_path(error);
+		std::filesystem::path found = WalkFor(current, relative);
+		if (found.empty())
+			found = WalkFor(FileSystem::ExecutableDirectory(), relative);
+		return found.string();
 	}
 
 	Scope<Scene> Scene::Open(std::string_view path)
@@ -889,7 +936,9 @@ namespace Lite {
 			return nullptr;
 		}
 
-		scene->m_Path = std::string(path);
+		std::error_code canonicalError;
+		std::filesystem::path canonical = std::filesystem::weakly_canonical(full, canonicalError);
+		scene->m_Path = (canonicalError ? full.lexically_normal() : canonical).string();
 		scene->ResolveTextures();
 		scene->Load();
 		return scene;

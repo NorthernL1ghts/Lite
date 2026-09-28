@@ -35,13 +35,21 @@ private:
 
 	void NewScene();
 	void OpenScene(const std::string& path);
+	void SaveScene();
 	void SyncName();
 	void PickObject(float mouseX, float mouseY);
 	void SyncEntityFields(Lite::Entity entity);
-	void ApplyPlayCamera(float aspect);
+	void ApplyPlayCamera();
 
 	Lite::OrthographicCamera m_Camera;
+	Lite::Mat4 m_ViewProjection = Lite::Mat4::Identity();
 	float m_ViewSize = 2.0f;
+	float m_ViewportX = 0.0f;
+	float m_ViewportY = 0.0f;
+	float m_ViewportW = 0.0f;
+	float m_ViewportH = 0.0f;
+	float m_WindowW = 0.0f;
+	float m_WindowH = 0.0f;
 	Lite::Scope<Lite::Scene> m_Scene;
 	Lite::Scene* m_NamedScene = nullptr;
 	char m_Name[128] {};
