@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Platform.h"
+
 #define LITE_BIT(x) (1 << (x))
 
 #ifdef LITE_PLATFORM_WINDOWS

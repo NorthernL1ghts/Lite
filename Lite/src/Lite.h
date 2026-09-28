@@ -2,10 +2,7 @@
 
 // Public engine header. Include from exactly one client translation unit
 // so the entry point is defined once.
-#include "Lite/Core/Logger.h"
-#include "Lite/Core/Assert.h"
-#include "Lite/Core/Time.h"
-#include "Lite/Core/Random.h"
+#include "Lite/Core/Core.h"
 #include "Lite/Core/Layer.h"
 #include "Lite/Core/LayerStack.h"
 #include "Lite/Input/Input.h"

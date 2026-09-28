@@ -1,10 +1,11 @@
 #include "Shader.h"
 
+#include "Lite/Core/FileSystem.h"
 #include "Lite/Core/Logger.h"
 #include "Lite/Renderer/Vulkan/VulkanUtils.h"
 
 #include <cctype>
-#include <fstream>
+#include <cstring>
 
 namespace {
 
@@ -24,28 +25,15 @@ namespace {
 
 	std::vector<uint32_t> ReadSpirv(const std::filesystem::path& path)
 	{
-		std::ifstream file(path, std::ios::binary | std::ios::ate);
-		if (!file)
-		{
-			LITE_ERROR("Failed to open shader {}", path.string());
-			return {};
-		}
-
-		auto size = static_cast<std::streamsize>(file.tellg());
-		if (size <= 0 || static_cast<size_t>(size) % sizeof(uint32_t) != 0)
+		std::vector<uint8_t> bytes = Lite::FileSystem::ReadBinary(path);
+		if (bytes.empty() || bytes.size() % sizeof(uint32_t) != 0)
 		{
 			LITE_ERROR("Shader {} is not valid SPIR-V", path.string());
 			return {};
 		}
 
-		std::vector<uint32_t> code(static_cast<size_t>(size) / sizeof(uint32_t));
-		file.seekg(0);
-		file.read(reinterpret_cast<char*>(code.data()), size);
-		if (!file)
-		{
-			LITE_ERROR("Failed to read shader {}", path.string());
-			return {};
-		}
+		std::vector<uint32_t> code(bytes.size() / sizeof(uint32_t));
+		std::memcpy(code.data(), bytes.data(), bytes.size());
 
 		if (code[0] != 0x07230203u)
 		{

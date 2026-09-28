@@ -4,21 +4,9 @@
 #include "Texture.h"
 
 #include "Lite/Core/Assert.h"
-
-#include <Windows.h>
+#include "Lite/Core/FileSystem.h"
 
 #include <cctype>
-
-namespace {
-
-	std::filesystem::path ExecutableDirectory()
-	{
-		wchar_t modulePath[MAX_PATH] {};
-		GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
-		return std::filesystem::path(modulePath).parent_path();
-	}
-
-}
 
 namespace Lite {
 
@@ -36,7 +24,7 @@ namespace Lite {
 			return;
 
 		s_Registry.reset(new AssetRegistry());
-		s_Registry->m_Root = ExecutableDirectory();
+		s_Registry->m_Root = FileSystem::ExecutableDirectory();
 		s_Registry->Register(std::make_unique<ShaderHandler>());
 		s_Registry->Register(std::make_unique<TextureHandler>());
 		LITE_INFO("Asset registry ready ({})", s_Registry->m_Root.string());
@@ -85,7 +73,7 @@ namespace Lite {
 			return nullptr;
 
 		m_Assets.emplace(key, asset);
-		LITE_INFO("Loaded asset {}", key);
+		LITE_INFO("Loaded asset {} ({})", key, asset->GetID().ToString());
 		return asset;
 	}
 

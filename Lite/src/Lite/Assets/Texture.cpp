@@ -1,8 +1,7 @@
 #include "Texture.h"
 
+#include "Lite/Core/FileSystem.h"
 #include "Lite/Core/Logger.h"
-
-#include <fstream>
 
 namespace {
 
@@ -26,28 +25,9 @@ namespace {
 
 	std::vector<uint8_t> ReadFile(const std::filesystem::path& path)
 	{
-		std::ifstream file(path, std::ios::binary | std::ios::ate);
-		if (!file)
-		{
-			LITE_ERROR("Failed to open texture {}", path.string());
-			return {};
-		}
-
-		auto size = static_cast<std::streamsize>(file.tellg());
-		if (size <= 0)
-		{
-			LITE_ERROR("Texture {} is empty", path.string());
-			return {};
-		}
-
-		std::vector<uint8_t> bytes(static_cast<size_t>(size));
-		file.seekg(0);
-		file.read(reinterpret_cast<char*>(bytes.data()), size);
-		if (!file)
-		{
+		std::vector<uint8_t> bytes = Lite::FileSystem::ReadBinary(path);
+		if (bytes.empty())
 			LITE_ERROR("Failed to read texture {}", path.string());
-			return {};
-		}
 
 		return bytes;
 	}
