@@ -23,6 +23,7 @@ namespace Lite {
 	private:
 		GLFWwindow* m_Window = nullptr;
 		bool m_Ready = false;
+		bool m_ShowInfo = false;
 	};
 
 }

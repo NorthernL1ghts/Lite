@@ -1,8 +1,11 @@
 #include "ImGuiLayer.h"
 
 #include "Lite/Core/Events/Event.h"
+#include "Lite/Core/Events/KeyEvent.h"
 #include "Lite/Core/Logger.h"
+#include "Lite/Core/Profiler.h"
 #include "Lite/Core/Time.h"
+#include "Lite/Input/KeyCodes.h"
 #include "Lite/Renderer/Renderer.h"
 
 #include <imgui.h>
@@ -11,6 +14,7 @@
 #include <imgui_impl_vulkan.h>
 
 #include <format>
+#include <string>
 #include <string_view>
 
 namespace Lite {
@@ -187,6 +191,20 @@ namespace Lite {
 
 	void ImGuiLayer::OnEvent(Event& event)
 	{
+		EventDispatcher dispatcher(event);
+		dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent& key)
+		{
+			if (key.GetKeyCode() != Key::I || key.IsRepeat())
+				return false;
+
+			m_ShowInfo = !m_ShowInfo;
+			LITE_INFO("Information view {}", m_ShowInfo ? "shown" : "hidden");
+			return true;
+		});
+
+		if (event.Handled)
+			return;
+
 		const ImGuiIO& io = ImGui::GetIO();
 
 		if (io.WantCaptureMouse && event.IsInCategory(EventCategory::Mouse))
@@ -205,6 +223,9 @@ namespace Lite {
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
+		if (!m_ShowInfo)
+			return;
+
 		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
 			| ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
 			| ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
@@ -221,7 +242,7 @@ namespace Lite {
 		ImGui::Begin("DockSpace", nullptr, windowFlags);
 		ImGui::PopStyleVar(3);
 
-		ImGuiID dockspaceId = ImGui::GetID("LiteEditorSides");
+		ImGuiID dockspaceId = ImGui::GetID("LiteInfo");
 		ImGuiDockNodeFlags dockFlags = static_cast<ImGuiDockNodeFlags>(
 			static_cast<int>(ImGuiDockNodeFlags_PassthruCentralNode) | static_cast<int>(ImGuiDockNodeFlags_AutoHideTabBar));
 		ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockFlags);
@@ -238,13 +259,14 @@ namespace Lite {
 			ImGuiID center = dockspaceId;
 			ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.26f, nullptr, &center);
 			ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.28f, nullptr, &center);
-			ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.13f, nullptr, &center);
+			ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.22f, nullptr, &center);
 			ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.42f, nullptr, &left);
 
 			ImGui::DockBuilderDockWindow("GPU", left);
 			ImGui::DockBuilderDockWindow("Swapchain", leftBottom);
 			ImGui::DockBuilderDockWindow("Draw", right);
 			ImGui::DockBuilderDockWindow("Stats", bottom);
+			ImGui::DockBuilderDockWindow("Profile", bottom);
 			ImGui::DockBuilderFinish(dockspaceId);
 		}
 
@@ -253,7 +275,8 @@ namespace Lite {
 
 	void ImGuiLayer::OnImGuiRender()
 	{
-		if (!m_Ready)
+		LITE_PROFILE_SCOPE("ImGui Panels");
+		if (!m_Ready || !m_ShowInfo)
 			return;
 
 		VkPhysicalDeviceProperties properties {};
@@ -319,8 +342,30 @@ namespace Lite {
 		const ImGuiIO& io = ImGui::GetIO();
 		float frameMs = io.Framerate > 0.0f ? 1000.0f / io.Framerate : 0.0f;
 		float cap = Time::GetFPS();
+		ImGui::Begin("Profile");
+		PanelHeader("Profile");
+		const std::vector<ProfileSample>& samples = Profiler::GetSamples();
+		if (samples.empty())
+		{
+			Property("Samples", "waiting");
+		}
+		else
+		{
+			for (const ProfileSample& sample : samples)
+			{
+				std::string label(static_cast<size_t>(sample.Depth) * 2, ' ');
+				label += sample.Name;
+				Property(label.c_str(), std::format("{:.3f} ms", sample.Milliseconds));
+			}
+		}
+		ImGui::End();
+
 		ImGui::Begin("Stats");
 		PanelHeader("Stats");
+		ImGui::PushStyleColor(ImGuiCol_Text, kLabelColor);
+		ImGui::TextUnformatted("Press I to hide");
+		ImGui::PopStyleColor();
+		ImGui::Dummy(ImVec2(0.0f, 2.0f));
 		Stat("FPS", std::format("{:.1f}", io.Framerate));
 		ImGui::SameLine(0.0f, 22.0f);
 		Stat("Frame", std::format("{:.2f} ms", frameMs));

@@ -6,6 +6,7 @@
 #include "Logger.h"
 #include "Assert.h"
 #include "Time.h"
+#include "Profiler.h"
 #include "Random.h"
 #include "UUID.h"
 #include "FileSystem.h"

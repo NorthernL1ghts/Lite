@@ -3,6 +3,7 @@
 #include "Framebuffer.h"
 
 #include "Lite/Core/Logger.h"
+#include "Lite/Core/Profiler.h"
 
 #include <GLFW/glfw3.h>
 
@@ -194,6 +195,7 @@ namespace Lite {
 
 	void Renderer::BeginFrame()
 	{
+		LITE_PROFILE_SCOPE("Acquire");
 		s_Renderer.FrameActive = false;
 		s_Renderer.DrawCalls = 0;
 		s_Renderer.QuadCount = 0;
@@ -274,6 +276,7 @@ namespace Lite {
 
 	void Renderer::EndFrame()
 	{
+		LITE_PROFILE_SCOPE("Submit");
 		if (!s_Renderer.FrameActive)
 			return;
 

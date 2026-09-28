@@ -1,6 +1,7 @@
 #include "Application.h"
 #include "Assert.h"
 #include "Logger.h"
+#include "Profiler.h"
 #include "Time.h"
 #include "Window.h"
 
@@ -70,29 +71,55 @@ namespace Lite {
 	{
 		while (m_Running && m_Window->IsOpen())
 		{
+			Profiler::BeginFrame();
 			Time::Update();
-			m_Window->PollEvents();
-			Renderer2D::BeginFrame();
+
+			{
+				LITE_PROFILE_SCOPE("Window");
+				m_Window->PollEvents();
+			}
+
+			{
+				LITE_PROFILE_SCOPE("Renderer Begin");
+				Renderer2D::BeginFrame();
+			}
 
 			if (Renderer2D::IsFrameActive())
 			{
 				Timestep timestep = Time::GetTimestep();
 
-				for (auto& layer : m_LayerStack)
-					layer->OnUpdate(timestep);
+				{
+					LITE_PROFILE_SCOPE("Update");
+					for (auto& layer : m_LayerStack)
+						layer->OnUpdate(timestep);
+				}
 
-				for (auto& layer : m_LayerStack)
-					layer->OnRender();
+				{
+					LITE_PROFILE_SCOPE("Render");
+					for (auto& layer : m_LayerStack)
+						layer->OnRender();
+				}
 
-				m_ImGuiLayer->Begin();
-				for (auto& layer : m_LayerStack)
-					layer->OnImGuiRender();
-				m_ImGuiLayer->End();
+				{
+					LITE_PROFILE_SCOPE("ImGui");
+					m_ImGuiLayer->Begin();
+					for (auto& layer : m_LayerStack)
+						layer->OnImGuiRender();
+					m_ImGuiLayer->End();
+				}
 
-				Renderer2D::EndFrame();
+				{
+					LITE_PROFILE_SCOPE("Renderer End");
+					Renderer2D::EndFrame();
+				}
 			}
 
-			Time::Limit();
+			{
+				LITE_PROFILE_SCOPE("Frame Limit");
+				Time::Limit();
+			}
+
+			Profiler::EndFrame();
 		}
 	}
 

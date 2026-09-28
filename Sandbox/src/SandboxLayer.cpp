@@ -3,6 +3,7 @@
 #include "Lite/Assets/AssetRegistry.h"
 #include "Lite/Core/Events/MouseEvent.h"
 #include "Lite/Core/Logger.h"
+#include "Lite/Core/Profiler.h"
 #include "Lite/Input/Input.h"
 #include "Lite/Renderer/Renderer.h"
 #include "Lite/Renderer/Renderer2D.h"
@@ -105,6 +106,7 @@ void SandboxLayer::OnAttach()
 
 void SandboxLayer::OnUpdate(Lite::Timestep timestep)
 {
+	LITE_PROFILE_SCOPE("Sandbox Update");
 	float rotation = m_Camera.GetRotation();
 	float step = 1.6f * timestep.GetSeconds();
 	if (Lite::Input::IsKeyPressed(Lite::Key::Q))
@@ -116,6 +118,7 @@ void SandboxLayer::OnUpdate(Lite::Timestep timestep)
 
 void SandboxLayer::OnRender()
 {
+	LITE_PROFILE_SCOPE("Sandbox Render");
 	VkExtent2D extent = Lite::Renderer::GetExtent();
 	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
 	m_Camera.SetProjection(m_ViewSize, aspect);
