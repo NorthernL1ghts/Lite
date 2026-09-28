@@ -18,6 +18,11 @@ namespace Lite {
 		return true;
 	}
 
+	bool VertexArray::Upload(const void* vertices, uint32_t vertexSize, const uint16_t* indices, uint32_t indexCount)
+	{
+		return m_VertexBuffer.Upload(vertices, vertexSize) && m_IndexBuffer.Upload(indices, indexCount);
+	}
+
 	void VertexArray::Destroy()
 	{
 		m_IndexBuffer.Destroy();

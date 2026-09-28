@@ -159,12 +159,37 @@ namespace Lite {
 		DestroyGpu();
 	}
 
+	Ref<Texture> Texture::Create(uint32_t width, uint32_t height, const uint8_t* rgba)
+	{
+		if (!rgba || width == 0 || height == 0)
+			return nullptr;
+
+		const uint64_t byteCount = static_cast<uint64_t>(width) * height * 4u;
+		auto texture = CreateRef<Texture>();
+		texture->m_Width = width;
+		texture->m_Height = height;
+		std::vector<uint8_t> pixels(rgba, rgba + byteCount);
+		if (!texture->CreateGpu(pixels, "texture"))
+			return nullptr;
+
+		return texture;
+	}
+
 	bool Texture::LoadFromFile(const std::filesystem::path& path)
 	{
 		std::vector<uint8_t> pixels;
 		if (!DecodeImage(path, m_Width, m_Height, pixels))
 			return false;
 
+		if (!CreateGpu(pixels, path.filename().string()))
+			return false;
+
+		SetIdentity(path.generic_string(), path.filename().string());
+		return true;
+	}
+
+	bool Texture::CreateGpu(const std::vector<uint8_t>& pixels, std::string_view name)
+	{
 		m_Device = Renderer::GetDevice();
 		if (!m_Device || !UploadImage(m_Device, Renderer::GetPhysicalDevice(), m_Width, m_Height, pixels, m_Image, m_Memory))
 		{
@@ -256,7 +281,7 @@ namespace Lite {
 		write.pImageInfo = &descriptorImage;
 		vkUpdateDescriptorSets(m_Device, 1, &write, 0, nullptr);
 
-		SetIdentity(path.generic_string(), path.filename().string());
+		SetIdentity(std::string(name), std::string(name));
 		m_Loaded = true;
 		LITE_INFO("Texture ready ({} x {})", m_Width, m_Height);
 		return true;

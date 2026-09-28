@@ -9,6 +9,8 @@ set(SANDBOX_SHADER_SOURCES
     assets/shaders/Triangle.frag
     assets/shaders/Quad.vert
     assets/shaders/Quad.frag
+    assets/shaders/Batch.vert
+    assets/shaders/Batch.frag
 )
 target_sources(Sandbox PRIVATE ${SANDBOX_SHADER_SOURCES})
 set_source_files_properties(${SANDBOX_SHADER_SOURCES} PROPERTIES

@@ -11,6 +11,7 @@ namespace Lite {
 	{
 	public:
 		bool Create(const void* vertices, uint32_t vertexSize, const uint16_t* indices, uint32_t indexCount);
+		bool Upload(const void* vertices, uint32_t vertexSize, const uint16_t* indices, uint32_t indexCount);
 		void Destroy();
 		void Bind() const;
 

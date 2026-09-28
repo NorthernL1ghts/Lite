@@ -18,6 +18,11 @@ namespace Lite {
 		return true;
 	}
 
+	bool VertexBuffer::Upload(const void* data, uint32_t size)
+	{
+		return m_Buffer.Upload(data, size);
+	}
+
 	void VertexBuffer::Destroy()
 	{
 		m_Buffer.Destroy();
@@ -39,6 +44,16 @@ namespace Lite {
 			m_Buffer.Destroy();
 			return false;
 		}
+
+		m_Count = count;
+		return true;
+	}
+
+	bool IndexBuffer::Upload(const uint16_t* indices, uint32_t count)
+	{
+		VkDeviceSize size = static_cast<VkDeviceSize>(count) * sizeof(uint16_t);
+		if (!m_Buffer.Upload(indices, size))
+			return false;
 
 		m_Count = count;
 		return true;

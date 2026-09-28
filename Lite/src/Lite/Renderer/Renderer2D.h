@@ -5,19 +5,8 @@
 #include "Lite/Math/Math.h"
 #include "Renderer.h"
 #include "ShaderLibrary.h"
-#include "UniformBuffer.h"
 
 namespace Lite {
-
-	class Material;
-	class VertexArray;
-
-	struct Sprite
-	{
-		Transform Transform {};
-		MaterialUniform Uniform {};
-		Ref<Texture> Texture {};
-	};
 
 	class LITE_API Renderer2D
 	{
@@ -26,12 +15,12 @@ namespace Lite {
 		static void Shutdown();
 		static ShaderLibrary& GetShaderLibrary();
 		static void SetViewProjection(const Mat4& viewProjection);
-		static void SetTransform(const Transform& transform);
 
 		static void BeginFrame();
-		static void Draw(const VertexArray& vertexArray, Material& material);
-		static void Draw(const VertexArray& vertexArray, Material& material, const Transform& transform);
-		static void Draw(const VertexArray& vertexArray, Material& material, const Sprite& sprite);
+		static void DrawQuad(const Transform& transform, const Vec4& color);
+		static void DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling = Vec2(1.0f, 1.0f), const Vec4& tint = Vec4(1.0f, 1.0f, 1.0f, 1.0f));
+		static void DrawTriangle(const Transform& transform, const Vec4& first, const Vec4& second, const Vec4& third);
+		static void Flush();
 		static void EndFrame();
 		static void OnResize(int width, int height);
 		static bool IsFrameActive();

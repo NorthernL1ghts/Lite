@@ -4,6 +4,8 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <string_view>
+#include <vector>
 #include <vulkan/vulkan.h>
 
 namespace Lite {
@@ -14,6 +16,8 @@ namespace Lite {
 		static constexpr AssetType Type = AssetType::Texture;
 
 		~Texture();
+
+		[[nodiscard]] static Ref<Texture> Create(uint32_t width, uint32_t height, const uint8_t* rgba);
 
 		AssetType GetType() const override { return Type; }
 
@@ -27,6 +31,7 @@ namespace Lite {
 		friend class TextureHandler;
 
 		bool LoadFromFile(const std::filesystem::path& path);
+		bool CreateGpu(const std::vector<uint8_t>& pixels, std::string_view name);
 		void DestroyGpu();
 
 		uint32_t m_Width = 0;
