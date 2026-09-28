@@ -15,5 +15,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
+#include "Lite/Math/Math.h"
+
 #include <GLFW/glfw3.h>
 #include <GL/gl.h>

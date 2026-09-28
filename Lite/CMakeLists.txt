@@ -13,6 +13,11 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(src/vendor/glfw)
 
+set(GLM_BUILD_LIBRARY OFF CACHE BOOL "" FORCE)
+set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(src/vendor/glm)
+
 lite_sources(Lite)
 
 target_include_directories(Lite
@@ -46,6 +51,7 @@ target_compile_definitions(Lite
 target_link_libraries(Lite
     PUBLIC
         spdlog::spdlog
+        glm::glm
     PRIVATE
         glfw
         opengl32
