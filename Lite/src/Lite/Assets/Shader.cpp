@@ -1,9 +1,9 @@
-#include "Shader.h"
+#include <Lite/Assets/Shader.h>
 
-#include "Lite/Core/FileSystem.h"
-#include "Lite/Core/Logger.h"
-#include "Lite/Core/String.h"
-#include "Lite/Renderer/Vulkan/VulkanUtils.h"
+#include <Lite/Core/IO/FileSystem.h>
+#include <Lite/Core/Log/Logger.h>
+#include <Lite/Core/String.h>
+#include <Lite/Renderer/Vulkan/VulkanUtils.h>
 
 #include <cstring>
 

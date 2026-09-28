@@ -1,7 +1,7 @@
-#include "RendererAPI.h"
+#include <Lite/Renderer/RendererAPI.h>
 
-#include "Renderer.h"
-#include "VertexArray.h"
+#include <Lite/Renderer/Renderer.h>
+#include <Lite/Renderer/Resources/VertexArray.h>
 
 namespace Lite {
 

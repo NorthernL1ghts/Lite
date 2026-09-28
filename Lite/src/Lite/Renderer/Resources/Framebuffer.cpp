@@ -1,4 +1,4 @@
-#include "Framebuffer.h"
+#include <Lite/Renderer/Resources/Framebuffer.h>
 
 namespace Lite {
 

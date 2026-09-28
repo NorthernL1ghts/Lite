@@ -1,6 +1,6 @@
-#include "Window.h"
+#include <Lite/Core/Window.h>
 
-#include "Lite/Platform/GLFW/GLFWWindow.h"
+#include <Lite/Platform/GLFW/GLFWWindow.h>
 
 namespace Lite {
 

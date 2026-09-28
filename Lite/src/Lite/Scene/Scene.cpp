@@ -1,10 +1,10 @@
-#include "Scene.h"
+#include <Lite/Scene/Scene.h>
 
-#include "Console.h"
+#include <Lite/Scene/Console.h>
 
-#include "Lite/Assets/AssetRegistry.h"
-#include "Lite/Core/FileSystem.h"
-#include "Lite/Renderer/Renderer2D.h"
+#include <Lite/Assets/AssetRegistry.h>
+#include <Lite/Core/IO/FileSystem.h>
+#include <Lite/Renderer/Renderer2D.h>
 
 #include <algorithm>
 #include <filesystem>
@@ -65,23 +65,64 @@ namespace Lite {
 			return FileSystem::ExecutableDirectory() / file;
 		}
 
-		std::filesystem::path WalkFor(const std::filesystem::path& start, const std::filesystem::path& relative)
+		void Consider(const std::filesystem::path& candidate, std::vector<std::filesystem::path>& matches)
+		{
+			std::error_code error;
+			if (!std::filesystem::is_regular_file(candidate, error) && !std::filesystem::is_directory(candidate, error))
+				return;
+
+			std::filesystem::path normal = candidate.lexically_normal();
+			for (const std::filesystem::path& match : matches)
+			{
+				if (match == normal)
+					return;
+			}
+
+			matches.push_back(std::move(normal));
+		}
+
+		void Collect(const std::filesystem::path& start, const std::filesystem::path& relative, std::vector<std::filesystem::path>& matches)
 		{
 			std::filesystem::path cursor = start;
 			for (int step = 0; step < 8 && !cursor.empty(); ++step)
 			{
-				std::filesystem::path candidate = cursor / relative;
+				Consider(cursor / relative, matches);
+
 				std::error_code error;
-				if (std::filesystem::is_regular_file(candidate, error) || std::filesystem::is_directory(candidate, error))
-					return candidate;
+				if (std::filesystem::is_directory(cursor, error))
+				{
+					for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(cursor, error))
+					{
+						std::error_code childError;
+						if (error || !entry.is_directory(childError))
+							continue;
+						Consider(entry.path() / relative, matches);
+					}
+				}
 
 				std::filesystem::path parent = cursor.parent_path();
 				if (parent.empty() || parent == cursor)
 					break;
 				cursor = parent;
 			}
+		}
 
-			return {};
+		std::filesystem::path PreferSource(const std::vector<std::filesystem::path>& matches)
+		{
+			std::filesystem::path executable = FileSystem::ExecutableDirectory();
+			std::filesystem::path inside;
+			for (const std::filesystem::path& match : matches)
+			{
+				std::error_code error;
+				std::filesystem::path relative = std::filesystem::relative(match, executable, error);
+				bool contained = !error && (relative.empty() || relative.begin()->string() != "..");
+				if (!contained)
+					return match;
+				if (inside.empty())
+					inside = match;
+			}
+
+			return inside;
 		}
 
 		void ReadVec3(std::istream& stream, Vec3& value)
@@ -270,22 +311,26 @@ namespace Lite {
 		return FindRecord(id) != nullptr ? Entity(this, id) : Entity{};
 	}
 
-	Entity Scene::GetPrimaryCamera()
+	const Scene::Record* Scene::FindPrimaryCameraRecord() const
 	{
-		Entity fallback;
+		const Record* fallback = nullptr;
 		for (const Record& record : m_Records)
 		{
 			if (!record.Camera)
 				continue;
-
-			Entity entity(this, record.Id);
 			if (record.Camera->Primary)
-				return entity;
-			if (!fallback)
-				fallback = entity;
+				return &record;
+			if (fallback == nullptr)
+				fallback = &record;
 		}
 
 		return fallback;
+	}
+
+	Entity Scene::GetPrimaryCamera()
+	{
+		const Record* record = FindPrimaryCameraRecord();
+		return record != nullptr ? Entity(this, record->Id) : Entity{};
 	}
 
 	std::vector<Entity> Scene::GetEntities()
@@ -384,6 +429,26 @@ namespace Lite {
 			return;
 
 		StepPhysics(seconds);
+	}
+
+	Mat4 Scene::ViewProjection(float aspect, const Transform& fallbackTransform, const CameraComponent& fallbackCamera) const
+	{
+		const Record* record = IsPlaying() ? FindPrimaryCameraRecord() : nullptr;
+		if (record == nullptr || !record->Transform || !record->Camera)
+			return CameraProjectionMatrix(fallbackCamera, aspect) * fallbackTransform.GetViewMatrix();
+
+		return CameraProjectionMatrix(*record->Camera, aspect) * record->Transform->Local.GetViewMatrix();
+	}
+
+	void Scene::Close(Scope<Scene>& scene)
+	{
+		if (scene == nullptr)
+			return;
+
+		scene->Stop();
+		if (s_Active == scene.get())
+			s_Active = nullptr;
+		scene.reset();
 	}
 
 	void Scene::Render() const
@@ -741,7 +806,7 @@ namespace Lite {
 			if (record.Name.empty())
 				record.Name = "Entity";
 			if (record.Material && record.Material->Shader.empty())
-				record.Material->Shader = "Batch";
+				record.Material->Shader = kDefaultShader;
 		}
 
 		return true;
@@ -783,7 +848,7 @@ namespace Lite {
 			{
 				const MaterialComponent& material = *record.Material;
 				output << "component material\n";
-				output << std::format("shader {}\n", material.Shader.empty() ? "Batch" : material.Shader);
+				output << std::format("shader {}\n", material.Shader.empty() ? kDefaultShader : material.Shader);
 				output << std::format("color {:.4f} {:.4f} {:.4f} {:.4f}\n", material.Color.x, material.Color.y, material.Color.z, material.Color.w);
 				output << std::format("tiling {:.4f} {:.4f}\n", material.Tiling.x, material.Tiling.y);
 				if (!material.TexturePath.empty())
@@ -909,16 +974,27 @@ namespace Lite {
 	std::string Scene::Locate(std::string_view relativeToProject)
 	{
 		std::filesystem::path relative(relativeToProject);
+		std::vector<std::filesystem::path> matches;
 		std::error_code error;
-		std::filesystem::path current = std::filesystem::current_path(error);
-		std::filesystem::path found = WalkFor(current, relative);
-		if (found.empty())
-			found = WalkFor(FileSystem::ExecutableDirectory(), relative);
-		return found.string();
+		Collect(std::filesystem::current_path(error), relative, matches);
+		Collect(FileSystem::ExecutableDirectory(), relative, matches);
+
+		std::filesystem::path chosen = PreferSource(matches);
+		if (chosen.empty())
+			return {};
+
+		std::filesystem::path canonical = std::filesystem::weakly_canonical(chosen, error);
+		return (error ? chosen : canonical).string();
 	}
 
 	Scope<Scene> Scene::Open(std::string_view path)
 	{
+		if (path.empty())
+		{
+			Console::Log("Failed to load scene: empty path");
+			return nullptr;
+		}
+
 		std::filesystem::path full = ResolvePath(path);
 		std::ifstream file(full);
 		if (!file)

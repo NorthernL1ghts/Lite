@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Lite/Renderer/VertexLayout.h"
-#include "VulkanUtils.h"
+#include <Lite/Renderer/Resources/VertexLayout.h>
+#include <Lite/Renderer/Vulkan/VulkanUtils.h>
 
 namespace Lite {
 

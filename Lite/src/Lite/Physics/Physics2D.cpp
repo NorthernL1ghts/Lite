@@ -1,6 +1,6 @@
-#include "Lite/Scene/Scene.h"
+#include <Lite/Scene/Scene.h>
 
-#include "Lite/Scene/Console.h"
+#include <Lite/Scene/Console.h>
 
 #include <box2d/box2d.h>
 
@@ -115,8 +115,9 @@ namespace Lite {
 	{
 		StopPhysics();
 
+		constexpr float kGravity = 9.81f;
 		b2WorldDef worldDef = b2DefaultWorldDef();
-		worldDef.gravity = { 0.0f, -9.81f };
+		worldDef.gravity = { 0.0f, -kGravity };
 		m_Physics = new PhysicsStorage();
 		m_Physics->World = b2CreateWorld(&worldDef);
 

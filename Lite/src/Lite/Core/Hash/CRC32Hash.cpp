@@ -1,4 +1,4 @@
-#include "CRC32Hash.h"
+#include <Lite/Core/Hash/CRC32Hash.h>
 
 #include <array>
 

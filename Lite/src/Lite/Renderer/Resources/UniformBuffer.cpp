@@ -1,7 +1,7 @@
-#include "UniformBuffer.h"
+#include <Lite/Renderer/Resources/UniformBuffer.h>
 
-#include "Renderer.h"
-#include "Vulkan/VulkanUtils.h"
+#include <Lite/Renderer/Renderer.h>
+#include <Lite/Renderer/Vulkan/VulkanUtils.h>
 
 #include <cstring>
 

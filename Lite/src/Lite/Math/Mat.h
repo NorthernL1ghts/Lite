@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vector.h"
+#include <Lite/Math/Vector.h>
 
 #include <algorithm>
 #include <cmath>

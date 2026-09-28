@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Events/Event.h"
-#include "Time.h"
+#include <Lite/Core/Events/Event.h>
+#include <Lite/Core/Time.h>
 
 #include <string>
 

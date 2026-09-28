@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Lite/Assets/Texture.h"
-#include "Lite/Core/Base.h"
-#include "Lite/Math/Math.h"
-#include "ShaderProgram.h"
+#include <Lite/Assets/Texture.h>
+#include <Lite/Core/Base.h>
+#include <Lite/Math/Math.h>
+#include <Lite/Renderer/Shader/ShaderProgram.h>
 
 namespace Lite {
 

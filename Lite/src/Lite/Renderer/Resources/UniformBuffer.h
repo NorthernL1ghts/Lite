@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Lite/Core/Base.h"
-#include "Lite/Math/Math.h"
-#include "Vulkan/VulkanBuffer.h"
-#include "Vulkan/VulkanSync.h"
+#include <Lite/Core/Base.h>
+#include <Lite/Math/Math.h>
+#include <Lite/Renderer/Vulkan/VulkanBuffer.h>
+#include <Lite/Renderer/Vulkan/VulkanSync.h>
 
 #include <array>
 #include <cstdint>

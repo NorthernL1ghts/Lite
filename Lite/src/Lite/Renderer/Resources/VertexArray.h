@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Lite/Core/Base.h"
-#include "Buffer.h"
+#include <Lite/Core/Base.h>
+#include <Lite/Renderer/Resources/Buffer.h>
 
 #include <cstdint>
 

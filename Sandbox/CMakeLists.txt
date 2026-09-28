@@ -17,6 +17,7 @@ set_source_files_properties(${SANDBOX_SHADER_SOURCES} PROPERTIES
     HEADER_FILE_ONLY ON
 )
 
+target_include_directories(Sandbox PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(Sandbox PRIVATE Lite)
 
 target_compile_definitions(Sandbox

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Lite/Core/Layer.h"
-#include "Lite/Renderer/OrthographicCamera.h"
-#include "Lite/Scene/Scene.h"
+#include <Lite/Core/Layer.h>
+#include <Lite/Renderer/OrthographicCamera.h>
+#include <Lite/Scene/Scene.h>
 
 #include <cstdint>
 #include <string>

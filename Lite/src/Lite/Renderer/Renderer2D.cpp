@@ -1,13 +1,13 @@
-#include "Renderer2D.h"
+#include <Lite/Renderer/Renderer2D.h>
 
-#include "Material.h"
-#include "RendererAPI.h"
-#include "VertexArray.h"
-#include "VertexLayout.h"
-#include "Vulkan/VulkanSync.h"
+#include <Lite/Renderer/Material.h>
+#include <Lite/Renderer/RendererAPI.h>
+#include <Lite/Renderer/Resources/VertexArray.h>
+#include <Lite/Renderer/Resources/VertexLayout.h>
+#include <Lite/Renderer/Vulkan/VulkanSync.h>
 
-#include "Lite/Core/Logger.h"
-#include "Lite/Core/Profiler.h"
+#include <Lite/Core/Log/Logger.h>
+#include <Lite/Core/Profile/Profiler.h>
 
 #include <array>
 #include <vector>

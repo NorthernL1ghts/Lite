@@ -1,7 +1,7 @@
-#include "ShaderProgram.h"
+#include <Lite/Renderer/Shader/ShaderProgram.h>
 
-#include "Renderer.h"
-#include "Lite/Assets/Shader.h"
+#include <Lite/Renderer/Renderer.h>
+#include <Lite/Assets/Shader.h>
 
 namespace Lite {
 

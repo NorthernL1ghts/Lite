@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Lite/Assets/Shader.h"
-#include "Lite/Core/Base.h"
+#include <Lite/Assets/Shader.h>
+#include <Lite/Core/Base.h>
 
 #include <string>
 #include <string_view>

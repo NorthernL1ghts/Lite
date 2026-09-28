@@ -1,8 +1,8 @@
-#include "Material.h"
+#include <Lite/Renderer/Material.h>
 
-#include "Renderer.h"
-#include "Lite/Assets/Shader.h"
-#include "Lite/Core/Logger.h"
+#include <Lite/Renderer/Renderer.h>
+#include <Lite/Assets/Shader.h>
+#include <Lite/Core/Log/Logger.h>
 
 namespace Lite {
 

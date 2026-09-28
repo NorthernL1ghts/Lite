@@ -1,6 +1,6 @@
-#include "Console.h"
+#include <Lite/Scene/Console.h>
 
-#include "Lite/Core/Logger.h"
+#include <Lite/Core/Log/Logger.h>
 
 namespace Lite {
 

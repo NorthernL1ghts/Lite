@@ -1,9 +1,9 @@
-#include "GLFWWindow.h"
+#include <Lite/Platform/GLFW/GLFWWindow.h>
 
-#include "Lite/Core/Logger.h"
-#include "Lite/Core/Events/KeyEvent.h"
-#include "Lite/Core/Events/MouseEvent.h"
-#include "Lite/Core/Events/WindowEvent.h"
+#include <Lite/Core/Log/Logger.h>
+#include <Lite/Core/Events/KeyEvent.h>
+#include <Lite/Core/Events/MouseEvent.h>
+#include <Lite/Core/Events/WindowEvent.h>
 
 #include <GLFW/glfw3.h>
 

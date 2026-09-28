@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Logger.h"
+#include <Lite/Core/Log/Logger.h>
 
 #include <format>
 

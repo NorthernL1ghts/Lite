@@ -1,6 +1,6 @@
-#include "Buffer.h"
+#include <Lite/Renderer/Resources/Buffer.h>
 
-#include "Renderer.h"
+#include <Lite/Renderer/Renderer.h>
 
 namespace Lite {
 

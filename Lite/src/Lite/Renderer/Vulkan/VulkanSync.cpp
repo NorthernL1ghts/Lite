@@ -1,4 +1,4 @@
-#include "VulkanSync.h"
+#include <Lite/Renderer/Vulkan/VulkanSync.h>
 
 namespace Lite {
 

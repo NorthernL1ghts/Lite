@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Lite/Assets/Texture.h"
-#include "Lite/Core/Base.h"
-#include "Lite/Math/Math.h"
-#include "Renderer.h"
-#include "ShaderLibrary.h"
+#include <Lite/Assets/Texture.h>
+#include <Lite/Core/Base.h>
+#include <Lite/Math/Math.h>
+#include <Lite/Renderer/Renderer.h>
+#include <Lite/Renderer/Shader/ShaderLibrary.h>
 
 namespace Lite {
 

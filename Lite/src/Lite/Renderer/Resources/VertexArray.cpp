@@ -1,4 +1,4 @@
-#include "VertexArray.h"
+#include <Lite/Renderer/Resources/VertexArray.h>
 
 namespace Lite {
 

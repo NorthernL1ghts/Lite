@@ -1,11 +1,11 @@
-#include "AssetRegistry.h"
+#include <Lite/Assets/AssetRegistry.h>
 
-#include "Shader.h"
-#include "Texture.h"
+#include <Lite/Assets/Shader.h>
+#include <Lite/Assets/Texture.h>
 
-#include "Lite/Core/Assert.h"
-#include "Lite/Core/FileSystem.h"
-#include "Lite/Core/String.h"
+#include <Lite/Core/Assert.h>
+#include <Lite/Core/IO/FileSystem.h>
+#include <Lite/Core/String.h>
 
 namespace Lite {
 

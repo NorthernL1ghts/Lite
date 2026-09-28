@@ -1,4 +1,4 @@
-#include "Profiler.h"
+#include <Lite/Core/Profile/Profiler.h>
 
 #include <chrono>
 

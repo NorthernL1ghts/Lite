@@ -1,9 +1,9 @@
-#include "ShaderLibrary.h"
+#include <Lite/Renderer/Shader/ShaderLibrary.h>
 
-#include "Lite/Assets/AssetRegistry.h"
-#include "Lite/Core/Assert.h"
-#include "Lite/Core/Logger.h"
-#include "Lite/Core/String.h"
+#include <Lite/Assets/AssetRegistry.h>
+#include <Lite/Core/Assert.h>
+#include <Lite/Core/Log/Logger.h>
+#include <Lite/Core/String.h>
 
 #include <filesystem>
 

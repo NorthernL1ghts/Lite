@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Lite/Assets/Texture.h"
-#include "Lite/Core/Base.h"
-#include "Lite/Math/Math.h"
+#include <Lite/Assets/Texture.h>
+#include <Lite/Core/Base.h>
+#include <Lite/Math/Math.h>
 
 #include <cstdint>
 #include <iosfwd>
@@ -20,6 +20,16 @@ namespace Lite {
 		Paused
 	};
 
+	inline const char* PlaybackName(ScenePlayback playback)
+	{
+		switch (playback)
+		{
+			case ScenePlayback::Playing: return "playing";
+			case ScenePlayback::Paused: return "paused";
+			default: return "stopped";
+		}
+	}
+
 	enum class MeshType
 	{
 		Quad,
@@ -32,6 +42,9 @@ namespace Lite {
 		Transform Local;
 	};
 
+	inline constexpr float kDefaultFieldOfView = 60.0f * (3.14159265f / 180.0f);
+	inline constexpr const char* kDefaultShader = "Batch";
+
 	enum class CameraProjection
 	{
 		Orthographic,
@@ -42,7 +55,7 @@ namespace Lite {
 	{
 		CameraProjection Projection = CameraProjection::Orthographic;
 		float Size = 2.0f;
-		float FieldOfView = 1.04719758f;
+		float FieldOfView = kDefaultFieldOfView;
 		float Near = -1.0f;
 		float Far = 1.0f;
 		bool Primary = false;
@@ -54,7 +67,7 @@ namespace Lite {
 		{
 			float zNear = camera.Near > 0.0f ? camera.Near : 0.1f;
 			float zFar = camera.Far > zNear ? camera.Far : zNear + 100.0f;
-			float fov = camera.FieldOfView > 0.0f ? camera.FieldOfView : 1.04719758f;
+			float fov = camera.FieldOfView > 0.0f ? camera.FieldOfView : kDefaultFieldOfView;
 			return Mat4::Perspective(fov, aspect, zNear, zFar);
 		}
 
@@ -70,7 +83,7 @@ namespace Lite {
 
 	struct MaterialComponent
 	{
-		std::string Shader = "Batch";
+		std::string Shader = kDefaultShader;
 		Vec4 Color { 1.0f, 1.0f, 1.0f, 1.0f };
 		Vec4 Colors[4] {};
 		bool UseVertexColors = false;
@@ -207,6 +220,9 @@ namespace Lite {
 		void Restart();
 		void Update(float seconds);
 		void Render() const;
+		Mat4 ViewProjection(float aspect, const Transform& fallbackTransform, const CameraComponent& fallbackCamera) const;
+
+		static void Close(Scope<Scene>& scene);
 
 		bool Save();
 		bool SaveAs(std::string_view path);
@@ -255,6 +271,7 @@ namespace Lite {
 
 		Record* FindRecord(uint32_t id);
 		const Record* FindRecord(uint32_t id) const;
+		const Record* FindPrimaryCameraRecord() const;
 		void* AddComponent(ComponentId id, uint32_t entity);
 		void* GetComponent(ComponentId id, uint32_t entity);
 		void RemoveComponent(ComponentId id, uint32_t entity);

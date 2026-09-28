@@ -1,15 +1,15 @@
-#include "Application.h"
-#include "Assert.h"
-#include "Logger.h"
-#include "Profiler.h"
-#include "Time.h"
-#include "Window.h"
+#include <Lite/Core/Application.h>
+#include <Lite/Core/Assert.h>
+#include <Lite/Core/Log/Logger.h>
+#include <Lite/Core/Profile/Profiler.h>
+#include <Lite/Core/Time.h>
+#include <Lite/Core/Window.h>
 
-#include "Events/WindowEvent.h"
-#include "Lite/Assets/AssetRegistry.h"
-#include "Lite/ImGui/ImGuiLayer.h"
-#include "Lite/Input/Input.h"
-#include "Lite/Renderer/Renderer2D.h"
+#include <Lite/Core/Events/WindowEvent.h>
+#include <Lite/Assets/AssetRegistry.h>
+#include <Lite/ImGui/ImGuiLayer.h>
+#include <Lite/Input/Input.h>
+#include <Lite/Renderer/Renderer2D.h>
 
 namespace Lite {
 

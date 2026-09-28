@@ -1,8 +1,8 @@
-#include "ImGuiLayer.h"
+#include <Lite/ImGui/ImGuiLayer.h>
 
-#include "Lite/Core/Events/Event.h"
-#include "Lite/Core/Logger.h"
-#include "Lite/Renderer/Renderer.h"
+#include <Lite/Core/Events/Event.h>
+#include <Lite/Core/Log/Logger.h>
+#include <Lite/Renderer/Renderer.h>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>

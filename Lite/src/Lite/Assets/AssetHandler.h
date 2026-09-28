@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Asset.h"
+#include <Lite/Assets/Asset.h>
 
 #include <filesystem>
 

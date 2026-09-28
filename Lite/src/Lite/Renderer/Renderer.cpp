@@ -1,9 +1,9 @@
-#include "Renderer.h"
+#include <Lite/Renderer/Renderer.h>
 
-#include "Framebuffer.h"
+#include <Lite/Renderer/Resources/Framebuffer.h>
 
-#include "Lite/Core/Logger.h"
-#include "Lite/Core/Profiler.h"
+#include <Lite/Core/Log/Logger.h>
+#include <Lite/Core/Profile/Profiler.h>
 
 #include <GLFW/glfw3.h>
 

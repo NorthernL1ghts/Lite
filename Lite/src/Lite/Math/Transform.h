@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Quaternion.h"
+#include <Lite/Math/Quaternion.h>
 
 #include <cmath>
 

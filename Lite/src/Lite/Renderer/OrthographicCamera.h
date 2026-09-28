@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Lite/Math/Math.h"
+#include <Lite/Math/Math.h>
 
 namespace Lite {
 

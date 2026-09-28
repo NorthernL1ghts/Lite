@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Lite/Core/Base.h"
-#include "Lite/Core/UUID.h"
+#include <Lite/Core/Base.h>
+#include <Lite/Core/UUID.h>
 
 #include <string>
 

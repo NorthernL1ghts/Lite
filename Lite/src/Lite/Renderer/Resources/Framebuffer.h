@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Lite/Core/Base.h"
-#include "Vulkan/VulkanFramebuffer.h"
+#include <Lite/Core/Base.h>
+#include <Lite/Renderer/Vulkan/VulkanFramebuffer.h>
 
 #include <cstdint>
 #include <vector>

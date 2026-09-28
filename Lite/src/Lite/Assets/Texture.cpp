@@ -1,8 +1,8 @@
-#include "Texture.h"
+#include <Lite/Assets/Texture.h>
 
-#include "Lite/Core/Logger.h"
-#include "Lite/Renderer/Renderer.h"
-#include "Lite/Renderer/Vulkan/VulkanUtils.h"
+#include <Lite/Core/Log/Logger.h>
+#include <Lite/Renderer/Renderer.h>
+#include <Lite/Renderer/Vulkan/VulkanUtils.h>
 
 #include <cstring>
 #include <limits>

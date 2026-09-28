@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AssetHandler.h"
+#include <Lite/Assets/AssetHandler.h>
 
 #include <cstdint>
 #include <filesystem>

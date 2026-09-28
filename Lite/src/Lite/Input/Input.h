@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Lite/Core/Base.h"
-#include "KeyCodes.h"
-#include "MouseCodes.h"
+#include <Lite/Core/Base.h>
+#include <Lite/Input/KeyCodes.h>
+#include <Lite/Input/MouseCodes.h>
 
 #include <utility>
 

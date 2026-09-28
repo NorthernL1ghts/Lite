@@ -1,6 +1,6 @@
 #include <Lite.h>
 
-#include "SandboxLayer.h"
+#include <SandboxLayer.h>
 
 namespace {
 

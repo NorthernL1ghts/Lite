@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Lite/Core/Base.h"
-#include "VertexLayout.h"
-#include "UniformBuffer.h"
-#include "Vulkan/VulkanPipeline.h"
+#include <Lite/Core/Base.h>
+#include <Lite/Renderer/Resources/VertexLayout.h>
+#include <Lite/Renderer/Resources/UniformBuffer.h>
+#include <Lite/Renderer/Vulkan/VulkanPipeline.h>
 
 namespace Lite {
 

@@ -1,19 +1,20 @@
-#include "EditorLayer.h"
+#include <EditorLayer.h>
 
-#include "Lite/Core/Events/KeyEvent.h"
-#include "Lite/Core/Events/MouseEvent.h"
-#include "Lite/Assets/AssetRegistry.h"
-#include "Lite/Assets/Texture.h"
-#include "Lite/Core/FileSystem.h"
-#include "Lite/Core/Logger.h"
-#include "Lite/Core/Profiler.h"
-#include "Lite/Core/Time.h"
-#include "Lite/Input/Input.h"
-#include "Lite/Input/KeyCodes.h"
-#include "Lite/Renderer/Renderer.h"
-#include "Lite/Renderer/Renderer2D.h"
-#include "Lite/Scene/Console.h"
-#include "Lite/Scene/Scene.h"
+#include <Lite/Core/Events/KeyEvent.h>
+#include <Lite/Core/Events/MouseEvent.h>
+#include <Lite/Assets/AssetRegistry.h>
+#include <Lite/Assets/Texture.h>
+#include <Lite/Core/IO/FileSystem.h>
+#include <Lite/Core/Log/Logger.h>
+#include <Lite/Core/Profile/Profiler.h>
+#include <Lite/Core/Time.h>
+#include <Lite/Input/Input.h>
+#include <Lite/Input/KeyCodes.h>
+#include <Lite/Renderer/Renderer.h>
+#include <Lite/Renderer/Renderer2D.h>
+#include <Lite/Scene/Console.h>
+#include <Lite/Scene/Scene.h>
+#include <Lite/Scene/SceneCamera.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -351,38 +352,25 @@ EditorLayer::EditorLayer()
 
 void EditorLayer::OnAttach()
 {
-	std::string scenePath = Lite::Scene::Locate("Sandbox/assets/scenes/Sandbox.scene");
-	if (scenePath.empty())
-		scenePath = "assets/scenes/Sandbox.scene";
-	OpenScene(scenePath);
+	std::string scenePath = Lite::Scene::Locate("assets/scenes/Sandbox.scene");
+	if (!scenePath.empty())
+		OpenScene(scenePath);
 	if (!m_Scene)
 		NewScene();
-
-	m_Camera.SetProjection(m_ViewSize, 16.0f / 9.0f);
 }
 
 void EditorLayer::OnDetach()
 {
-	if (m_Scene)
-	{
-		m_Scene->Stop();
-		if (Lite::Scene::GetActive() == m_Scene.get())
-			Lite::Scene::SetActive(nullptr);
-		m_Scene.reset();
-	}
+	Lite::Scene::Close(m_Scene);
 }
 
 void EditorLayer::OnUpdate(Lite::Timestep timestep)
 {
 	LITE_PROFILE_SCOPE("Editor Update");
-	float rotation = m_Camera.GetRotation();
-	float step = 1.6f * timestep.GetSeconds();
 	if (!m_Scene || !m_Scene->IsPlaying())
 	{
-		if (Lite::Input::IsKeyPressed(Lite::Key::Q))
-			rotation += step;
-		if (Lite::Input::IsKeyPressed(Lite::Key::E))
-			rotation -= step;
+		float rotation = m_Camera.GetRotation();
+		Lite::TurnCamera(rotation, timestep.GetSeconds());
 		m_Camera.SetRotation(rotation);
 	}
 
@@ -421,8 +409,15 @@ void EditorLayer::OpenScene(const std::string& path)
 
 	m_Scene = std::move(scene);
 	Lite::Scene::SetActive(m_Scene.get());
-	Lite::Entity triangle = m_Scene->Find("Triangle");
-	m_Selected = triangle ? triangle.GetId() : 0;
+	m_Selected = 0;
+	for (Lite::Entity entity : m_Scene->GetEntities())
+	{
+		if (entity.Has<Lite::MeshComponent>())
+		{
+			m_Selected = entity.GetId();
+			break;
+		}
+	}
 	m_SyncedId = 0;
 	SyncName();
 }
@@ -459,29 +454,18 @@ void EditorLayer::SaveScene()
 
 void EditorLayer::ApplyPlayCamera()
 {
-	float aspect = 16.0f / 9.0f;
+	float aspect = Lite::kDefaultAspect;
 	if (m_ViewportH > 1.0f)
-		aspect = m_ViewportW / m_ViewportH;
+		aspect = Lite::AspectRatio(m_ViewportW, m_ViewportH);
 	else
 	{
 		VkExtent2D extent = Lite::Renderer::GetExtent();
-		if (extent.height > 0)
-			aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+		aspect = Lite::AspectRatio(static_cast<float>(extent.width), static_cast<float>(extent.height));
 	}
 
-	Lite::Transform transform = m_Camera.GetTransform();
 	Lite::CameraComponent camera;
 	camera.Size = m_ViewSize;
-	if (m_Scene != nullptr && m_Scene->IsPlaying())
-	{
-		Lite::Entity entity = m_Scene->GetPrimaryCamera();
-		if (Lite::TransformComponent* component = entity.Get<Lite::TransformComponent>())
-			transform = component->Local;
-		if (Lite::CameraComponent* component = entity.Get<Lite::CameraComponent>())
-			camera = *component;
-	}
-
-	Lite::Mat4 viewProjection = Lite::CameraProjectionMatrix(camera, aspect) * transform.GetViewMatrix();
+	Lite::Mat4 viewProjection = m_Scene->ViewProjection(aspect, m_Camera.GetTransform(), camera);
 	m_ViewProjection = FitToWindow(viewProjection, m_ViewportX, m_ViewportY, m_ViewportW, m_ViewportH, m_WindowW, m_WindowH);
 	Lite::Renderer2D::SetViewProjection(m_ViewProjection);
 }
@@ -603,14 +587,10 @@ void EditorLayer::OnEvent(Lite::Event& event)
 	dispatcher.Dispatch<Lite::MouseScrolledEvent>([this](Lite::MouseScrolledEvent& scroll)
 	{
 		float steps = scroll.GetYOffset();
-		if (steps == 0.0f)
+		if (steps == 0.0f || (m_Scene && m_Scene->IsPlaying()))
 			return false;
 
-		m_ViewSize *= std::pow(0.85f, steps);
-		if (m_ViewSize < 0.25f)
-			m_ViewSize = 0.25f;
-		if (m_ViewSize > 12.0f)
-			m_ViewSize = 12.0f;
+		Lite::ZoomCamera(m_ViewSize, steps);
 		return false;
 	});
 }
@@ -693,7 +673,7 @@ void EditorLayer::OpenBrowser()
 
 	if (directory.empty())
 	{
-		std::string scenes = Lite::Scene::Locate("Sandbox/assets/scenes");
+		std::string scenes = Lite::Scene::Locate("assets/scenes");
 		if (!scenes.empty())
 			directory = scenes;
 	}
@@ -975,13 +955,7 @@ void EditorLayer::DrawScene()
 		return;
 	}
 
-	const char* playback = "stopped";
-	switch (m_Scene->GetPlayback())
-	{
-		case Lite::ScenePlayback::Playing: playback = "playing"; break;
-		case Lite::ScenePlayback::Paused: playback = "paused"; break;
-		case Lite::ScenePlayback::Stopped: playback = "stopped"; break;
-	}
+	const char* playback = Lite::PlaybackName(m_Scene->GetPlayback());
 	ImGui::TextDisabled("%s  %s", m_Scene->GetName().c_str(), playback);
 	if (!m_Scene->GetPath().empty())
 		ImGui::TextWrapped("%s", m_Scene->GetPath().c_str());
@@ -1032,16 +1006,7 @@ void EditorLayer::DrawViewport()
 	}
 
 	const char* name = m_Scene != nullptr ? m_Scene->GetName().c_str() : "No scene";
-	const char* playback = "stopped";
-	if (m_Scene)
-	{
-		switch (m_Scene->GetPlayback())
-		{
-			case Lite::ScenePlayback::Playing: playback = "playing"; break;
-			case Lite::ScenePlayback::Paused: playback = "paused"; break;
-			case Lite::ScenePlayback::Stopped: playback = "stopped"; break;
-		}
-	}
+	const char* playback = m_Scene != nullptr ? Lite::PlaybackName(m_Scene->GetPlayback()) : "stopped";
 	ImGui::SetCursorScreenPos(origin);
 	ImGui::TextDisabled("%s  %s  %.0f x %.0f", name, playback, size.x, size.y);
 	ImGui::End();

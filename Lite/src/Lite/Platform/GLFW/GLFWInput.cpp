@@ -1,4 +1,4 @@
-#include "Lite/Input/Input.h"
+#include <Lite/Input/Input.h>
 
 #include <GLFW/glfw3.h>
 

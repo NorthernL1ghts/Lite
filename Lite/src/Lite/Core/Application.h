@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Base.h"
-#include "LayerStack.h"
-#include "Window.h"
+#include <Lite/Core/Base.h>
+#include <Lite/Core/LayerStack.h>
+#include <Lite/Core/Window.h>
 
 namespace Lite {
 

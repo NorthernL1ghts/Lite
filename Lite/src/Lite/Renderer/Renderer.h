@@ -1,14 +1,14 @@
 #pragma once
 
-#include "Lite/Core/Base.h"
-#include "Lite/Math/Math.h"
-#include "Vulkan/VulkanInstance.h"
-#include "Vulkan/VulkanPhysicalDevice.h"
-#include "Vulkan/VulkanDevice.h"
-#include "Vulkan/VulkanSwapchain.h"
-#include "Vulkan/VulkanRenderPass.h"
-#include "Vulkan/VulkanCommandBuffer.h"
-#include "Vulkan/VulkanSync.h"
+#include <Lite/Core/Base.h>
+#include <Lite/Math/Math.h>
+#include <Lite/Renderer/Vulkan/VulkanInstance.h>
+#include <Lite/Renderer/Vulkan/VulkanPhysicalDevice.h>
+#include <Lite/Renderer/Vulkan/VulkanDevice.h>
+#include <Lite/Renderer/Vulkan/VulkanSwapchain.h>
+#include <Lite/Renderer/Vulkan/VulkanRenderPass.h>
+#include <Lite/Renderer/Vulkan/VulkanCommandBuffer.h>
+#include <Lite/Renderer/Vulkan/VulkanSync.h>
 
 namespace Lite {
 

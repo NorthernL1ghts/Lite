@@ -17,6 +17,7 @@ set_source_files_properties(${EDITOR_SHADER_SOURCES} PROPERTIES
     HEADER_FILE_ONLY ON
 )
 
+target_include_directories(Editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(Editor PRIVATE Lite)
 
 target_compile_definitions(Editor

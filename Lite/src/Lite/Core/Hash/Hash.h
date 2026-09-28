@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CRC32Hash.h"
+#include <Lite/Core/Hash/CRC32Hash.h>
 
 #include <cstddef>
 #include <cstdint>
