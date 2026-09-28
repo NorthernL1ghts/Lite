@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 config="${1:-Debug}"
 
 case "$config" in
     Debug|Release|RelWithDebInfo|MinSizeRel) ;;
     *)
-        echo "Usage: ./build.sh [Debug|Release|RelWithDebInfo|MinSizeRel]" >&2
+        echo "Usage: ./scripts/build.sh [Debug|Release|RelWithDebInfo|MinSizeRel]" >&2
         exit 1
         ;;
 esac
@@ -54,4 +54,9 @@ cmake -S . -B build -G "$generator" -A x64
 echo "Building ${config} ..."
 cmake --build build --config "$config"
 
-echo "Build finished. Sandbox is in build/bin/sandbox/"
+echo "Opening Sandbox in a new window..."
+root="$(pwd)"
+if command -v cygpath >/dev/null 2>&1; then
+    root="$(cygpath -w "$root")"
+fi
+MSYS_NO_PATHCONV=1 cmd.exe /c start "Sandbox" /D "$root" cmd /k "build\\bin\\sandbox\\Sandbox.exe"

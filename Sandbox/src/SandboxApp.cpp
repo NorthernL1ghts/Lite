@@ -1,7 +1,5 @@
 #include <Lite.h>
 
-#include <print>
-
 namespace {
 
 	class Sandbox final : public Lite::Application
@@ -9,18 +7,18 @@ namespace {
 	public:
 		Sandbox()
 		{
-			std::println("Sandbox created");
+			LITE_CLIENT_INFO("Created");
 		}
 
 		~Sandbox() override
 		{
-			std::println("Sandbox destroyed");
+			LITE_CLIENT_INFO("Destroyed");
 		}
 	};
 
 }
 
-Lite::Application* Lite::CreateApplication()
+std::unique_ptr<Lite::Application> Lite::CreateApplication()
 {
-    return new Sandbox();
+    return std::make_unique<Sandbox>();
 }

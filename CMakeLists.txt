@@ -30,9 +30,9 @@ if(_latest_windows_sdk)
     message(STATUS "Using latest Windows SDK ${_latest_windows_sdk}")
 endif()
 
-# MSVC's newest language mode. Leave CMAKE_CXX_STANDARD unset so CMake
-# does not also pass an older /std: flag.
-add_compile_options(/std:c++latest /FS)
+# MSVC parallel PDB writes. Language mode is set per target so dependencies
+# such as spdlog keep their own standard.
+add_compile_options(/FS)
 
 # Keep each config in the same bin folder instead of appending Debug/Release.
 function(lite_bin_dir target folder)
@@ -60,6 +60,7 @@ function(lite_sources target)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cxx"
     )
+    list(FILTER sources EXCLUDE REGEX "[/\\\\]vendor[/\\\\]")
     target_sources(${target} PRIVATE ${sources})
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" FILES ${sources})
 endfunction()

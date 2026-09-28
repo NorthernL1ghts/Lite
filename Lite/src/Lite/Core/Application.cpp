@@ -1,24 +1,23 @@
 #include "Application.h"
-
-#include <print>
+#include "Logger.h"
 
 namespace Lite {
 
 	Application::Application()
 	{
-		std::println("Lite Application created");
+		LITE_INFO("Application created");
 	}
 
 	Application::~Application()
 	{
-		std::println("Lite Application destroyed");
+		LITE_INFO("Application destroyed");
 	}
 
 	void Application::Run()
 	{
 		while (m_Running)
 		{
-			std::println("Lite running");
+			LITE_INFO("Running");
 			m_Running = false;
 		}
 	}

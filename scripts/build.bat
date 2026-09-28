@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions
 
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 set "CONFIG=%~1"
 if "%CONFIG%"=="" set "CONFIG=Debug"
 
 if /I not "%CONFIG%"=="Debug" if /I not "%CONFIG%"=="Release" if /I not "%CONFIG%"=="RelWithDebInfo" if /I not "%CONFIG%"=="MinSizeRel" (
-    echo Usage: build.bat [Debug^|Release^|RelWithDebInfo^|MinSizeRel]
+    echo Usage: scripts\build.bat [Debug^|Release^|RelWithDebInfo^|MinSizeRel]
     exit /b 1
 )
 
@@ -47,5 +47,6 @@ echo Building %CONFIG% ...
 cmake --build build --config %CONFIG%
 if errorlevel 1 exit /b 1
 
-echo Build finished. Sandbox is in build\bin\sandbox\
+echo Opening Sandbox in a new window...
+start "Sandbox" /D "%cd%" cmd /k build\bin\sandbox\Sandbox.exe
 exit /b 0
