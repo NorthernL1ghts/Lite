@@ -85,8 +85,8 @@ if errorlevel 1 exit /b 1
 
 if "%LITE_RUN%"=="0" exit /b 0
 
-echo Opening Sandbox in a new window...
-start "Sandbox" /D "%cd%" cmd /k "%LITE_BUILD_DIR%\bin\sandbox\Sandbox.exe"
+echo Opening Editor in a new window...
+start "Editor" /D "%cd%" cmd /k "%LITE_BUILD_DIR%\bin\editor\Editor.exe"
 exit /b 0
 
 :detect_generator
@@ -130,5 +130,5 @@ echo   --arch ^<arch^>           CMake architecture. Default: x64, or LITE_ARCH.
 echo   --build-dir ^<dir^>       Build directory. Default: build, or LITE_BUILD_DIR.
 echo   --generator ^<name^>      CMake generator. Default: detected Visual Studio, or LITE_GENERATOR.
 echo   --sdk ^<version^>         Windows SDK version. Default: newest installed, or LITE_WINDOWS_SDK.
-echo   --no-run                Build without opening Sandbox. LITE_RUN=0 does the same.
+echo   --no-run                Build without opening Editor. LITE_RUN=0 does the same.
 exit /b 1

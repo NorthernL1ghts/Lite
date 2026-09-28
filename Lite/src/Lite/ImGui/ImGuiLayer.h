@@ -14,7 +14,6 @@ namespace Lite {
 
 		void OnAttach() override;
 		void OnDetach() override;
-		void OnImGuiRender() override;
 		void OnEvent(Event& event) override;
 
 		void Begin();
@@ -23,7 +22,6 @@ namespace Lite {
 	private:
 		GLFWwindow* m_Window = nullptr;
 		bool m_Ready = false;
-		bool m_ShowInfo = false;
 	};
 
 }

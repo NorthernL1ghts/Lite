@@ -18,7 +18,7 @@ Usage: ./scripts/build.sh [Debug|Release|RelWithDebInfo|MinSizeRel] [options]
   --build-dir <dir>       Build directory. Default: build, or LITE_BUILD_DIR.
   --generator <name>      CMake generator. Default: detected Visual Studio, or LITE_GENERATOR.
   --sdk <version>         Windows SDK version. Default: newest installed, or LITE_WINDOWS_SDK.
-  --no-run                Build without opening Sandbox. LITE_RUN=0 does the same.
+  --no-run                Build without opening Editor. LITE_RUN=0 does the same.
 EOF
 }
 
@@ -119,9 +119,9 @@ if [[ "$lite_run" == "0" ]]; then
     exit 0
 fi
 
-echo "Opening Sandbox in a new window..."
+echo "Opening Editor in a new window..."
 root="$(pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     root="$(cygpath -w "$root")"
 fi
-MSYS_NO_PATHCONV=1 cmd.exe /c start "Sandbox" /D "$root" cmd /k "${lite_build_dir}\\bin\\sandbox\\Sandbox.exe"
+MSYS_NO_PATHCONV=1 cmd.exe /c start "Editor" /D "$root" cmd /k "${lite_build_dir}\\bin\\editor\\Editor.exe"
