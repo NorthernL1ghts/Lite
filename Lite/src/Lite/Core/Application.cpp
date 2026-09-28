@@ -1,9 +1,11 @@
 #include "Application.h"
 #include "Logger.h"
+#include "Window.h"
 
 namespace Lite {
 
-	Application::Application()
+	Application::Application(const WindowProps& props)
+		: m_Window(std::make_unique<Window>(props))
 	{
 		LITE_INFO("Application created");
 	}
@@ -15,11 +17,8 @@ namespace Lite {
 
 	void Application::Run()
 	{
-		while (m_Running)
-		{
-			LITE_INFO("Running");
-			m_Running = false;
-		}
+		while (m_Running && m_Window->IsOpen())
+			m_Window->Update();
 	}
 
 }

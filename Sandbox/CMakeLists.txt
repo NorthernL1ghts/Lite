@@ -25,6 +25,7 @@ target_compile_options(Sandbox
     PRIVATE
         /std:c++latest
         /W4
+        /wd4251
         /permissive-
         /Zc:__cplusplus
         /EHsc

@@ -6,6 +6,7 @@ namespace {
 	{
 	public:
 		Sandbox()
+			: Lite::Application(Lite::WindowProps("Sandbox"))
 		{
 			LITE_CLIENT_INFO("Created");
 		}

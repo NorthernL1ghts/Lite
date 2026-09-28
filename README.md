@@ -18,7 +18,7 @@ scripts\build.bat
 
 `Lite.dll` is built in `build/bin/lite`. After Sandbox links, CMake copies it into `build/bin/sandbox`.
 
-spdlog lives in `Lite/src/vendor` as a git submodule. `LITE_WARN` logs from the engine. `LITE_CLIENT_WARN` logs from the application.
+spdlog and GLFW live in `Lite/src/vendor` as git submodules. `LITE_WARN` logs from the engine. `LITE_CLIENT_WARN` logs from the application. Sandbox opens a GLFW window.
 
 ## License
 

@@ -7,6 +7,12 @@ set(SPDLOG_INSTALL OFF CACHE BOOL "" FORCE)
 set(SPDLOG_SYSTEM_INCLUDES ON CACHE BOOL "" FORCE)
 add_subdirectory(src/vendor/spdlog)
 
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(src/vendor/glfw)
+
 lite_sources(Lite)
 
 target_include_directories(Lite
@@ -14,7 +20,13 @@ target_include_directories(Lite
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(Lite PUBLIC spdlog::spdlog)
+target_link_libraries(Lite
+    PUBLIC
+        spdlog::spdlog
+    PRIVATE
+        glfw
+        opengl32
+)
 
 target_compile_definitions(Lite
     PUBLIC
@@ -31,6 +43,7 @@ target_compile_options(Lite
     PRIVATE
         /std:c++latest
         /W4
+        /wd4251
         /permissive-
         /Zc:__cplusplus
         /EHsc
