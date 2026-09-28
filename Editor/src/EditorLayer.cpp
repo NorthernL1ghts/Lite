@@ -6,6 +6,8 @@
 #include "Lite/Core/Time.h"
 #include "Lite/Input/KeyCodes.h"
 #include "Lite/Renderer/Renderer.h"
+#include "Lite/Scene/Console.h"
+#include "Lite/Scene/Scene.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -13,6 +15,7 @@
 #include <format>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -184,7 +187,9 @@ void EditorLayer::OnImGuiRender()
 	if (EditorDockNeedsBuild(dockspaceId))
 		BuildEditorDock(dockspaceId, viewport->WorkSize);
 
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 	ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+	ImGui::PopStyleColor();
 	ImGui::End();
 
 	DrawScene();
@@ -198,13 +203,20 @@ void EditorLayer::OnImGuiRender()
 void EditorLayer::DrawScene()
 {
 	ImGui::Begin("Scene");
-	ImGui::TextDisabled("Sandbox");
-	if (ImGui::Selectable("Checkerboard", m_Selection == Selection::Checkerboard))
-		m_Selection = Selection::Checkerboard;
-	if (ImGui::Selectable("Triangle", m_Selection == Selection::Triangle))
-		m_Selection = Selection::Triangle;
-	if (ImGui::Selectable("Quad", m_Selection == Selection::Quad))
-		m_Selection = Selection::Quad;
+	Lite::Scene* scene = Lite::Scene::GetActive();
+	if (scene == nullptr)
+	{
+		ImGui::TextDisabled("No scene");
+		ImGui::End();
+		return;
+	}
+
+	ImGui::TextDisabled("%s", scene->GetName().c_str());
+	for (const Lite::SceneObject& object : scene->GetObjects())
+	{
+		if (ImGui::Selectable(object.Name.c_str(), m_Selection == object.Name))
+			m_Selection = object.Name;
+	}
 	ImGui::End();
 }
 
@@ -212,45 +224,58 @@ void EditorLayer::DrawViewport()
 {
 	ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 	ImVec2 size = ImGui::GetContentRegionAvail();
-	ImGui::TextDisabled("Sandbox  %.0f x %.0f", size.x, size.y);
+	Lite::Scene* scene = Lite::Scene::GetActive();
+	const char* name = scene != nullptr ? scene->GetName().c_str() : "No scene";
+	ImGui::TextDisabled("%s  %.0f x %.0f", name, size.x, size.y);
 	ImGui::End();
 }
 
 void EditorLayer::DrawInspector()
 {
 	ImGui::Begin("Inspector");
-	const char* selectionName = "Sandbox";
-	switch (m_Selection)
+	Lite::Scene* scene = Lite::Scene::GetActive();
+	const Lite::SceneObject* object = scene != nullptr ? scene->Find(m_Selection) : nullptr;
+	if (object == nullptr)
 	{
-		case Selection::Checkerboard: selectionName = "Checkerboard"; break;
-		case Selection::Triangle: selectionName = "Triangle"; break;
-		case Selection::Quad: selectionName = "Quad"; break;
+		ImGui::TextDisabled("No selection");
+		ImGui::End();
+		return;
 	}
-	ImGui::TextUnformatted(selectionName);
+
+	const char* kind = "Quad";
+	switch (object->Kind)
+	{
+		case Lite::SceneObjectKind::Sprite: kind = "Sprite"; break;
+		case Lite::SceneObjectKind::Triangle: kind = "Triangle"; break;
+		case Lite::SceneObjectKind::Quad: kind = "Quad"; break;
+	}
+
+	const Lite::Vec3& position = object->Transform.Position;
+	const Lite::Vec3& scale = object->Transform.Scale;
+	ImGui::TextUnformatted(object->Name.c_str());
 	ImGui::Separator();
-	switch (m_Selection)
-	{
-		case Selection::Checkerboard:
-			ImGui::TextUnformatted("Scale  8, 8");
-			ImGui::TextUnformatted("Tiling 8, 8");
-			break;
-		case Selection::Triangle:
-			ImGui::TextUnformatted("Transform identity");
-			break;
-		case Selection::Quad:
-			ImGui::TextUnformatted("Position  1.22, -0.48");
-			ImGui::TextUnformatted("Scale     0.62");
-			ImGui::TextUnformatted("Rotation  spinning");
-			break;
-	}
+	ImGui::Text("Kind      %s", kind);
+	ImGui::Text("Position  %.2f, %.2f, %.2f", position.x, position.y, position.z);
+	ImGui::Text("Rotation  %.2f", object->Transform.GetRotationZ());
+	ImGui::Text("Scale     %.2f, %.2f, %.2f", scale.x, scale.y, scale.z);
+	if (object->Kind == Lite::SceneObjectKind::Sprite)
+		ImGui::Text("Tiling    %.2f, %.2f", object->Tiling.x, object->Tiling.y);
 	ImGui::End();
 }
 
 void EditorLayer::DrawConsole()
 {
 	ImGui::Begin("Console");
-	ImGui::TextUnformatted("Sandbox test scene running");
-	ImGui::TextDisabled("Press I for instrumentation");
+	const std::vector<std::string>& lines = Lite::Console::GetLines();
+	const bool follow = ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f;
+	if (lines.empty())
+		ImGui::TextDisabled("No messages");
+
+	for (const std::string& line : lines)
+		ImGui::TextUnformatted(line.c_str());
+
+	if (follow)
+		ImGui::SetScrollHereY(1.0f);
 	ImGui::End();
 }
 

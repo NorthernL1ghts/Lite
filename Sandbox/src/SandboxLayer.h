@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Lite/Assets/Texture.h"
 #include "Lite/Core/Layer.h"
 #include "Lite/Renderer/OrthographicCamera.h"
+#include "Lite/Scene/Scene.h"
 
 class SandboxLayer final : public Lite::Layer
 {
@@ -16,8 +16,10 @@ public:
 	void OnEvent(Lite::Event& event) override;
 
 private:
+	void DrawObject(const Lite::SceneObject& object);
+
 	Lite::OrthographicCamera m_Camera;
 	float m_ViewSize = 2.0f;
 	float m_QuadRotation = 0.0f;
-	Lite::Ref<Lite::Texture> m_Checkerboard;
+	Lite::Scope<Lite::Scene> m_Scene;
 };
