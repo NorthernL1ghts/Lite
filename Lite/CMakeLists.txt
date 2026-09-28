@@ -27,6 +27,8 @@ target_include_directories(Lite
         ${CMAKE_CURRENT_SOURCE_DIR}/src/vendor/imgui/backends
 )
 
+find_package(Vulkan REQUIRED)
+
 set(LITE_IMGUI_SOURCES
     src/vendor/imgui/imgui.cpp
     src/vendor/imgui/imgui_draw.cpp
@@ -34,7 +36,7 @@ set(LITE_IMGUI_SOURCES
     src/vendor/imgui/imgui_widgets.cpp
     src/vendor/imgui/imgui_demo.cpp
     src/vendor/imgui/backends/imgui_impl_glfw.cpp
-    src/vendor/imgui/backends/imgui_impl_opengl3.cpp
+    src/vendor/imgui/backends/imgui_impl_vulkan.cpp
 )
 
 target_sources(Lite PRIVATE ${LITE_IMGUI_SOURCES})
@@ -54,7 +56,7 @@ target_link_libraries(Lite
         glm::glm
     PRIVATE
         glfw
-        opengl32
+        Vulkan::Vulkan
 )
 
 target_compile_definitions(Lite

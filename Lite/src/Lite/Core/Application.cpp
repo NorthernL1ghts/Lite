@@ -5,8 +5,7 @@
 #include "Events/WindowEvent.h"
 #include "Lite/ImGui/ImGuiLayer.h"
 #include "Lite/Input/Input.h"
-
-#include <GLFW/glfw3.h>
+#include "Lite/Renderer/Renderer2D.h"
 
 namespace Lite {
 
@@ -15,6 +14,7 @@ namespace Lite {
 	{
 		m_Window->SetEventCallback([this](Event& event) { OnEvent(event); });
 		Input::SetWindow(m_Window->GetNativeHandle());
+		Renderer2D::Init(m_Window->GetNativeHandle());
 
 		auto imgui = std::make_unique<ImGuiLayer>(static_cast<GLFWwindow*>(m_Window->GetNativeHandle()));
 		m_ImGuiLayer = imgui.get();
@@ -25,6 +25,8 @@ namespace Lite {
 
 	Application::~Application()
 	{
+		m_LayerStack.Clear();
+		Renderer2D::Shutdown();
 		LITE_INFO("Application destroyed");
 	}
 
@@ -33,17 +35,20 @@ namespace Lite {
 		while (m_Running && m_Window->IsOpen())
 		{
 			m_Window->PollEvents();
-			m_Window->Clear();
+			Renderer2D::BeginFrame();
 
-			for (auto& layer : m_LayerStack)
-				layer->OnUpdate();
+			if (Renderer2D::IsFrameActive())
+			{
+				for (auto& layer : m_LayerStack)
+					layer->OnUpdate();
 
-			m_ImGuiLayer->Begin();
-			for (auto& layer : m_LayerStack)
-				layer->OnImGuiRender();
-			m_ImGuiLayer->End();
+				m_ImGuiLayer->Begin();
+				for (auto& layer : m_LayerStack)
+					layer->OnImGuiRender();
+				m_ImGuiLayer->End();
 
-			m_Window->SwapBuffers();
+				Renderer2D::EndFrame();
+			}
 		}
 	}
 
@@ -62,6 +67,12 @@ namespace Lite {
 		{
 			m_Running = false;
 			return true;
+		});
+
+		dispatcher.Dispatch<WindowResizeEvent>([](WindowResizeEvent& event)
+		{
+			Renderer2D::OnResize(event.GetWidth(), event.GetHeight());
+			return false;
 		});
 
 		if (event.GetType() != EventType::MouseMoved)

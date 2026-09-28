@@ -43,6 +43,18 @@ namespace Lite {
 		--m_LayerInsertIndex;
 	}
 
+	void LayerStack::Clear()
+	{
+		for (auto& layer : m_Layers)
+		{
+			LITE_TRACE("Detached layer {}", layer->GetName());
+			layer->OnDetach();
+		}
+
+		m_Layers.clear();
+		m_LayerInsertIndex = 0;
+	}
+
 	void LayerStack::PopOverlay(Layer* layer)
 	{
 		auto it = std::find_if(m_Layers.begin() + m_LayerInsertIndex, m_Layers.end(), [layer](const auto& item)

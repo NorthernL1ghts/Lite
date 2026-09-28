@@ -6,7 +6,6 @@
 #include "Lite/Core/Events/WindowEvent.h"
 
 #include <GLFW/glfw3.h>
-#include <GL/gl.h>
 
 namespace {
 
@@ -32,9 +31,7 @@ namespace Lite {
 
 		m_GlfwInitialized = true;
 
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 		m_Window = glfwCreateWindow(m_Data.Props.Width, m_Data.Props.Height, m_Data.Props.Title.c_str(), nullptr, nullptr);
 		if (!m_Window)
@@ -43,7 +40,6 @@ namespace Lite {
 			return;
 		}
 
-		glfwMakeContextCurrent(m_Window);
 		glfwSetWindowUserPointer(m_Window, &m_Data);
 		SetCallbacks();
 		LITE_INFO("Created window {} ({}x{})", m_Data.Props.Title, m_Data.Props.Width, m_Data.Props.Height);
@@ -65,13 +61,10 @@ namespace Lite {
 
 	void GLFWWindow::Clear()
 	{
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
 	}
 
 	void GLFWWindow::SwapBuffers()
 	{
-		glfwSwapBuffers(m_Window);
 	}
 
 	bool GLFWWindow::IsOpen() const

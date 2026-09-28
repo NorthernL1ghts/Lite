@@ -22,6 +22,7 @@ namespace Lite {
 		void PushOverlay(std::unique_ptr<Layer> layer);
 		void PopLayer(Layer* layer);
 		void PopOverlay(Layer* layer);
+		void Clear();
 
 		auto begin() { return m_Layers.begin(); }
 		auto end() { return m_Layers.end(); }

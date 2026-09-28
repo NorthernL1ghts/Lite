@@ -1,10 +1,13 @@
 #include "ImGuiLayer.h"
 
 #include "Lite/Core/Events/Event.h"
+#include "Lite/Core/Logger.h"
+#include "Lite/Platform/Vulkan/VulkanContext.h"
+#include "Lite/Renderer/Renderer2D.h"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
+#include <imgui_impl_vulkan.h>
 
 namespace Lite {
 
@@ -16,8 +19,21 @@ namespace Lite {
 
 	ImGuiLayer::~ImGuiLayer() = default;
 
+	void CheckImGuiVulkan(VkResult result)
+	{
+		if (result != VK_SUCCESS)
+			LITE_ERROR("ImGui Vulkan call failed ({})", static_cast<int>(result));
+	}
+
 	void ImGuiLayer::OnAttach()
 	{
+		auto& vulkan = Renderer2D::GetVulkanContext();
+		if (!vulkan.GetDevice())
+		{
+			LITE_ERROR("ImGui was not started because Vulkan is not ready");
+			return;
+		}
+
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 
@@ -27,15 +43,45 @@ namespace Lite {
 
 		ImGui::StyleColorsDark();
 
-		ImGui_ImplGlfw_InitForOpenGL(m_Window, true);
-		ImGui_ImplOpenGL3_Init("#version 330");
+		ImGui_ImplGlfw_InitForVulkan(m_Window, true);
+
+		ImGui_ImplVulkan_InitInfo info {};
+		info.ApiVersion = VK_API_VERSION_1_3;
+		info.Instance = vulkan.GetInstance();
+		info.PhysicalDevice = vulkan.GetPhysicalDevice();
+		info.Device = vulkan.GetDevice();
+		info.QueueFamily = vulkan.GetGraphicsQueueFamily();
+		info.Queue = vulkan.GetGraphicsQueue();
+		info.DescriptorPoolSize = 128;
+		info.MinImageCount = vulkan.GetMinImageCount();
+		info.ImageCount = vulkan.GetImageCount();
+		info.PipelineInfoMain.RenderPass = vulkan.GetRenderPass();
+		info.PipelineInfoMain.Subpass = 0;
+		info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+		info.MinAllocationSize = 1024 * 1024;
+		info.CheckVkResultFn = CheckImGuiVulkan;
+
+		if (!ImGui_ImplVulkan_Init(&info))
+		{
+			LITE_ERROR("Failed to start the ImGui Vulkan backend");
+			ImGui_ImplGlfw_Shutdown();
+			ImGui::DestroyContext();
+			return;
+		}
+
+		m_Ready = true;
 	}
 
 	void ImGuiLayer::OnDetach()
 	{
-		ImGui_ImplOpenGL3_Shutdown();
+		if (!m_Ready)
+			return;
+
+		vkDeviceWaitIdle(Renderer2D::GetVulkanContext().GetDevice());
+		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
+		m_Ready = false;
 	}
 
 	void ImGuiLayer::OnEvent(Event& event)
@@ -51,7 +97,10 @@ namespace Lite {
 
 	void ImGuiLayer::Begin()
 	{
-		ImGui_ImplOpenGL3_NewFrame();
+		if (!m_Ready)
+			return;
+
+		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
@@ -76,8 +125,11 @@ namespace Lite {
 
 	void ImGuiLayer::End()
 	{
+		if (!m_Ready)
+			return;
+
 		ImGui::Render();
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), Renderer2D::GetVulkanContext().GetCommandBuffer());
 	}
 
 }
