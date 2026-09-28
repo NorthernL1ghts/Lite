@@ -7,7 +7,7 @@
 namespace Lite {
 
 	Application::Application(const WindowProps& props)
-		: m_Window(std::make_unique<Window>(props))
+		: m_Window(Window::Create(props))
 	{
 		m_Window->SetEventCallback([this](Event& event) { OnEvent(event); });
 		LITE_INFO("Application created");

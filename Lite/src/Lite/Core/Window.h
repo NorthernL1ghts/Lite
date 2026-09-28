@@ -3,10 +3,9 @@
 #include "Events/Event.h"
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
-
-struct GLFWwindow;
 
 namespace Lite {
 
@@ -29,27 +28,15 @@ namespace Lite {
 	public:
 		using EventCallback = std::function<void(Event&)>;
 
-		explicit Window(const WindowProps& props);
-		~Window();
+		virtual ~Window() = default;
 
-		void Update();
-		bool IsOpen() const;
+		virtual void Update() = 0;
+		virtual bool IsOpen() const = 0;
 
-		void SetEventCallback(EventCallback callback) { m_Data.Callback = std::move(callback); }
-		const WindowProps& GetProps() const { return m_Data.Props; }
+		virtual void SetEventCallback(EventCallback callback) = 0;
+		virtual const WindowProps& GetProps() const = 0;
 
-	private:
-		struct WindowData
-		{
-			WindowProps Props;
-			EventCallback Callback;
-		};
-
-		void SetCallbacks();
-
-		WindowData m_Data;
-		GLFWwindow* m_Window = nullptr;
-		bool m_GlfwInitialized = false;
+		static std::unique_ptr<Window> Create(const WindowProps& props);
 	};
 
 }
