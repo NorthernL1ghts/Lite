@@ -34,13 +34,18 @@ void SandboxLayer::OnUpdate(Lite::Timestep timestep)
 	if (!m_Scene)
 		return;
 
-	float rotation = m_Camera.GetRotation();
+	Lite::Entity camera = m_Scene->GetPrimaryCamera();
+	Lite::TransformComponent* transform = camera.GetTransform();
+	float rotation = transform != nullptr ? transform->Local.GetRotationZ() : m_Camera.GetRotation();
 	float step = 1.6f * timestep.GetSeconds();
 	if (Lite::Input::IsKeyPressed(Lite::Key::Q))
 		rotation += step;
 	if (Lite::Input::IsKeyPressed(Lite::Key::E))
 		rotation -= step;
-	m_Camera.SetRotation(rotation);
+	if (transform != nullptr)
+		transform->Local.SetRotationZ(rotation);
+	else
+		m_Camera.SetRotation(rotation);
 
 	m_Scene->Update(timestep.GetSeconds());
 }
@@ -53,8 +58,17 @@ void SandboxLayer::OnRender()
 
 	VkExtent2D extent = Lite::Renderer::GetExtent();
 	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
-	m_Camera.SetProjection(m_ViewSize, aspect);
-	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
+	Lite::Entity camera = m_Scene->GetPrimaryCamera();
+	Lite::CameraComponent* component = camera.GetCamera();
+	Lite::TransformComponent* transform = camera.GetTransform();
+	Lite::OrthographicCamera view;
+	if (transform != nullptr)
+	{
+		view.SetPosition(transform->Local.Position);
+		view.SetRotation(transform->Local.GetRotationZ());
+	}
+	view.SetProjection(component != nullptr ? component->Size : m_ViewSize, aspect);
+	Lite::Renderer2D::SetViewProjection(view.GetViewProjection());
 	m_Scene->Render();
 }
 
@@ -80,11 +94,13 @@ void SandboxLayer::OnEvent(Lite::Event& event)
 		if (steps == 0.0f)
 			return false;
 
-		m_ViewSize *= std::pow(0.85f, steps);
-		if (m_ViewSize < 0.25f)
-			m_ViewSize = 0.25f;
-		if (m_ViewSize > 12.0f)
-			m_ViewSize = 12.0f;
+		Lite::CameraComponent* component = m_Scene ? m_Scene->GetPrimaryCamera().GetCamera() : nullptr;
+		float& size = component != nullptr ? component->Size : m_ViewSize;
+		size *= std::pow(0.85f, steps);
+		if (size < 0.25f)
+			size = 0.25f;
+		if (size > 12.0f)
+			size = 12.0f;
 		return false;
 	});
 

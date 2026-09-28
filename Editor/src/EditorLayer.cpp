@@ -175,9 +175,9 @@ namespace {
 		return true;
 	}
 
-	bool Hits(const Lite::SceneObject& object, Lite::Vec2 point)
+	bool Hits(Lite::MeshType type, const Lite::Transform& transform, Lite::Vec2 point)
 	{
-		if (object.Kind == Lite::SceneObjectKind::Triangle)
+		if (type == Lite::MeshType::Triangle)
 		{
 			const Lite::Vec2 local[3] = {
 				{ 0.00f, -0.72f },
@@ -187,7 +187,7 @@ namespace {
 			Lite::Vec2 world[3];
 			for (int index = 0; index < 3; ++index)
 			{
-				Lite::Vec3 transformed = object.Transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
+				Lite::Vec3 transformed = transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
 				world[index] = { transformed.x, transformed.y };
 			}
 			return Contains(point, world, 3);
@@ -202,7 +202,7 @@ namespace {
 		Lite::Vec2 world[4];
 		for (int index = 0; index < 4; ++index)
 		{
-			Lite::Vec3 transformed = object.Transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
+			Lite::Vec3 transformed = transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
 			world[index] = { transformed.x, transformed.y };
 		}
 		return Contains(point, world, 4);
@@ -298,11 +298,14 @@ void EditorLayer::OnUpdate(Lite::Timestep timestep)
 	LITE_PROFILE_SCOPE("Editor Update");
 	float rotation = m_Camera.GetRotation();
 	float step = 1.6f * timestep.GetSeconds();
-	if (Lite::Input::IsKeyPressed(Lite::Key::Q))
-		rotation += step;
-	if (Lite::Input::IsKeyPressed(Lite::Key::E))
-		rotation -= step;
-	m_Camera.SetRotation(rotation);
+	if (!m_Scene || !m_Scene->IsPlaying())
+	{
+		if (Lite::Input::IsKeyPressed(Lite::Key::Q))
+			rotation += step;
+		if (Lite::Input::IsKeyPressed(Lite::Key::E))
+			rotation -= step;
+		m_Camera.SetRotation(rotation);
+	}
 
 	if (m_Scene)
 		m_Scene->Update(timestep.GetSeconds());
@@ -316,8 +319,7 @@ void EditorLayer::OnRender()
 
 	VkExtent2D extent = Lite::Renderer::GetExtent();
 	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
-	m_Camera.SetProjection(m_ViewSize, aspect);
-	Lite::Renderer2D::SetViewProjection(m_Camera.GetViewProjection());
+	ApplyPlayCamera(aspect);
 	m_Scene->Render();
 }
 
@@ -326,7 +328,8 @@ void EditorLayer::NewScene()
 	m_Scene = Lite::CreateScope<Lite::Scene>("Untitled");
 	m_Scene->Create();
 	Lite::Scene::SetActive(m_Scene.get());
-	m_Selection.clear();
+	m_Selected = 0;
+	m_SyncedId = 0;
 	SyncName();
 }
 
@@ -341,7 +344,9 @@ void EditorLayer::OpenScene(const std::string& path)
 
 	m_Scene = std::move(scene);
 	Lite::Scene::SetActive(m_Scene.get());
-	m_Selection = m_Scene->Find("Triangle") != nullptr ? "Triangle" : std::string{};
+	Lite::Entity triangle = m_Scene->Find("Triangle");
+	m_Selected = triangle ? triangle.GetId() : 0;
+	m_SyncedId = 0;
 	SyncName();
 }
 
@@ -352,15 +357,36 @@ void EditorLayer::SyncName()
 	std::snprintf(m_Name, sizeof(m_Name), "%s", name);
 }
 
-void EditorLayer::SyncObjectFields(const Lite::SceneObject& object)
+void EditorLayer::SyncEntityFields(Lite::Entity entity)
 {
-	if (m_ObjectEdit == object.Name)
+	if (m_SyncedId == entity.GetId())
 		return;
 
-	m_ObjectEdit = object.Name;
-	std::snprintf(m_ObjectName, sizeof(m_ObjectName), "%s", object.Name.c_str());
-	std::snprintf(m_ShaderText, sizeof(m_ShaderText), "%s", object.Shader.c_str());
-	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", object.TexturePath.c_str());
+	m_SyncedId = entity.GetId();
+	std::snprintf(m_ObjectName, sizeof(m_ObjectName), "%s", entity.GetName().c_str());
+	Lite::MaterialComponent* material = entity.GetMaterial();
+	std::snprintf(m_ShaderText, sizeof(m_ShaderText), "%s", material != nullptr ? material->Shader.c_str() : "");
+	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material != nullptr ? material->TexturePath.c_str() : "");
+}
+
+void EditorLayer::ApplyPlayCamera(float aspect)
+{
+	Lite::OrthographicCamera view = m_Camera;
+	float size = m_ViewSize;
+	if (m_Scene != nullptr && m_Scene->IsPlaying())
+	{
+		Lite::Entity camera = m_Scene->GetPrimaryCamera();
+		if (Lite::TransformComponent* transform = camera.GetTransform())
+		{
+			view.SetPosition(transform->Local.Position);
+			view.SetRotation(transform->Local.GetRotationZ());
+		}
+		if (Lite::CameraComponent* component = camera.GetCamera())
+			size = component->Size;
+	}
+
+	view.SetProjection(size, aspect);
+	Lite::Renderer2D::SetViewProjection(view.GetViewProjection());
 }
 
 void EditorLayer::PickObject(float mouseX, float mouseY)
@@ -378,16 +404,20 @@ void EditorLayer::PickObject(float mouseX, float mouseY)
 	if (world.w != 0.0f)
 		world /= world.w;
 
-	const std::vector<Lite::SceneObject>& objects = m_Scene->GetObjects();
-	for (int index = static_cast<int>(objects.size()) - 1; index >= 0; --index)
+	std::vector<Lite::Entity> entities = m_Scene->GetEntities();
+	for (int index = static_cast<int>(entities.size()) - 1; index >= 0; --index)
 	{
-		if (!Hits(objects[static_cast<size_t>(index)], { world.x, world.y }))
+		Lite::Entity entity = entities[static_cast<size_t>(index)];
+		Lite::MeshComponent* mesh = entity.GetMesh();
+		Lite::TransformComponent* transform = entity.GetTransform();
+		if (mesh == nullptr || transform == nullptr)
+			continue;
+		if (!Hits(mesh->Type, transform->Local, { world.x, world.y }))
 			continue;
 
-		const std::string& name = objects[static_cast<size_t>(index)].Name;
-		if (m_Selection != name)
-			Lite::Console::Log(std::format("Selected: {}", name));
-		m_Selection = name;
+		if (m_Selected != entity.GetId())
+			Lite::Console::Log(std::format("Selected: {}", entity.GetName()));
+		m_Selected = entity.GetId();
 		return;
 	}
 }
@@ -806,10 +836,24 @@ void EditorLayer::DrawScene()
 		case Lite::ScenePlayback::Stopped: playback = "stopped"; break;
 	}
 	ImGui::TextDisabled("%s  %s", m_Scene->GetName().c_str(), playback);
-	for (const Lite::SceneObject& object : m_Scene->GetObjects())
+	for (Lite::Entity entity : m_Scene->GetEntities())
 	{
-		if (ImGui::Selectable(object.Name.c_str(), m_Selection == object.Name))
-			m_Selection = object.Name;
+		std::string label = std::format("{}##entity{}", entity.GetName(), entity.GetId());
+		if (ImGui::Selectable(label.c_str(), m_Selected == entity.GetId()))
+			m_Selected = entity.GetId();
+
+		ImGui::Indent();
+		if (entity.HasTransform())
+			ImGui::TextDisabled("Transform");
+		if (entity.HasCamera())
+			ImGui::TextDisabled("Camera");
+		if (entity.HasMesh())
+			ImGui::TextDisabled("Mesh");
+		if (entity.HasMaterial())
+			ImGui::TextDisabled("Material");
+		if (entity.HasSpin())
+			ImGui::TextDisabled("Spin");
+		ImGui::Unindent();
 	}
 	ImGui::End();
 }
@@ -846,79 +890,105 @@ void EditorLayer::DrawInspector()
 {
 	ImGui::Begin("Inspector");
 	Lite::Scene* scene = Lite::Scene::GetActive();
-	Lite::SceneObject* object = scene != nullptr ? scene->Find(m_Selection) : nullptr;
-	if (object == nullptr)
+	Lite::Entity entity = scene != nullptr ? scene->GetEntity(m_Selected) : Lite::Entity{};
+	if (!entity)
 	{
 		ImGui::TextDisabled("No selection");
 		ImGui::End();
 		return;
 	}
 
-	const char* kind = "Quad";
-	switch (object->Kind)
-	{
-		case Lite::SceneObjectKind::Sprite: kind = "Sprite"; break;
-		case Lite::SceneObjectKind::Triangle: kind = "Triangle"; break;
-		case Lite::SceneObjectKind::Quad: kind = "Quad"; break;
-	}
-
-	SyncObjectFields(*object);
+	SyncEntityFields(entity);
 	bool editing = scene->GetPlayback() != Lite::ScenePlayback::Playing;
 	if (!editing)
 		ImGui::BeginDisabled();
 
 	ImGui::SetNextItemWidth(-1.0f);
 	if (ImGui::InputText("##ObjectName", m_ObjectName, sizeof(m_ObjectName)))
+		entity.SetName(m_ObjectName);
+
+	if (Lite::TransformComponent* transform = entity.GetTransform())
 	{
-		object->Name = m_ObjectName;
-		m_Selection = object->Name;
-		m_ObjectEdit = object->Name;
+		ImGui::SeparatorText("Transform");
+		ImGui::DragFloat3("Position", &transform->Local.Position.x, 0.01f);
+		float rotation = transform->Local.GetRotationZ();
+		if (ImGui::DragFloat("Rotation", &rotation, 0.01f))
+			transform->Local.SetRotationZ(rotation);
+		ImGui::DragFloat3("Scale", &transform->Local.Scale.x, 0.01f);
 	}
 
-	ImGui::TextDisabled("%s", kind);
-	ImGui::Separator();
-
-	ImGui::AlignTextToFramePadding();
-	ImGui::TextUnformatted("Shader");
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth(-1.0f);
-	if (ImGui::InputText("##Shader", m_ShaderText, sizeof(m_ShaderText)))
-		object->Shader = m_ShaderText;
-
-	ImGui::DragFloat3("Position", &object->Transform.Position.x, 0.01f);
-	float rotation = object->Transform.GetRotationZ();
-	if (ImGui::DragFloat("Rotation", &rotation, 0.01f))
-		object->Transform.SetRotationZ(rotation);
-	ImGui::DragFloat3("Scale", &object->Transform.Scale.x, 0.01f);
-
-	if (object->Kind == Lite::SceneObjectKind::Triangle || object->UseCornerColors)
+	if (Lite::CameraComponent* camera = entity.GetCamera())
 	{
-		int colors = object->Kind == Lite::SceneObjectKind::Triangle ? 3 : 4;
-		for (int index = 0; index < colors; ++index)
-			ColorField(std::format("Color {}", index + 1).c_str(), object->CornerColors[index]);
-	}
-	else
-	{
-		ColorField("Color", object->Color);
-	}
-
-	if (object->Kind == Lite::SceneObjectKind::Sprite)
-	{
-		ImGui::DragFloat2("Tiling", &object->Tiling.x, 0.01f);
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextUnformatted("Texture");
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(-1.0f);
-		if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
+		ImGui::SeparatorText("Camera");
+		ImGui::DragFloat("Size", &camera->Size, 0.01f, 0.25f, 12.0f);
+		ImGui::DragFloat("Near", &camera->Near, 0.01f);
+		ImGui::DragFloat("Far", &camera->Far, 0.01f);
+		bool primary = camera->Primary;
+		if (ImGui::Checkbox("Primary", &primary))
 		{
-			object->TexturePath = m_TextureText;
-			object->Texture = object->TexturePath.empty()
-				? Lite::Ref<Lite::Texture>{}
-				: Lite::AssetRegistry::Get().Load<Lite::Texture>(object->TexturePath);
+			camera->Primary = primary;
+			if (primary)
+				scene->SetPrimaryCamera(entity.GetId());
 		}
 	}
 
-	ImGui::DragFloat("Spin", &object->Spin, 0.01f);
+	if (Lite::MeshComponent* mesh = entity.GetMesh())
+	{
+		ImGui::SeparatorText("Mesh");
+		const char* types[] = { "Quad", "Triangle", "Sprite" };
+		int current = static_cast<int>(mesh->Type);
+		if (ImGui::Combo("Type", &current, types, 3))
+			mesh->Type = static_cast<Lite::MeshType>(current);
+	}
+
+	if (Lite::MaterialComponent* material = entity.GetMaterial())
+	{
+		ImGui::SeparatorText("Material");
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted("Shader");
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(-1.0f);
+		if (ImGui::InputText("##Shader", m_ShaderText, sizeof(m_ShaderText)))
+			material->Shader = m_ShaderText;
+
+		Lite::MeshComponent* mesh = entity.GetMesh();
+		bool vertexColors = material->UseVertexColors || (mesh != nullptr && mesh->Type == Lite::MeshType::Triangle);
+		if (ImGui::Checkbox("Vertex colors", &material->UseVertexColors))
+			vertexColors = material->UseVertexColors || (mesh != nullptr && mesh->Type == Lite::MeshType::Triangle);
+
+		if (vertexColors)
+		{
+			int colors = mesh != nullptr && mesh->Type == Lite::MeshType::Triangle ? 3 : 4;
+			for (int index = 0; index < colors; ++index)
+				ColorField(std::format("Color {}", index + 1).c_str(), material->Colors[index]);
+		}
+		else
+		{
+			ColorField("Color", material->Color);
+		}
+
+		if (mesh != nullptr && mesh->Type == Lite::MeshType::Sprite)
+		{
+			ImGui::DragFloat2("Tiling", &material->Tiling.x, 0.01f);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted("Texture");
+			ImGui::SameLine();
+			ImGui::SetNextItemWidth(-1.0f);
+			if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
+			{
+				material->TexturePath = m_TextureText;
+				material->Texture = material->TexturePath.empty()
+					? Lite::Ref<Lite::Texture>{}
+					: Lite::AssetRegistry::Get().Load<Lite::Texture>(material->TexturePath);
+			}
+		}
+	}
+
+	if (Lite::SpinComponent* spin = entity.GetSpin())
+	{
+		ImGui::SeparatorText("Spin");
+		ImGui::DragFloat("Rate", &spin->Rate, 0.01f);
+	}
 
 	if (!editing)
 	{

@@ -4,6 +4,7 @@
 #include "Lite/Renderer/OrthographicCamera.h"
 #include "Lite/Scene/Scene.h"
 
+#include <cstdint>
 #include <string>
 
 class EditorLayer final : public Lite::Layer
@@ -36,7 +37,8 @@ private:
 	void OpenScene(const std::string& path);
 	void SyncName();
 	void PickObject(float mouseX, float mouseY);
-	void SyncObjectFields(const Lite::SceneObject& object);
+	void SyncEntityFields(Lite::Entity entity);
+	void ApplyPlayCamera(float aspect);
 
 	Lite::OrthographicCamera m_Camera;
 	float m_ViewSize = 2.0f;
@@ -46,8 +48,8 @@ private:
 	char m_ObjectName[128] {};
 	char m_ShaderText[128] {};
 	char m_TextureText[260] {};
-	std::string m_ObjectEdit;
-	std::string m_Selection = "Triangle";
+	uint32_t m_Selected = 0;
+	uint32_t m_SyncedId = 0;
 	std::string m_BrowserDirectory;
 	char m_DirectoryText[512] {};
 	char m_FileName[256] {};
