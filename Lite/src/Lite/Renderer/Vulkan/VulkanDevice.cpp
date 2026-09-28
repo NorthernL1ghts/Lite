@@ -21,11 +21,28 @@ namespace Lite {
 
 		const char* swapchainExtension = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 
+		VkPhysicalDeviceFeatures supported {};
+		vkGetPhysicalDeviceFeatures(physicalDevice, &supported);
+
+		VkPhysicalDeviceDescriptorIndexingFeatures indexingSupport {};
+		indexingSupport.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+		VkPhysicalDeviceFeatures2 supportedFeatures {};
+		supportedFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		supportedFeatures.pNext = &indexingSupport;
+		vkGetPhysicalDeviceFeatures2(physicalDevice, &supportedFeatures);
+
+		VkPhysicalDeviceDescriptorIndexingFeatures indexing {};
+		indexing.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+		indexing.shaderSampledImageArrayNonUniformIndexing = indexingSupport.shaderSampledImageArrayNonUniformIndexing;
+		indexing.runtimeDescriptorArray = indexingSupport.runtimeDescriptorArray;
+
 		VkPhysicalDeviceDynamicRenderingFeatures dynamicRendering {};
 		dynamicRendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+		dynamicRendering.pNext = &indexing;
 		dynamicRendering.dynamicRendering = VK_TRUE;
 
 		VkPhysicalDeviceFeatures features {};
+		features.shaderSampledImageArrayDynamicIndexing = supported.shaderSampledImageArrayDynamicIndexing;
 		VkDeviceCreateInfo deviceInfo {};
 		deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		deviceInfo.pNext = &dynamicRendering;

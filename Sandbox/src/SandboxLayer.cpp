@@ -52,17 +52,17 @@ void SandboxLayer::OnRender()
 	background.Scale = { 8.0f, 8.0f, 1.0f };
 	Lite::Renderer2D::DrawQuad(background, m_Checkerboard, { 8.0f, 8.0f });
 
-	Lite::Transform redQuad;
-	redQuad.Position = { 0.72f, 0.12f, 0.0f };
-	redQuad.Scale = { 0.9f, 0.9f, 1.0f };
-	Lite::Renderer2D::DrawQuad(redQuad, { 0.86f, 0.16f, 0.18f, 1.0f });
-
 	Lite::Transform triangle;
 	Lite::Renderer2D::DrawTriangle(
 		triangle,
 		{ 0.93f, 0.22f, 0.28f, 1.0f },
 		{ 0.08f, 0.78f, 0.42f, 1.0f },
 		{ 0.16f, 0.36f, 0.96f, 1.0f });
+
+	Lite::Transform redQuad;
+	redQuad.Position = { 0.78f, 0.58f, 0.0f };
+	redQuad.Scale = { 0.34f, 0.34f, 1.0f };
+	Lite::Renderer2D::DrawQuad(redQuad, { 0.86f, 0.16f, 0.18f, 1.0f });
 }
 
 void SandboxLayer::OnDetach()

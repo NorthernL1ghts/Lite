@@ -10,6 +10,7 @@ namespace Lite {
 		{
 			switch (format)
 			{
+			case Lite::VertexFormat::Float: return VK_FORMAT_R32_SFLOAT;
 			case Lite::VertexFormat::Float3: return VK_FORMAT_R32G32B32_SFLOAT;
 			case Lite::VertexFormat::Float4: return VK_FORMAT_R32G32B32A32_SFLOAT;
 			default: return VK_FORMAT_R32G32_SFLOAT;

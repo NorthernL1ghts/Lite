@@ -6,7 +6,8 @@ namespace Lite {
 
 	enum class VertexFormat
 	{
-		Float2 = 0,
+		Float = 0,
+		Float2,
 		Float3,
 		Float4
 	};

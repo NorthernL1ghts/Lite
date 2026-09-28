@@ -12,7 +12,7 @@ namespace Lite {
 	class LITE_API Material
 	{
 	public:
-		[[nodiscard]] static Ref<Material> Create(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture = {});
+		[[nodiscard]] static Ref<Material> Create(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture = {}, VkDescriptorSetLayout textureLayout = VK_NULL_HANDLE);
 
 		~Material();
 
@@ -31,17 +31,19 @@ namespace Lite {
 		const Ref<Texture>& GetTexture() const { return m_Texture; }
 
 		void Bind();
+		VkPipelineLayout GetLayout() const { return m_Shader.GetLayout(); }
 
 	private:
 		Material() = default;
 
-		bool Init(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture);
+		bool Init(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture, VkDescriptorSetLayout textureLayout);
 		void Destroy();
 
 		ShaderProgram m_Shader;
 		UniformBuffer m_Uniforms;
 		Ref<Texture> m_Texture;
 		bool m_UsesTexture = false;
+		bool m_BindOwnedTexture = false;
 		Vec4 m_Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 		Vec2 m_Tiling = { 1.0f, 1.0f };
 	};

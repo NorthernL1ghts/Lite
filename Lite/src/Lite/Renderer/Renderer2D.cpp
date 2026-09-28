@@ -16,6 +16,7 @@ namespace Lite {
 
 	namespace {
 
+		constexpr uint32_t MaxTextures = 16;
 		constexpr uint32_t MaxQuads = 4096;
 		constexpr uint32_t MaxVertices = MaxQuads * 4;
 		constexpr uint32_t MaxIndices = MaxQuads * 6;
@@ -30,42 +31,155 @@ namespace Lite {
 			float a = 1.0f;
 			float u = 0.0f;
 			float v = 0.0f;
+			float textureIndex = 0.0f;
 		};
 
 		ShaderLibrary s_ShaderLibrary;
 		std::vector<BatchVertex> s_Vertices;
 		std::vector<uint16_t> s_Indices;
 		Ref<Texture> s_White;
-		Ref<Texture> s_Texture;
+		std::array<Ref<Texture>, MaxTextures> s_Slots;
+		uint32_t s_SlotCount = 0;
 		Ref<Material> s_Material;
 		std::array<VertexArray, VulkanSync::FramesInFlight> s_Meshes;
+		std::array<VkDescriptorSet, VulkanSync::FramesInFlight> s_TextureSets {};
+		VkDescriptorSetLayout s_TextureLayout = VK_NULL_HANDLE;
+		VkDescriptorPool s_TexturePool = VK_NULL_HANDLE;
+		VkDevice s_Device = VK_NULL_HANDLE;
 		bool s_Ready = false;
 
 		VertexLayout BatchLayout()
 		{
 			VertexLayout layout;
 			layout.Stride = sizeof(BatchVertex);
-			layout.Count = 3;
+			layout.Count = 4;
 			layout.Attributes[0] = { 0, VertexFormat::Float2, 0 };
 			layout.Attributes[1] = { 1, VertexFormat::Float4, sizeof(float) * 2 };
 			layout.Attributes[2] = { 2, VertexFormat::Float2, sizeof(float) * 6 };
+			layout.Attributes[3] = { 3, VertexFormat::Float, sizeof(float) * 8 };
 			return layout;
 		}
 
-		void StartBatch(const Ref<Texture>& texture)
+		void ResetSlots()
 		{
-			Ref<Texture> next = texture ? texture : s_White;
-			if (!s_Vertices.empty() && s_Texture.get() != next.get())
-				Renderer2D::Flush();
-
-			s_Texture = next;
+			s_Slots.fill({});
+			s_Slots[0] = s_White;
+			s_SlotCount = s_White ? 1u : 0u;
 		}
 
-		void PushQuad(const Transform& transform, const Vec4& color, const Vec2& tiling)
+		bool CreateTextureArray()
 		{
-			if (s_Vertices.size() + 4 > MaxVertices || s_Indices.size() + 6 > MaxIndices)
-				Renderer2D::Flush();
+			s_Device = Renderer::GetDevice();
 
+			VkDescriptorSetLayoutBinding binding {};
+			binding.binding = 0;
+			binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			binding.descriptorCount = MaxTextures;
+			binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+			VkDescriptorSetLayoutCreateInfo layoutInfo {};
+			layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			layoutInfo.bindingCount = 1;
+			layoutInfo.pBindings = &binding;
+			if (!CheckVk(vkCreateDescriptorSetLayout(s_Device, &layoutInfo, nullptr, &s_TextureLayout), "create batch texture layout"))
+				return false;
+
+			VkDescriptorPoolSize poolSize {};
+			poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			poolSize.descriptorCount = MaxTextures * VulkanSync::FramesInFlight;
+
+			VkDescriptorPoolCreateInfo poolInfo {};
+			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			poolInfo.maxSets = VulkanSync::FramesInFlight;
+			poolInfo.poolSizeCount = 1;
+			poolInfo.pPoolSizes = &poolSize;
+			if (!CheckVk(vkCreateDescriptorPool(s_Device, &poolInfo, nullptr, &s_TexturePool), "create batch texture pool"))
+				return false;
+
+			std::array<VkDescriptorSetLayout, VulkanSync::FramesInFlight> layouts {};
+			layouts.fill(s_TextureLayout);
+
+			VkDescriptorSetAllocateInfo allocateInfo {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocateInfo.descriptorPool = s_TexturePool;
+			allocateInfo.descriptorSetCount = VulkanSync::FramesInFlight;
+			allocateInfo.pSetLayouts = layouts.data();
+			return CheckVk(vkAllocateDescriptorSets(s_Device, &allocateInfo, s_TextureSets.data()), "allocate batch texture sets");
+		}
+
+		void DestroyTextureArray()
+		{
+			if (!s_Device)
+				return;
+
+			vkDeviceWaitIdle(s_Device);
+			if (s_TexturePool)
+				vkDestroyDescriptorPool(s_Device, s_TexturePool, nullptr);
+			if (s_TextureLayout)
+				vkDestroyDescriptorSetLayout(s_Device, s_TextureLayout, nullptr);
+
+			s_TextureSets.fill(VK_NULL_HANDLE);
+			s_TexturePool = VK_NULL_HANDLE;
+			s_TextureLayout = VK_NULL_HANDLE;
+			s_Device = VK_NULL_HANDLE;
+		}
+
+		void WriteTextures(uint32_t frame)
+		{
+			std::array<VkDescriptorImageInfo, MaxTextures> images {};
+			for (uint32_t index = 0; index < MaxTextures; ++index)
+			{
+				const Ref<Texture>& slot = index < s_SlotCount && s_Slots[index] ? s_Slots[index] : s_White;
+				images[index].sampler = slot->GetSampler();
+				images[index].imageView = slot->GetView();
+				images[index].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			}
+
+			VkWriteDescriptorSet write {};
+			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write.dstSet = s_TextureSets[frame];
+			write.dstBinding = 0;
+			write.descriptorCount = MaxTextures;
+			write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			write.pImageInfo = images.data();
+			vkUpdateDescriptorSets(s_Device, 1, &write, 0, nullptr);
+		}
+
+		int FindSlot(const Texture* texture)
+		{
+			for (uint32_t index = 0; index < s_SlotCount; ++index)
+			{
+				if (s_Slots[index].get() == texture)
+					return static_cast<int>(index);
+			}
+
+			return -1;
+		}
+
+		float TextureSlot(const Ref<Texture>& texture)
+		{
+			const Texture* next = texture ? texture.get() : s_White.get();
+			int found = FindSlot(next);
+			if (found >= 0)
+				return static_cast<float>(found);
+
+			if (s_SlotCount >= MaxTextures)
+			{
+				Renderer2D::Flush();
+				found = FindSlot(next);
+				if (found >= 0)
+					return static_cast<float>(found);
+			}
+
+			if (s_SlotCount >= MaxTextures)
+				return 0.0f;
+
+			s_Slots[s_SlotCount] = texture ? texture : s_White;
+			return static_cast<float>(s_SlotCount++);
+		}
+
+		void PushQuad(const Transform& transform, const Vec4& color, const Vec2& tiling, float textureIndex)
+		{
 			const Vec2 corners[4] = {
 				{ -0.5f, -0.5f },
 				{  0.5f, -0.5f },
@@ -86,7 +200,8 @@ namespace Lite {
 				s_Vertices.push_back({
 					world.x, world.y,
 					color.x, color.y, color.z, color.w,
-					uvs[corner].x, uvs[corner].y
+					uvs[corner].x, uvs[corner].y,
+					textureIndex
 				});
 			}
 
@@ -110,13 +225,14 @@ namespace Lite {
 
 		const uint8_t whitePixel[4] = { 255, 255, 255, 255 };
 		s_White = Texture::Create(1, 1, whitePixel);
+		ResetSlots();
 
-		auto& shaders = s_ShaderLibrary;
-		Ref<Shader> vertex = shaders.Load("assets/shaders/Batch.vert.spv");
-		Ref<Shader> fragment = shaders.Load("assets/shaders/Batch.frag.spv");
-		if (!s_White || !vertex || !fragment)
+		Ref<Shader> vertex = s_ShaderLibrary.Load("assets/shaders/Batch.vert.spv");
+		Ref<Shader> fragment = s_ShaderLibrary.Load("assets/shaders/Batch.frag.spv");
+		if (!s_White || !vertex || !fragment || !CreateTextureArray())
 		{
-			LITE_ERROR("Renderer2D batch shaders or white texture failed to load");
+			LITE_ERROR("Renderer2D batch shaders or textures failed to load");
+			DestroyTextureArray();
 			s_White.reset();
 			return;
 		}
@@ -128,18 +244,22 @@ namespace Lite {
 			if (!mesh.Create(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(BatchVertex)), indices.data(), MaxIndices))
 			{
 				LITE_ERROR("Renderer2D batch mesh failed to allocate");
+				DestroyTextureArray();
 				return;
 			}
 		}
 
-		s_Material = Material::Create(*vertex, *fragment, BatchLayout(), true, s_White);
+		s_Material = Material::Create(*vertex, *fragment, BatchLayout(), true, {}, s_TextureLayout);
 		if (!s_Material)
+		{
+			DestroyTextureArray();
 			return;
+		}
 
 		s_Vertices.reserve(MaxVertices);
 		s_Indices.reserve(MaxIndices);
 		s_Ready = true;
-		LITE_INFO("Renderer2D batch ready ({} quads)", MaxQuads);
+		LITE_INFO("Renderer2D batch ready ({} quads, {} textures)", MaxQuads, MaxTextures);
 	}
 
 	ShaderLibrary& Renderer2D::GetShaderLibrary()
@@ -157,11 +277,13 @@ namespace Lite {
 		s_Ready = false;
 		s_Vertices.clear();
 		s_Indices.clear();
-		s_Texture.reset();
+		s_Slots.fill({});
+		s_SlotCount = 0;
 		s_Material.reset();
 		s_White.reset();
 		for (VertexArray& mesh : s_Meshes)
 			mesh.Destroy();
+		DestroyTextureArray();
 		s_ShaderLibrary.Clear();
 		Renderer::Shutdown();
 	}
@@ -171,7 +293,7 @@ namespace Lite {
 		Renderer::BeginFrame();
 		s_Vertices.clear();
 		s_Indices.clear();
-		s_Texture.reset();
+		ResetSlots();
 	}
 
 	void Renderer2D::DrawQuad(const Transform& transform, const Vec4& color)
@@ -179,8 +301,10 @@ namespace Lite {
 		if (!s_Ready || !Renderer::IsFrameActive())
 			return;
 
-		StartBatch({});
-		PushQuad(transform, color, { 1.0f, 1.0f });
+		if (s_Vertices.size() + 4 > MaxVertices || s_Indices.size() + 6 > MaxIndices)
+			Flush();
+
+		PushQuad(transform, color, { 1.0f, 1.0f }, TextureSlot({}));
 	}
 
 	void Renderer2D::DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& tint)
@@ -188,8 +312,10 @@ namespace Lite {
 		if (!s_Ready || !Renderer::IsFrameActive())
 			return;
 
-		StartBatch(texture);
-		PushQuad(transform, tint, tiling);
+		if (s_Vertices.size() + 4 > MaxVertices || s_Indices.size() + 6 > MaxIndices)
+			Flush();
+
+		PushQuad(transform, tint, tiling, TextureSlot(texture));
 	}
 
 	void Renderer2D::DrawTriangle(const Transform& transform, const Vec4& first, const Vec4& second, const Vec4& third)
@@ -200,8 +326,7 @@ namespace Lite {
 		if (s_Vertices.size() + 3 > MaxVertices || s_Indices.size() + 3 > MaxIndices)
 			Flush();
 
-		StartBatch({});
-
+		float textureIndex = TextureSlot({});
 		const Vec2 corners[3] = {
 			{  0.00f, -0.72f },
 			{ -0.78f,  0.58f },
@@ -215,7 +340,8 @@ namespace Lite {
 			s_Vertices.push_back({
 				world.x, world.y,
 				colors[corner].x, colors[corner].y, colors[corner].z, colors[corner].w,
-				0.0f, 0.0f
+				0.0f, 0.0f,
+				textureIndex
 			});
 			s_Indices.push_back(base + static_cast<uint16_t>(corner));
 		}
@@ -224,7 +350,7 @@ namespace Lite {
 	void Renderer2D::Flush()
 	{
 		LITE_PROFILE_SCOPE("Batch Flush");
-		if (!s_Ready || !Renderer::IsFrameActive() || s_Vertices.empty() || !s_Material || !s_Texture)
+		if (!s_Ready || !Renderer::IsFrameActive() || s_Vertices.empty() || !s_Material)
 			return;
 
 		uint32_t frame = Renderer::GetFrameIndex();
@@ -238,15 +364,17 @@ namespace Lite {
 			static_cast<uint32_t>(s_Indices.size())))
 			return;
 
+		WriteTextures(frame);
 		Renderer::SetModel(Mat4::Identity());
 		s_Material->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 		s_Material->SetTiling({ 1.0f, 1.0f });
-		s_Material->SetTexture(s_Texture);
 		s_Material->Bind();
+		vkCmdBindDescriptorSets(Renderer::GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_Material->GetLayout(), 2, 1, &s_TextureSets[frame], 0, nullptr);
 		RendererAPI::DrawIndexed(s_Meshes[frame]);
 
 		s_Vertices.clear();
 		s_Indices.clear();
+		ResetSlots();
 	}
 
 	void Renderer2D::EndFrame()

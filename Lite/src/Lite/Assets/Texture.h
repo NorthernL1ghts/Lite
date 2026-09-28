@@ -24,6 +24,8 @@ namespace Lite {
 		uint32_t GetWidth() const { return m_Width; }
 		uint32_t GetHeight() const { return m_Height; }
 		VkDescriptorSetLayout GetSetLayout() const { return m_SetLayout; }
+		VkSampler GetSampler() const { return m_Sampler; }
+		VkImageView GetView() const { return m_View; }
 
 		void Bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout) const;
 

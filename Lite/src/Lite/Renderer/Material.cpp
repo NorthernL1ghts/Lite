@@ -6,10 +6,10 @@
 
 namespace Lite {
 
-	Ref<Material> Material::Create(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture)
+	Ref<Material> Material::Create(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture, VkDescriptorSetLayout textureLayout)
 	{
 		auto material = Ref<Material>(new Material());
-		if (!material->Init(vertex, fragment, layout, blend, texture))
+		if (!material->Init(vertex, fragment, layout, blend, texture, textureLayout))
 			return nullptr;
 
 		return material;
@@ -20,16 +20,17 @@ namespace Lite {
 		Destroy();
 	}
 
-	bool Material::Init(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture)
+	bool Material::Init(const Shader& vertex, const Shader& fragment, const VertexLayout& layout, bool blend, const Ref<Texture>& texture, VkDescriptorSetLayout textureLayout)
 	{
 		m_Texture = texture;
-		m_UsesTexture = static_cast<bool>(texture);
+		m_UsesTexture = static_cast<bool>(texture) || textureLayout != VK_NULL_HANDLE;
+		m_BindOwnedTexture = static_cast<bool>(texture) && textureLayout == VK_NULL_HANDLE;
 
 		if (!m_Uniforms.Create(sizeof(MaterialUniform), 1, VK_SHADER_STAGE_FRAGMENT_BIT))
 			return false;
 
-		VkDescriptorSetLayout textureLayout = m_Texture ? m_Texture->GetSetLayout() : VK_NULL_HANDLE;
-		if (!m_Shader.Create(vertex, fragment, layout, blend, m_Uniforms.GetLayout(), textureLayout))
+		VkDescriptorSetLayout layoutHandle = textureLayout != VK_NULL_HANDLE ? textureLayout : (m_Texture ? m_Texture->GetSetLayout() : VK_NULL_HANDLE);
+		if (!m_Shader.Create(vertex, fragment, layout, blend, m_Uniforms.GetLayout(), layoutHandle))
 		{
 			m_Uniforms.Destroy();
 			return false;
@@ -90,7 +91,7 @@ namespace Lite {
 		m_Uniforms.SetData(&uniform, sizeof(uniform));
 		VkCommandBuffer commandBuffer = Renderer::GetCommandBuffer();
 		m_Uniforms.Bind(commandBuffer, m_Shader.GetLayout());
-		if (m_Texture)
+		if (m_BindOwnedTexture && m_Texture)
 			m_Texture->Bind(commandBuffer, m_Shader.GetLayout());
 	}
 
