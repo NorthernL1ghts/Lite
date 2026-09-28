@@ -21,37 +21,84 @@ namespace Lite {
 
 	namespace {
 
-		const ImVec4 kHeaderColor { 0.73f, 0.86f, 1.0f, 1.0f };
-		const ImVec4 kLabelColor { 0.58f, 0.61f, 0.66f, 1.0f };
+		const ImVec4 kLabelColor { 0.62f, 0.68f, 0.76f, 1.0f };
+		const ImVec4 kAccent { 0.36f, 0.56f, 0.86f, 1.0f };
 
-		void PanelHeader(const char* title)
+		void ApplyStyle()
 		{
-			ImGui::PushStyleColor(ImGuiCol_Text, kHeaderColor);
-			ImGui::TextUnformatted(title);
-			ImGui::PopStyleColor();
-			ImGui::Separator();
-			ImGui::Dummy(ImVec2(0.0f, 4.0f));
+			ImGui::StyleColorsDark();
+			ImGuiStyle& style = ImGui::GetStyle();
+			style.WindowRounding = 8.0f;
+			style.ChildRounding = 6.0f;
+			style.FrameRounding = 5.0f;
+			style.PopupRounding = 6.0f;
+			style.ScrollbarRounding = 6.0f;
+			style.GrabRounding = 5.0f;
+			style.TabRounding = 6.0f;
+			style.WindowPadding = ImVec2(14.0f, 12.0f);
+			style.FramePadding = ImVec2(12.0f, 7.0f);
+			style.ItemSpacing = ImVec2(10.0f, 7.0f);
+			style.ItemInnerSpacing = ImVec2(8.0f, 4.0f);
+			style.CellPadding = ImVec2(8.0f, 6.0f);
+			style.WindowBorderSize = 0.0f;
+			style.FrameBorderSize = 0.0f;
+			style.TabBorderSize = 0.0f;
+			style.TabBarBorderSize = 0.0f;
+			style.TabBarOverlineSize = 2.0f;
+			style.DockingSeparatorSize = 1.0f;
+
+			ImVec4* colors = style.Colors;
+			colors[ImGuiCol_Text] = ImVec4(0.93f, 0.94f, 0.96f, 1.0f);
+			colors[ImGuiCol_WindowBg] = ImVec4(0.11f, 0.12f, 0.15f, 0.96f);
+			colors[ImGuiCol_ChildBg] = ImVec4(0.11f, 0.12f, 0.15f, 0.0f);
+			colors[ImGuiCol_PopupBg] = ImVec4(0.12f, 0.13f, 0.16f, 0.98f);
+			colors[ImGuiCol_Border] = ImVec4(0.24f, 0.28f, 0.34f, 0.70f);
+			colors[ImGuiCol_FrameBg] = ImVec4(0.16f, 0.17f, 0.21f, 1.0f);
+			colors[ImGuiCol_FrameBgHovered] = ImVec4(0.20f, 0.24f, 0.30f, 1.0f);
+			colors[ImGuiCol_FrameBgActive] = ImVec4(0.24f, 0.32f, 0.42f, 1.0f);
+			colors[ImGuiCol_TitleBg] = ImVec4(0.09f, 0.10f, 0.12f, 1.0f);
+			colors[ImGuiCol_TitleBgActive] = ImVec4(0.11f, 0.13f, 0.17f, 1.0f);
+			colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.09f, 0.10f, 0.12f, 1.0f);
+			colors[ImGuiCol_ScrollbarBg] = ImVec4(0.10f, 0.11f, 0.13f, 1.0f);
+			colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.28f, 0.32f, 0.40f, 1.0f);
+			colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.36f, 0.42f, 0.52f, 1.0f);
+			colors[ImGuiCol_ScrollbarGrabActive] = kAccent;
+			colors[ImGuiCol_Header] = ImVec4(0.22f, 0.32f, 0.48f, 1.0f);
+			colors[ImGuiCol_HeaderHovered] = ImVec4(0.28f, 0.42f, 0.64f, 1.0f);
+			colors[ImGuiCol_HeaderActive] = kAccent;
+			colors[ImGuiCol_Tab] = ImVec4(0.14f, 0.16f, 0.20f, 1.0f);
+			colors[ImGuiCol_TabHovered] = ImVec4(0.26f, 0.38f, 0.58f, 1.0f);
+			colors[ImGuiCol_TabSelected] = kAccent;
+			colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.78f, 0.88f, 1.0f, 1.0f);
+			colors[ImGuiCol_TabDimmed] = ImVec4(0.13f, 0.14f, 0.17f, 1.0f);
+			colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.22f, 0.30f, 0.42f, 1.0f);
+			colors[ImGuiCol_TableHeaderBg] = ImVec4(0.15f, 0.17f, 0.21f, 1.0f);
+			colors[ImGuiCol_TableRowBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+			colors[ImGuiCol_TableRowBgAlt] = ImVec4(1.0f, 1.0f, 1.0f, 0.035f);
+			colors[ImGuiCol_TableBorderLight] = ImVec4(0.22f, 0.26f, 0.32f, 0.55f);
+			colors[ImGuiCol_Separator] = ImVec4(0.24f, 0.28f, 0.34f, 1.0f);
+			colors[ImGuiCol_DockingPreview] = ImVec4(kAccent.x, kAccent.y, kAccent.z, 0.45f);
 		}
 
-		void Property(const char* label, std::string_view value)
+		bool BeginRows(const char* id)
 		{
+			if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_PadOuterX | ImGuiTableFlags_SizingStretchProp))
+				return false;
+
+			ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthStretch, 0.46f);
+			ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 0.54f);
+			return true;
+		}
+
+		void Row(const char* label, std::string_view value)
+		{
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
 			ImGui::PushStyleColor(ImGuiCol_Text, kLabelColor);
 			ImGui::TextUnformatted(label);
 			ImGui::PopStyleColor();
-			ImGui::PushTextWrapPos(0.0f);
+			ImGui::TableSetColumnIndex(1);
 			ImGui::TextUnformatted(value.data(), value.data() + value.size());
-			ImGui::PopTextWrapPos();
-			ImGui::Dummy(ImVec2(0.0f, 2.0f));
-		}
-
-		void Stat(const char* label, std::string_view value)
-		{
-			ImGui::BeginGroup();
-			ImGui::PushStyleColor(ImGuiCol_Text, kLabelColor);
-			ImGui::TextUnformatted(label);
-			ImGui::PopStyleColor();
-			ImGui::TextUnformatted(value.data(), value.data() + value.size());
-			ImGui::EndGroup();
 		}
 
 		const char* FormatName(VkFormat format)
@@ -134,19 +181,7 @@ namespace Lite {
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-		ImGui::StyleColorsDark();
-		ImGuiStyle& style = ImGui::GetStyle();
-		style.WindowRounding = 0.0f;
-		style.ChildRounding = 4.0f;
-		style.FrameRounding = 3.0f;
-		style.GrabRounding = 3.0f;
-		style.WindowPadding = ImVec2(14.0f, 12.0f);
-		style.FramePadding = ImVec2(6.0f, 4.0f);
-		style.ItemSpacing = ImVec2(8.0f, 4.0f);
-		style.WindowBorderSize = 0.0f;
-		style.DockingSeparatorSize = 1.0f;
-		style.Colors[ImGuiCol_WindowBg] = ImVec4(0.10f, 0.10f, 0.11f, 1.0f);
-		style.Colors[ImGuiCol_Separator] = ImVec4(0.28f, 0.32f, 0.38f, 1.0f);
+		ApplyStyle();
 
 		ImGui_ImplGlfw_InitForVulkan(m_Window, true);
 
@@ -242,9 +277,8 @@ namespace Lite {
 		ImGui::Begin("DockSpace", nullptr, windowFlags);
 		ImGui::PopStyleVar(3);
 
-		ImGuiID dockspaceId = ImGui::GetID("LiteInfo");
-		ImGuiDockNodeFlags dockFlags = static_cast<ImGuiDockNodeFlags>(
-			static_cast<int>(ImGuiDockNodeFlags_PassthruCentralNode) | static_cast<int>(ImGuiDockNodeFlags_AutoHideTabBar));
+		ImGuiID dockspaceId = ImGui::GetID("LiteInfoSections");
+		ImGuiDockNodeFlags dockFlags = ImGuiDockNodeFlags_PassthruCentralNode;
 		ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockFlags);
 
 		ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
@@ -257,15 +291,14 @@ namespace Lite {
 			ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->Size);
 
 			ImGuiID center = dockspaceId;
-			ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.26f, nullptr, &center);
-			ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.28f, nullptr, &center);
-			ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.22f, nullptr, &center);
-			ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.42f, nullptr, &left);
+			ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.28f, nullptr, &center);
+			ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.30f, nullptr, &center);
+			ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.24f, nullptr, &center);
+			ImGuiID leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.48f, nullptr, &left);
 
 			ImGui::DockBuilderDockWindow("GPU", left);
 			ImGui::DockBuilderDockWindow("Swapchain", leftBottom);
 			ImGui::DockBuilderDockWindow("Draw", right);
-			ImGui::DockBuilderDockWindow("Stats", bottom);
 			ImGui::DockBuilderDockWindow("Profile", bottom);
 			ImGui::DockBuilderFinish(dockspaceId);
 		}
@@ -298,87 +331,93 @@ namespace Lite {
 			default: break;
 		}
 
-		ImGui::Begin("GPU");
-		PanelHeader("GPU");
-		Property("Name", properties.deviceName);
-		Property("Type", deviceType);
-		Property("Vendor", std::format("{:04X}", properties.vendorID));
-		Property("Device", std::format("{:04X}", properties.deviceID));
-		Property("Memory", DeviceMemory());
-		Property("API", version(properties.apiVersion));
-		Property("Driver", version(properties.driverVersion));
-		Property("Max texture", std::format("{}", properties.limits.maxImageDimension2D));
-		Property("Max framebuffer", std::format("{} x {}", properties.limits.maxFramebufferWidth, properties.limits.maxFramebufferHeight));
-		Property("Max uniform", std::format("{}", properties.limits.maxUniformBufferRange));
-		Property("Max anisotropy", std::format("{:.0f}", properties.limits.maxSamplerAnisotropy));
-		Property("Max samplers", std::format("{}", properties.limits.maxPerStageDescriptorSamplers));
-		ImGui::End();
-
-		ImGui::Begin("Swapchain");
-		PanelHeader("Swapchain");
-		Property("Extent", std::format("{} x {}", extent.width, extent.height));
-		Property("Format", FormatName(Renderer::GetSwapchainFormat()));
-		Property("Color space", ColorSpaceName(Renderer::GetColorSpace()));
-		Property("Present", PresentModeName(Renderer::GetPresentMode()));
-		Property("Images", std::format("{}", Renderer::GetImageCount()));
-		Property("Min images", std::format("{}", Renderer::GetMinImageCount()));
-		Property("Image index", std::format("{}", Renderer::GetImageIndex()));
-		Property("Frame index", std::format("{}", Renderer::GetFrameIndex()));
-		Property("Frames in flight", std::format("{}", VulkanSync::FramesInFlight));
-		Property("Queue family", std::format("{}", Renderer::GetGraphicsQueueFamily()));
-		ImGui::End();
-
-		ImGui::Begin("Draw");
-		PanelHeader("Draw");
-		Property("Frame active", Renderer::IsFrameActive() ? "yes" : "no");
-		Property("Draw calls", std::format("{}", Renderer::GetDrawCalls()));
-		Property("Quads", std::format("{}", Renderer::GetQuadCount()));
-		Property("Triangles", std::format("{}", Renderer::GetTriangleCount()));
-		Property("Indices", std::format("{}", Renderer::GetIndexCount()));
-		Property("Samples", "1");
-		Property("Blend", "Premultiplied");
-		ImGui::End();
-
-		const ImGuiIO& io = ImGui::GetIO();
-		float frameMs = io.Framerate > 0.0f ? 1000.0f / io.Framerate : 0.0f;
-		float cap = Time::GetFPS();
 		ImGui::Begin("Profile");
-		PanelHeader("Profile");
+		const ImGuiIO& io = ImGui::GetIO();
+		float cap = Time::GetFPS();
+		if (BeginRows("##session"))
+		{
+			Row("FPS", std::format("{:.1f}", io.Framerate));
+			Row("Elapsed", std::format("{:.1f} s", Time::GetElapsed()));
+			Row("Cap", cap > 0.0f ? std::format("{:.0f}", cap) : "off");
+			ImGui::EndTable();
+		}
+
+		ImGui::Dummy(ImVec2(0.0f, 6.0f));
 		const std::vector<ProfileSample>& samples = Profiler::GetSamples();
 		if (samples.empty())
 		{
-			Property("Samples", "waiting");
+			ImGui::TextDisabled("Waiting for a completed frame");
 		}
-		else
+		else if (ImGui::BeginTable("##profile", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_PadOuterX | ImGuiTableFlags_SizingStretchProp))
 		{
+			ImGui::TableSetupColumn("Scope", ImGuiTableColumnFlags_WidthStretch, 0.72f);
+			ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthStretch, 0.28f);
+			ImGui::TableHeadersRow();
+
 			for (const ProfileSample& sample : samples)
 			{
-				std::string label(static_cast<size_t>(sample.Depth) * 2, ' ');
-				label += sample.Name;
-				Property(label.c_str(), std::format("{:.3f} ms", sample.Milliseconds));
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + static_cast<float>(sample.Depth) * 14.0f);
+				ImGui::TextUnformatted(sample.Name);
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextUnformatted(std::format("{:.3f} ms", sample.Milliseconds).c_str());
 			}
+
+			ImGui::EndTable();
+		}
+		ImGui::Spacing();
+		ImGui::TextDisabled("Press I to hide");
+		ImGui::End();
+
+		ImGui::Begin("Draw");
+		if (BeginRows("##draw"))
+		{
+			Row("Frame active", Renderer::IsFrameActive() ? "yes" : "no");
+			Row("Draw calls", std::format("{}", Renderer::GetDrawCalls()));
+			Row("Quads", std::format("{}", Renderer::GetQuadCount()));
+			Row("Triangles", std::format("{}", Renderer::GetTriangleCount()));
+			Row("Indices", std::format("{}", Renderer::GetIndexCount()));
+			Row("Samples", "1");
+			Row("Blend", "Premultiplied");
+			ImGui::EndTable();
 		}
 		ImGui::End();
 
-		ImGui::Begin("Stats");
-		PanelHeader("Stats");
-		ImGui::PushStyleColor(ImGuiCol_Text, kLabelColor);
-		ImGui::TextUnformatted("Press I to hide");
-		ImGui::PopStyleColor();
-		ImGui::Dummy(ImVec2(0.0f, 2.0f));
-		Stat("FPS", std::format("{:.1f}", io.Framerate));
-		ImGui::SameLine(0.0f, 22.0f);
-		Stat("Frame", std::format("{:.2f} ms", frameMs));
-		ImGui::SameLine(0.0f, 22.0f);
-		Stat("Delta", std::format("{:.2f} ms", Time::GetDeltaMilliseconds()));
-		ImGui::SameLine(0.0f, 22.0f);
-		Stat("Elapsed", std::format("{:.1f} s", Time::GetElapsed()));
-		ImGui::SameLine(0.0f, 22.0f);
-		Stat("Cap", cap > 0.0f ? std::format("{:.0f}", cap) : "off");
-		ImGui::SameLine(0.0f, 22.0f);
-		Stat("Draws", std::format("{}", Renderer::GetDrawCalls()));
-		ImGui::SameLine(0.0f, 22.0f);
-		Stat("Quads", std::format("{}", Renderer::GetQuadCount()));
+		ImGui::Begin("GPU");
+		if (BeginRows("##gpu"))
+		{
+			Row("Name", properties.deviceName);
+			Row("Type", deviceType);
+			Row("Vendor", std::format("{:04X}", properties.vendorID));
+			Row("Device", std::format("{:04X}", properties.deviceID));
+			Row("Memory", DeviceMemory());
+			Row("API", version(properties.apiVersion));
+			Row("Driver", version(properties.driverVersion));
+			Row("Max texture", std::format("{}", properties.limits.maxImageDimension2D));
+			Row("Max framebuffer", std::format("{} x {}", properties.limits.maxFramebufferWidth, properties.limits.maxFramebufferHeight));
+			Row("Max uniform", std::format("{}", properties.limits.maxUniformBufferRange));
+			Row("Max anisotropy", std::format("{:.0f}", properties.limits.maxSamplerAnisotropy));
+			Row("Max samplers", std::format("{}", properties.limits.maxPerStageDescriptorSamplers));
+			ImGui::EndTable();
+		}
+		ImGui::End();
+
+		ImGui::Begin("Swapchain");
+		if (BeginRows("##swapchain"))
+		{
+			Row("Extent", std::format("{} x {}", extent.width, extent.height));
+			Row("Format", FormatName(Renderer::GetSwapchainFormat()));
+			Row("Color space", ColorSpaceName(Renderer::GetColorSpace()));
+			Row("Present", PresentModeName(Renderer::GetPresentMode()));
+			Row("Images", std::format("{}", Renderer::GetImageCount()));
+			Row("Min images", std::format("{}", Renderer::GetMinImageCount()));
+			Row("Image index", std::format("{}", Renderer::GetImageIndex()));
+			Row("Frame index", std::format("{}", Renderer::GetFrameIndex()));
+			Row("Frames in flight", std::format("{}", VulkanSync::FramesInFlight));
+			Row("Queue family", std::format("{}", Renderer::GetGraphicsQueueFamily()));
+			ImGui::EndTable();
+		}
 		ImGui::End();
 	}
 
