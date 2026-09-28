@@ -2,6 +2,8 @@
 
 #include "Lite/Assets/AssetRegistry.h"
 #include "Lite/Core/Logger.h"
+#include "Lite/Core/Time.h"
+#include "Lite/Input/Input.h"
 #include "Lite/Renderer/Renderer.h"
 #include "Lite/Renderer/Renderer2D.h"
 
@@ -30,6 +32,14 @@ void SandboxLayer::OnAttach()
 
 void SandboxLayer::OnUpdate()
 {
+	float rotation = m_Camera.GetRotation();
+	float step = 1.6f * Lite::Time::GetDelta();
+	if (Lite::Input::IsKeyPressed(Lite::Key::Q))
+		rotation += step;
+	if (Lite::Input::IsKeyPressed(Lite::Key::E))
+		rotation -= step;
+	m_Camera.SetRotation(rotation);
+
 	VkExtent2D extent = Lite::Renderer::GetExtent();
 	float aspect = extent.height > 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
 	m_Camera.SetProjection(2.0f, aspect);
