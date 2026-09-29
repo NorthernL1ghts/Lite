@@ -59,6 +59,7 @@ namespace Lite {
 		struct Candidate
 		{
 			Entity Entity;
+			int Plane = 0;
 			int Order = 0;
 			size_t Index = 0;
 		};
@@ -75,11 +76,15 @@ namespace Lite {
 			int order = 0;
 			if (SortingComponent* sorting = entity.Get<SortingComponent>())
 				order = sorting->Order;
-			candidates.push_back({ entity, order, index });
+			const Record* record = FindRecord(entity.GetId());
+			int plane = record != nullptr ? PlaneOrder(record->Plane) : 0;
+			candidates.push_back({ entity, plane, order, index });
 		}
 
 		std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate& left, const Candidate& right)
 		{
+			if (left.Plane != right.Plane)
+				return left.Plane > right.Plane;
 			if (left.Order != right.Order)
 				return left.Order > right.Order;
 			return left.Index > right.Index;

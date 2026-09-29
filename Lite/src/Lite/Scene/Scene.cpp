@@ -127,8 +127,32 @@ namespace Lite {
 		Plane plane;
 		plane.Id = m_NextPlane++;
 		plane.Name = std::move(name);
+		for (const Plane& existing : m_Planes)
+			plane.Order = std::max(plane.Order, existing.Order + 1);
 		m_Planes.push_back(std::move(plane));
 		return m_Planes.back().Id;
+	}
+
+	void Scene::SetPlaneOrder(uint32_t id, int order)
+	{
+		for (Plane& plane : m_Planes)
+		{
+			if (plane.Id != id)
+				continue;
+			plane.Order = order;
+			return;
+		}
+	}
+
+	int Scene::PlaneOrder(uint32_t planeId) const
+	{
+		for (const Plane& plane : m_Planes)
+		{
+			if (plane.Id == planeId)
+				return plane.Order;
+		}
+
+		return 0;
 	}
 
 	Entity Scene::CreateEntity(std::string name)
@@ -439,6 +463,7 @@ namespace Lite {
 		struct DrawItem
 		{
 			uint32_t Id = 0;
+			int Plane = 0;
 			int Order = 0;
 		};
 
@@ -449,11 +474,13 @@ namespace Lite {
 				continue;
 
 			const auto* sorting = static_cast<const SortingComponent*>(GetComponent(ComponentId::Sorting, record.Id));
-			draw.push_back({ record.Id, sorting != nullptr ? sorting->Order : 0 });
+			draw.push_back({ record.Id, PlaneOrder(record.Plane), sorting != nullptr ? sorting->Order : 0 });
 		}
 
 		std::stable_sort(draw.begin(), draw.end(), [](const DrawItem& left, const DrawItem& right)
 		{
+			if (left.Plane != right.Plane)
+				return left.Plane < right.Plane;
 			return left.Order < right.Order;
 		});
 
@@ -578,7 +605,10 @@ namespace Lite {
 				if (name.empty())
 					name = "Plane";
 
-				readEntities(CreatePlane(name), planeNode["entities"]);
+				uint32_t plane = CreatePlane(name);
+				if (planeNode["order"])
+					SetPlaneOrder(plane, planeNode["order"].as<int>());
+				readEntities(plane, planeNode["entities"]);
 			}
 		}
 		else
@@ -605,6 +635,7 @@ namespace Lite {
 		{
 			YAML::Node planeNode;
 			planeNode["name"] = plane.Name;
+			planeNode["order"] = plane.Order;
 
 			YAML::Node entities(YAML::NodeType::Sequence);
 			for (const Record& record : m_Records)

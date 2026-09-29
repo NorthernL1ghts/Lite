@@ -849,12 +849,21 @@ void EditorLayer::DrawScene()
 
 	size_t componentCount = 0;
 	const Lite::ComponentEntry* catalog = Lite::ComponentCatalog(componentCount);
-	ImGuiTreeNodeFlags planeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+	ImGuiTreeNodeFlags planeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow;
 	bool sceneChanged = false;
 	for (const Lite::Scene::Plane& plane : m_Scene->GetPlanes())
 	{
 		std::string planeLabel = std::format("{}##plane{}", plane.Name, plane.Id);
-		if (!ImGui::TreeNodeEx(planeLabel.c_str(), planeFlags))
+		bool open = ImGui::TreeNodeEx(planeLabel.c_str(), planeFlags);
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(64.0f);
+		int order = plane.Order;
+		std::string orderLabel = std::format("##planeOrder{}", plane.Id);
+		if (ImGui::DragInt(orderLabel.c_str(), &order, 0.1f))
+			m_Scene->SetPlaneOrder(plane.Id, order);
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Draw order. A higher plane renders in front.");
+		if (!open)
 			continue;
 
 		for (Lite::Entity entity : m_Scene->GetEntities(plane.Id))

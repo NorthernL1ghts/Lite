@@ -7,4 +7,4 @@
 5. **Prefabs.** The Prefabs folder is empty. Save an entity as a prefab, then place copies of it into a scene.
 6. **Scripts.** The Scripts folder and `ScriptModulePath` are stored on the project. Nothing loads or runs a script yet.
 7. **Sandbox uses the project.** Done. The player opens `Sandbox/Sandbox.lite` and plays that project's start scene.
-8. **Planes affect drawing.** Planes currently only group the sidebar. Give each plane a draw order so everything on a higher plane renders in front.
+8. **Planes affect drawing.** Done. Each plane has a draw order in the scene panel. A higher plane renders in front. Sorting still orders entities inside one plane.

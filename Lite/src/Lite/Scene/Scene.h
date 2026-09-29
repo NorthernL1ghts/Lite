@@ -89,10 +89,12 @@ namespace Lite {
 		struct Plane
 		{
 			uint32_t Id = 0;
+			int Order = 0;
 			std::string Name;
 		};
 
 		uint32_t CreatePlane(std::string name);
+		void SetPlaneOrder(uint32_t id, int order);
 		const std::vector<Plane>& GetPlanes() const { return m_Planes; }
 
 		Entity CreateEntity(std::string name);
@@ -149,6 +151,7 @@ namespace Lite {
 
 		Record* FindRecord(uint32_t id);
 		const Record* FindRecord(uint32_t id) const;
+		int PlaneOrder(uint32_t planeId) const;
 		const Record* FindPrimaryCameraRecord() const;
 		bool Read(std::istream& input);
 		void Write(std::ostream& output) const;

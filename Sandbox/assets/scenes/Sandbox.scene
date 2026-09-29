@@ -1,6 +1,7 @@
 name: Sandbox
 planes:
   - name: Background
+    order: 0
     entities:
       - name: Checkerboard
         transform:
@@ -34,6 +35,7 @@ planes:
         sorting:
           order: -10
   - name: World
+    order: 1
     entities:
       - name: Camera
         transform:
