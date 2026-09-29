@@ -103,7 +103,7 @@ quad.Add<Rigidbody2DComponent>().Type = BodyType::Dynamic;
 quad.Add<BoxCollider2DComponent>();
 ```
 
-`Get<T>()`, `Has<T>()`, and `Remove<T>()` use the same pattern. The inspector has an Add control for the same set.
+`Get<T>()`, `Has<T>()`, and `Remove<T>()` use the same pattern. The inspector can add any of these, and each section has a Remove button. Removing a physics component updates the body immediately, including while playing.
 
 | Component | What it stores |
 | --- | --- |
