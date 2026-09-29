@@ -35,6 +35,29 @@ namespace Lite {
 			return FileSystem::ExecutableDirectory() / file;
 		}
 
+		void SubmitMesh(const Transform& transform, const MaterialComponent& material, MeshType type)
+		{
+			if (type == MeshType::Triangle)
+			{
+				if (material.UseVertexColors)
+					Renderer2D::DrawTriangle(transform, material.Colors[0], material.Colors[1], material.Colors[2]);
+				else
+					Renderer2D::DrawTriangle(transform, material.Color, material.Color, material.Color);
+				return;
+			}
+
+			if (material.UseVertexColors)
+			{
+				Renderer2D::DrawQuad(transform, material.Texture, material.Tiling, material.Colors[0], material.Colors[1], material.Colors[2], material.Colors[3]);
+				return;
+			}
+
+			if (type == MeshType::Sprite)
+				Renderer2D::DrawQuad(transform, material.Texture, material.Tiling, material.Color);
+			else
+				Renderer2D::DrawQuad(transform, material.Color);
+		}
+
 	}
 
 	Entity::Entity(Scene* scene, uint32_t id)
@@ -599,19 +622,33 @@ namespace Lite {
 	{
 		struct DrawItem
 		{
-			uint32_t Id = 0;
+			const TransformComponent* Transform = nullptr;
+			const MaterialComponent* Material = nullptr;
+			const MeshComponent* Mesh = nullptr;
 			int Plane = 0;
 			int Order = 0;
 		};
 
+		std::vector<int> planeOrders(m_NextPlane, 0);
+		for (const Plane& plane : m_Planes)
+		{
+			if (plane.Id < planeOrders.size())
+				planeOrders[plane.Id] = plane.Order;
+		}
+
 		std::vector<DrawItem> draw;
+		draw.reserve(m_Records.size());
 		for (const Record& record : m_Records)
 		{
-			if (GetComponent(ComponentId::Mesh, record.Id) == nullptr || GetComponent(ComponentId::Transform, record.Id) == nullptr || GetComponent(ComponentId::Material, record.Id) == nullptr)
+			const auto* mesh = static_cast<const MeshComponent*>(GetComponent(ComponentId::Mesh, record.Id));
+			const auto* transform = static_cast<const TransformComponent*>(GetComponent(ComponentId::Transform, record.Id));
+			const auto* material = static_cast<const MaterialComponent*>(GetComponent(ComponentId::Material, record.Id));
+			if (mesh == nullptr || transform == nullptr || material == nullptr)
 				continue;
 
 			const auto* sorting = static_cast<const SortingComponent*>(GetComponent(ComponentId::Sorting, record.Id));
-			draw.push_back({ record.Id, PlaneOrder(record.Plane), sorting != nullptr ? sorting->Order : 0 });
+			const int plane = record.Plane < planeOrders.size() ? planeOrders[record.Plane] : 0;
+			draw.push_back({ transform, material, mesh, plane, sorting != nullptr ? sorting->Order : 0 });
 		}
 
 		std::stable_sort(draw.begin(), draw.end(), [](const DrawItem& left, const DrawItem& right)
@@ -622,57 +659,7 @@ namespace Lite {
 		});
 
 		for (const DrawItem& item : draw)
-		{
-			const auto* transform = static_cast<const TransformComponent*>(GetComponent(ComponentId::Transform, item.Id));
-			const auto* material = static_cast<const MaterialComponent*>(GetComponent(ComponentId::Material, item.Id));
-			const auto* mesh = static_cast<const MeshComponent*>(GetComponent(ComponentId::Mesh, item.Id));
-			if (transform == nullptr || material == nullptr || mesh == nullptr)
-				continue;
-
-			switch (mesh->Type)
-			{
-				case MeshType::Sprite:
-					if (material->UseVertexColors)
-					{
-						Renderer2D::DrawQuad(
-							transform->Local,
-							material->Texture,
-							material->Tiling,
-							material->Colors[0],
-							material->Colors[1],
-							material->Colors[2],
-							material->Colors[3]);
-					}
-					else
-					{
-						Renderer2D::DrawQuad(transform->Local, material->Texture, material->Tiling, material->Color);
-					}
-					break;
-				case MeshType::Triangle:
-					if (material->UseVertexColors)
-						Renderer2D::DrawTriangle(transform->Local, material->Colors[0], material->Colors[1], material->Colors[2]);
-					else
-						Renderer2D::DrawTriangle(transform->Local, material->Color, material->Color, material->Color);
-					break;
-				case MeshType::Quad:
-					if (material->UseVertexColors)
-					{
-						Renderer2D::DrawQuad(
-							transform->Local,
-							material->Texture,
-							material->Tiling,
-							material->Colors[0],
-							material->Colors[1],
-							material->Colors[2],
-							material->Colors[3]);
-					}
-					else
-					{
-						Renderer2D::DrawQuad(transform->Local, material->Color);
-					}
-					break;
-			}
-		}
+			SubmitMesh(item.Transform->Local, *item.Material, item.Mesh->Type);
 	}
 
 	bool Scene::Read(std::istream& input)

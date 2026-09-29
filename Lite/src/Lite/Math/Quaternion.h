@@ -45,12 +45,16 @@ namespace Lite {
 
 		constexpr Quat Conjugate() const { return { -x, -y, -z, w }; }
 
+		Vec3 RotateUnit(const Vec3& vector) const
+		{
+			const Vec3 axis { x, y, z };
+			const Vec3 t = axis.Cross(vector) * 2.0f;
+			return vector + t * w + axis.Cross(t);
+		}
+
 		Vec3 Rotate(const Vec3& vector) const
 		{
-			Quat q = Normalized();
-			Quat point { vector.x, vector.y, vector.z, 0.0f };
-			Quat rotated = q * point * q.Conjugate();
-			return { rotated.x, rotated.y, rotated.z };
+			return Normalized().RotateUnit(vector);
 		}
 
 		static Quat FromAxisAngle(const Vec3& axis, float radians)

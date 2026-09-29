@@ -69,7 +69,7 @@ namespace Lite {
 
 		Vec3 TransformPoint(const Vec3& point) const
 		{
-			return (GetMatrix() * Vec4(point, 1.0f)).xyz();
+			return Position + TransformDirection(point);
 		}
 
 		Vec3 TransformDirection(const Vec3& direction) const

@@ -11,6 +11,7 @@
 #include <Lite/Renderer/MeshShape.h>
 
 #include <array>
+#include <span>
 #include <vector>
 
 namespace Lite {
@@ -179,35 +180,63 @@ namespace Lite {
 			return static_cast<float>(s_SlotCount++);
 		}
 
-		void PushQuad(const Transform& transform, const Vec4 colors[4], const Vec2& tiling, float textureIndex)
+		struct SpriteBasis
 		{
-			const Vec2* corners = kQuadCorners;
-			const Vec2 uvs[4] = {
-				{ 0.0f, 0.0f },
-				{ tiling.x, 0.0f },
-				{ tiling.x, tiling.y },
-				{ 0.0f, tiling.y }
-			};
+			Vec2 Origin {};
+			Vec2 AxisX {};
+			Vec2 AxisY {};
+		};
 
-			uint16_t base = static_cast<uint16_t>(s_Vertices.size());
-			for (int corner = 0; corner < 4; ++corner)
+		SpriteBasis Basis(const Transform& transform)
+		{
+			const Quat rotation = transform.Rotation.Normalized();
+			const Vec3 axisX = rotation.RotateUnit({ transform.Scale.x, 0.0f, 0.0f });
+			const Vec3 axisY = rotation.RotateUnit({ 0.0f, transform.Scale.y, 0.0f });
+			return {
+				{ transform.Position.x, transform.Position.y },
+				{ axisX.x, axisX.y },
+				{ axisY.x, axisY.y }
+			};
+		}
+
+		Vec2 Place(const SpriteBasis& basis, Vec2 corner)
+		{
+			return {
+				basis.Origin.x + basis.AxisX.x * corner.x + basis.AxisY.x * corner.y,
+				basis.Origin.y + basis.AxisX.y * corner.x + basis.AxisY.y * corner.y
+			};
+		}
+
+		void Push(const Transform& transform, std::span<const Vec2> corners, std::span<const Vec4> colors, std::span<const Vec2> uvs, float textureIndex)
+		{
+			const SpriteBasis basis = Basis(transform);
+			const uint16_t base = static_cast<uint16_t>(s_Vertices.size());
+			for (size_t corner = 0; corner < corners.size(); ++corner)
 			{
-				Vec3 world = transform.TransformPoint({ corners[corner].x, corners[corner].y, 0.0f });
+				const Vec2 world = Place(basis, corners[corner]);
 				const Vec4& color = colors[corner];
+				const Vec2 uv = corner < uvs.size() ? uvs[corner] : Vec2 {};
 				s_Vertices.push_back({
 					world.x, world.y,
 					color.x, color.y, color.z, color.w,
-					uvs[corner].x, uvs[corner].y,
+					uv.x, uv.y,
 					textureIndex
 				});
 			}
 
-			s_Indices.push_back(base + 0);
-			s_Indices.push_back(base + 1);
-			s_Indices.push_back(base + 2);
-			s_Indices.push_back(base + 2);
-			s_Indices.push_back(base + 3);
-			s_Indices.push_back(base + 0);
+			if (corners.size() == 4)
+			{
+				s_Indices.push_back(base + 0);
+				s_Indices.push_back(base + 1);
+				s_Indices.push_back(base + 2);
+				s_Indices.push_back(base + 2);
+				s_Indices.push_back(base + 3);
+				s_Indices.push_back(base + 0);
+				return;
+			}
+
+			for (size_t corner = 0; corner < corners.size(); ++corner)
+				s_Indices.push_back(base + static_cast<uint16_t>(corner));
 		}
 
 	}
@@ -302,7 +331,7 @@ namespace Lite {
 			Flush();
 
 		const Vec4 colors[4] = { color, color, color, color };
-		PushQuad(transform, colors, { 1.0f, 1.0f }, TextureSlot({}));
+		Push(transform, kQuadCorners, colors, {}, TextureSlot({}));
 	}
 
 	void Renderer2D::DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& tint)
@@ -320,7 +349,13 @@ namespace Lite {
 			Flush();
 
 		const Vec4 colors[4] = { bottomLeft, bottomRight, topRight, topLeft };
-		PushQuad(transform, colors, tiling, TextureSlot(texture));
+		const Vec2 uvs[4] = {
+			{ 0.0f, 0.0f },
+			{ tiling.x, 0.0f },
+			{ tiling.x, tiling.y },
+			{ 0.0f, tiling.y }
+		};
+		Push(transform, kQuadCorners, colors, uvs, TextureSlot(texture));
 	}
 
 	void Renderer2D::DrawTriangle(const Transform& transform, const Vec4& first, const Vec4& second, const Vec4& third)
@@ -331,21 +366,8 @@ namespace Lite {
 		if (s_Vertices.size() + 3 > MaxVertices || s_Indices.size() + 3 > MaxIndices)
 			Flush();
 
-		float textureIndex = TextureSlot({});
-		const Vec2* corners = kTriangleCorners;
 		const Vec4 colors[3] = { first, second, third };
-		uint16_t base = static_cast<uint16_t>(s_Vertices.size());
-		for (int corner = 0; corner < 3; ++corner)
-		{
-			Vec3 world = transform.TransformPoint({ corners[corner].x, corners[corner].y, 0.0f });
-			s_Vertices.push_back({
-				world.x, world.y,
-				colors[corner].x, colors[corner].y, colors[corner].z, colors[corner].w,
-				0.0f, 0.0f,
-				textureIndex
-			});
-			s_Indices.push_back(base + static_cast<uint16_t>(corner));
-		}
+		Push(transform, kTriangleCorners, colors, {}, TextureSlot({}));
 	}
 
 	void Renderer2D::Flush()
