@@ -8,6 +8,7 @@
 #include <Lite/Input/Input.h>
 #include <Lite/Input/KeyCodes.h>
 #include <Lite/Project/Project.h>
+#include <Lite/Renderer/MeshShape.h>
 #include <Lite/Renderer/Renderer.h>
 #include <Lite/Renderer/Renderer2D.h>
 #include <Lite/Scene/Console.h>
@@ -744,6 +745,339 @@ void EditorLayer::DrawScene()
 	ImGui::End();
 }
 
+namespace {
+
+	constexpr float kHandleSize = 7.0f;
+	constexpr float kRingGap = 16.0f;
+	constexpr float kRingHit = 7.0f;
+	constexpr float kMinRing = 36.0f;
+	constexpr float kPi = 3.14159265f;
+
+	struct GizmoLayout
+	{
+		bool Ok = false;
+		Lite::Vec2 CenterWorld {};
+		ImVec2 Center {};
+		Lite::Vec2 World[4] {};
+		ImVec2 Screen[4] {};
+		int Count = 0;
+		float Ring = kMinRing;
+	};
+
+	bool Contains(Lite::Vec2 point, const Lite::Vec2* vertices, int count)
+	{
+		bool positive = false;
+		bool negative = false;
+		for (int index = 0; index < count; ++index)
+		{
+			const Lite::Vec2& current = vertices[index];
+			const Lite::Vec2& next = vertices[(index + 1) % count];
+			float cross = (next.x - current.x) * (point.y - current.y) - (next.y - current.y) * (point.x - current.x);
+			if (cross > 0.0f)
+				positive = true;
+			if (cross < 0.0f)
+				negative = true;
+			if (positive && negative)
+				return false;
+		}
+
+		return true;
+	}
+
+	float WrapAngle(float radians)
+	{
+		while (radians > kPi)
+			radians -= kPi * 2.0f;
+		while (radians < -kPi)
+			radians += kPi * 2.0f;
+		return radians;
+	}
+
+	float ScreenDistance(ImVec2 left, ImVec2 right)
+	{
+		float x = left.x - right.x;
+		float y = left.y - right.y;
+		return std::sqrt(x * x + y * y);
+	}
+
+	bool Project(const Lite::Mat4& viewProjection, float windowW, float windowH, Lite::Vec2 world, ImVec2& screen)
+	{
+		if (windowW <= 1.0f || windowH <= 1.0f)
+			return false;
+
+		Lite::Vec4 clip = viewProjection * Lite::Vec4(world.x, world.y, 0.0f, 1.0f);
+		if (clip.w == 0.0f)
+			return false;
+
+		clip /= clip.w;
+		screen.x = (clip.x * 0.5f + 0.5f) * windowW;
+		screen.y = (1.0f - (clip.y * 0.5f + 0.5f)) * windowH;
+		return true;
+	}
+
+	bool Unproject(const Lite::Mat4& viewProjection, float windowW, float windowH, float mouseX, float mouseY, Lite::Vec2& world)
+	{
+		if (windowW <= 1.0f || windowH <= 1.0f)
+			return false;
+
+		float ndcX = (mouseX / windowW) * 2.0f - 1.0f;
+		float ndcY = 1.0f - (mouseY / windowH) * 2.0f;
+		Lite::Vec4 point = viewProjection.Inverse() * Lite::Vec4(ndcX, ndcY, 0.0f, 1.0f);
+		if (point.w != 0.0f)
+			point /= point.w;
+		world = { point.x, point.y };
+		return true;
+	}
+
+	bool BuildGizmo(const Lite::Mat4& viewProjection, float windowW, float windowH, Lite::Entity entity, GizmoLayout& layout)
+	{
+		Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>();
+		if (transform == nullptr)
+			return false;
+
+		const Lite::Vec2* local = Lite::kQuadCorners;
+		int count = 4;
+		if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
+		{
+			if (mesh->Type == Lite::MeshType::Triangle)
+			{
+				local = Lite::kTriangleCorners;
+				count = 3;
+			}
+		}
+
+		layout = {};
+		layout.CenterWorld = { transform->Local.Position.x, transform->Local.Position.y };
+		if (!Project(viewProjection, windowW, windowH, layout.CenterWorld, layout.Center))
+			return false;
+
+		layout.Count = count;
+		float reach = 0.0f;
+		for (int index = 0; index < count; ++index)
+		{
+			Lite::Vec3 transformed = transform->Local.TransformPoint({ local[index].x, local[index].y, 0.0f });
+			layout.World[index] = { transformed.x, transformed.y };
+			if (!Project(viewProjection, windowW, windowH, layout.World[index], layout.Screen[index]))
+				return false;
+			reach = std::max(reach, ScreenDistance(layout.Center, layout.Screen[index]));
+		}
+
+		layout.Ring = std::max(reach + kRingGap, kMinRing);
+		layout.Ok = true;
+		return true;
+	}
+
+	int HitScale(const GizmoLayout& layout, ImVec2 mouse)
+	{
+		int hit = -1;
+		float best = kHandleSize + 3.0f;
+		for (int index = 0; index < layout.Count; ++index)
+		{
+			float distance = ScreenDistance(mouse, layout.Screen[index]);
+			if (distance > best)
+				continue;
+			best = distance;
+			hit = index;
+		}
+
+		return hit;
+	}
+
+	bool HitRing(const GizmoLayout& layout, ImVec2 mouse)
+	{
+		float distance = ScreenDistance(mouse, layout.Center);
+		return std::abs(distance - layout.Ring) <= kRingHit;
+	}
+
+	Lite::Vec2 LocalOnPlane(const Lite::Transform& transform, Lite::Vec2 world)
+	{
+		Lite::Vec3 offset { world.x - transform.Position.x, world.y - transform.Position.y, 0.0f };
+		Lite::Vec3 local = transform.Rotation.Normalized().Conjugate().Rotate(offset);
+		return { local.x, local.y };
+	}
+
+}
+
+bool EditorLayer::BeginGizmo(float mouseX, float mouseY)
+{
+	m_Gizmo = GizmoAction::None;
+	if (m_Scene == nullptr || m_Selected == 0)
+		return false;
+
+	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
+	Lite::TransformComponent* transform = entity ? entity.Get<Lite::TransformComponent>() : nullptr;
+	if (transform == nullptr)
+		return false;
+
+	GizmoLayout layout;
+	if (!BuildGizmo(m_ViewProjection, m_WindowW, m_WindowH, entity, layout))
+		return false;
+
+	ImVec2 mouse { mouseX, mouseY };
+	Lite::Vec2 world;
+	if (!Unproject(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY, world))
+		return false;
+
+	int corner = HitScale(layout, mouse);
+	if (corner >= 0)
+		m_Gizmo = GizmoAction::Scale;
+	else if (HitRing(layout, mouse))
+		m_Gizmo = GizmoAction::Rotate;
+	else if (Contains(world, layout.World, layout.Count))
+		m_Gizmo = GizmoAction::Move;
+	else
+		return false;
+
+	m_GizmoCorner = corner;
+	m_GizmoMouse = world;
+	m_GizmoPosition = transform->Local.Position;
+	m_GizmoRotation = transform->Local.GetRotationZ();
+	m_GizmoScale = transform->Local.Scale;
+	m_GizmoAngle = std::atan2(world.y - m_GizmoPosition.y, world.x - m_GizmoPosition.x);
+	m_GizmoSpin = 0.0f;
+	return true;
+}
+
+void EditorLayer::ApplyGizmo(float mouseX, float mouseY)
+{
+	if (m_Scene == nullptr || m_Gizmo == GizmoAction::None)
+		return;
+
+	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
+	Lite::TransformComponent* transform = entity ? entity.Get<Lite::TransformComponent>() : nullptr;
+	Lite::Vec2 world;
+	if (transform == nullptr || !Unproject(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY, world))
+	{
+		m_Gizmo = GizmoAction::None;
+		return;
+	}
+
+	switch (m_Gizmo)
+	{
+		case GizmoAction::Move:
+			transform->Local.Position.x = m_GizmoPosition.x + (world.x - m_GizmoMouse.x);
+			transform->Local.Position.y = m_GizmoPosition.y + (world.y - m_GizmoMouse.y);
+			break;
+		case GizmoAction::Rotate:
+		{
+			float angle = std::atan2(world.y - m_GizmoPosition.y, world.x - m_GizmoPosition.x);
+			m_GizmoSpin += WrapAngle(angle - m_GizmoAngle);
+			m_GizmoAngle = angle;
+			transform->Local.SetRotationZ(m_GizmoRotation + m_GizmoSpin);
+			break;
+		}
+		case GizmoAction::Scale:
+		{
+			const Lite::Vec2* local = Lite::kQuadCorners;
+			if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
+			{
+				if (mesh->Type == Lite::MeshType::Triangle)
+					local = Lite::kTriangleCorners;
+			}
+
+			Lite::Transform basis;
+			basis.Position = m_GizmoPosition;
+			basis.SetRotationZ(m_GizmoRotation);
+			basis.Scale = { 1.0f, 1.0f, 1.0f };
+			Lite::Vec2 point = LocalOnPlane(basis, world);
+			Lite::Vec2 corner = local[m_GizmoCorner];
+			Lite::Vec3 scale = m_GizmoScale;
+			if (std::abs(corner.x) > 0.001f)
+				scale.x = point.x / corner.x;
+			if (std::abs(corner.y) > 0.001f)
+				scale.y = point.y / corner.y;
+			if (std::abs(scale.x) < 0.02f)
+				scale.x = scale.x < 0.0f ? -0.02f : 0.02f;
+			if (std::abs(scale.y) < 0.02f)
+				scale.y = scale.y < 0.0f ? -0.02f : 0.02f;
+			transform->Local.Scale.x = scale.x;
+			transform->Local.Scale.y = scale.y;
+			break;
+		}
+		default:
+			break;
+	}
+
+	m_Scene->RefreshPhysics(entity.GetId());
+}
+
+void EditorLayer::DrawGizmo()
+{
+	if (m_Scene == nullptr || m_Selected == 0)
+		return;
+
+	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
+	GizmoLayout layout;
+	if (!entity || !BuildGizmo(m_ViewProjection, m_WindowW, m_WindowH, entity, layout))
+		return;
+
+	ImDrawList* draw = ImGui::GetWindowDrawList();
+	ImVec2 mouse = ImGui::GetIO().MousePos;
+	int hotCorner = m_Gizmo == GizmoAction::Scale ? m_GizmoCorner : -1;
+	bool hotRing = m_Gizmo == GizmoAction::Rotate;
+	bool hotMove = m_Gizmo == GizmoAction::Move;
+	if (m_Gizmo == GizmoAction::None && ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
+	{
+		hotCorner = HitScale(layout, mouse);
+		hotRing = hotCorner < 0 && HitRing(layout, mouse);
+		Lite::Vec2 world;
+		hotMove = hotCorner < 0 && !hotRing && Unproject(m_ViewProjection, m_WindowW, m_WindowH, mouse.x, mouse.y, world) && Contains(world, layout.World, layout.Count);
+	}
+
+	if (hotMove)
+		ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+	else if (hotRing)
+		ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+	else if (hotCorner >= 0)
+		ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+
+	const ImU32 outline = IM_COL32(236, 240, 246, 210);
+	const ImU32 ring = hotRing ? IM_COL32(170, 220, 255, 255) : IM_COL32(110, 176, 240, 210);
+	draw->AddPolyline(layout.Screen, layout.Count, outline, 1.6f, ImDrawFlags_Closed);
+	draw->AddCircle(layout.Center, layout.Ring, ring, 48, hotRing ? 2.4f : 1.5f);
+
+	Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>();
+	if (transform != nullptr)
+	{
+		Lite::Vec3 axisX = transform->Local.TransformPoint({ 1.0f, 0.0f, 0.0f });
+		Lite::Vec3 axisY = transform->Local.TransformPoint({ 0.0f, 1.0f, 0.0f });
+		ImVec2 screenX;
+		ImVec2 screenY;
+		if (Project(m_ViewProjection, m_WindowW, m_WindowH, { axisX.x, axisX.y }, screenX))
+		{
+			ImVec2 direction { screenX.x - layout.Center.x, screenX.y - layout.Center.y };
+			float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+			if (length > 0.001f)
+			{
+				direction.x = direction.x / length * 22.0f;
+				direction.y = direction.y / length * 22.0f;
+				draw->AddLine(layout.Center, { layout.Center.x + direction.x, layout.Center.y + direction.y }, IM_COL32(230, 74, 74, 230), 2.0f);
+			}
+		}
+		if (Project(m_ViewProjection, m_WindowW, m_WindowH, { axisY.x, axisY.y }, screenY))
+		{
+			ImVec2 direction { screenY.x - layout.Center.x, screenY.y - layout.Center.y };
+			float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+			if (length > 0.001f)
+			{
+				direction.x = direction.x / length * 22.0f;
+				direction.y = direction.y / length * 22.0f;
+				draw->AddLine(layout.Center, { layout.Center.x + direction.x, layout.Center.y + direction.y }, IM_COL32(78, 206, 96, 230), 2.0f);
+			}
+		}
+	}
+
+	for (int index = 0; index < layout.Count; ++index)
+	{
+		ImVec2 corner = layout.Screen[index];
+		ImVec2 min { corner.x - kHandleSize, corner.y - kHandleSize };
+		ImVec2 max { corner.x + kHandleSize, corner.y + kHandleSize };
+		ImU32 fill = index == hotCorner ? IM_COL32(255, 214, 96, 255) : IM_COL32(246, 248, 252, 240);
+		draw->AddRectFilled(min, max, fill);
+		draw->AddRect(min, max, IM_COL32(24, 28, 34, 255));
+	}
+}
+
 void EditorLayer::DrawViewport()
 {
 	ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -754,11 +1088,20 @@ void EditorLayer::DrawViewport()
 	m_ViewportW = size.x;
 	m_ViewportH = size.y;
 	ImGui::InvisibleButton("##ViewportPick", size);
-	if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+	ImVec2 mouse = ImGui::GetIO().MousePos;
+	if (m_Gizmo != GizmoAction::None)
 	{
-		ImVec2 mouse = ImGui::GetIO().MousePos;
-		PickObject(mouse.x, mouse.y);
+		if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+			ApplyGizmo(mouse.x, mouse.y);
+		else
+			m_Gizmo = GizmoAction::None;
 	}
+	else if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+	{
+		if (!BeginGizmo(mouse.x, mouse.y))
+			PickObject(mouse.x, mouse.y);
+	}
+	DrawGizmo();
 
 	const char* name = m_Scene != nullptr ? m_Scene->GetName().c_str() : "No scene";
 	const char* playback = m_Scene != nullptr ? Lite::PlaybackName(m_Scene->GetPlayback()) : "stopped";
