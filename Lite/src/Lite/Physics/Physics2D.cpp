@@ -121,51 +121,58 @@ namespace Lite {
 		m_Physics = new PhysicsStorage();
 		m_Physics->World = b2CreateWorld(&worldDef);
 
-		for (Record& record : m_Records)
+		for (Entity entity : GetEntities())
 		{
-			if (!record.Transform)
-				continue;
-			if (!record.Rigidbody2D && !record.BoxCollider2D && !record.CircleCollider2D)
+			TransformComponent* transformComponent = entity.Get<TransformComponent>();
+			if (transformComponent == nullptr)
 				continue;
 
-			const Transform& transform = record.Transform->Local;
+			Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>();
+			BoxCollider2DComponent* box = entity.Get<BoxCollider2DComponent>();
+			CircleCollider2DComponent* circle = entity.Get<CircleCollider2DComponent>();
+			SpinComponent* spin = entity.Get<SpinComponent>();
+			if (rigidbody == nullptr && box == nullptr && circle == nullptr)
+				continue;
+
+			const Transform& transform = transformComponent->Local;
 			PhysicsStorage::Body stored {};
-			stored.Entity = record.Id;
+			stored.Entity = entity.GetId();
 			stored.Position = transform.Position;
 			stored.Rotation = transform.GetRotationZ();
-			stored.HasRigidbody = record.Rigidbody2D.has_value();
-			if (record.Rigidbody2D)
+			stored.HasRigidbody = rigidbody != nullptr;
+			if (rigidbody != nullptr)
 			{
-				stored.LinearVelocity = record.Rigidbody2D->LinearVelocity;
-				stored.AngularVelocity = record.Rigidbody2D->AngularVelocity;
+				stored.LinearVelocity = rigidbody->LinearVelocity;
+				stored.AngularVelocity = rigidbody->AngularVelocity;
 			}
 
 			b2BodyDef bodyDef = b2DefaultBodyDef();
-			bodyDef.type = record.Rigidbody2D ? ToBodyType(record.Rigidbody2D->Type) : b2_staticBody;
+			bodyDef.type = rigidbody != nullptr ? ToBodyType(rigidbody->Type) : b2_staticBody;
 			bodyDef.position = { transform.Position.x, transform.Position.y };
 			bodyDef.rotation = b2MakeRot(transform.GetRotationZ());
-			bodyDef.fixedRotation = record.Rigidbody2D && record.Rigidbody2D->FreezeRotation;
-			bodyDef.gravityScale = record.Rigidbody2D ? record.Rigidbody2D->GravityScale : 1.0f;
+			bodyDef.fixedRotation = rigidbody != nullptr && rigidbody->FreezeRotation;
+			bodyDef.gravityScale = rigidbody != nullptr ? rigidbody->GravityScale : 1.0f;
 			bodyDef.isBullet = bodyDef.type == b2_dynamicBody;
-			bodyDef.userData = reinterpret_cast<void*>(static_cast<uintptr_t>(record.Id));
-			if (record.Rigidbody2D)
+			bodyDef.userData = reinterpret_cast<void*>(static_cast<uintptr_t>(entity.GetId()));
+			if (rigidbody != nullptr)
 			{
-				bodyDef.linearVelocity = { record.Rigidbody2D->LinearVelocity.x, record.Rigidbody2D->LinearVelocity.y };
-				bodyDef.angularVelocity = record.Rigidbody2D->AngularVelocity;
+				bodyDef.linearVelocity = { rigidbody->LinearVelocity.x, rigidbody->LinearVelocity.y };
+				bodyDef.angularVelocity = rigidbody->AngularVelocity;
 			}
-			if (record.Spin && !bodyDef.fixedRotation)
-				bodyDef.angularVelocity += record.Spin->Rate;
+			if (spin != nullptr && !bodyDef.fixedRotation)
+				bodyDef.angularVelocity += spin->Rate;
 
 			stored.Id = b2CreateBody(m_Physics->World, &bodyDef);
-			b2Body_SetName(stored.Id, record.Name.c_str());
+			std::string name = entity.GetName();
+			b2Body_SetName(stored.Id, name.c_str());
 
 			bool solid = false;
-			if (record.BoxCollider2D)
-				solid = AddBox(stored.Id, transform, *record.BoxCollider2D) || solid;
-			if (record.CircleCollider2D)
-				solid = AddCircle(stored.Id, transform, *record.CircleCollider2D) || solid;
-			if (record.Rigidbody2D)
-				ApplyMass(stored.Id, *record.Rigidbody2D, solid);
+			if (box != nullptr)
+				solid = AddBox(stored.Id, transform, *box) || solid;
+			if (circle != nullptr)
+				solid = AddCircle(stored.Id, transform, *circle) || solid;
+			if (rigidbody != nullptr)
+				ApplyMass(stored.Id, *rigidbody, solid);
 
 			m_Physics->Bodies.push_back(stored);
 		}
@@ -180,16 +187,20 @@ namespace Lite {
 
 		for (const PhysicsStorage::Body& body : m_Physics->Bodies)
 		{
-			Record* record = FindRecord(body.Entity);
-			if (record == nullptr || !record->Transform)
+			Entity entity = GetEntity(body.Entity);
+			TransformComponent* transform = entity.Get<TransformComponent>();
+			if (transform == nullptr)
 				continue;
 
-			record->Transform->Local.Position = body.Position;
-			record->Transform->Local.SetRotationZ(body.Rotation);
-			if (body.HasRigidbody && record->Rigidbody2D)
+			transform->Local.Position = body.Position;
+			transform->Local.SetRotationZ(body.Rotation);
+			if (body.HasRigidbody)
 			{
-				record->Rigidbody2D->LinearVelocity = body.LinearVelocity;
-				record->Rigidbody2D->AngularVelocity = body.AngularVelocity;
+				if (Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>())
+				{
+					rigidbody->LinearVelocity = body.LinearVelocity;
+					rigidbody->AngularVelocity = body.AngularVelocity;
+				}
 			}
 		}
 
@@ -207,18 +218,20 @@ namespace Lite {
 
 		for (const PhysicsStorage::Body& body : m_Physics->Bodies)
 		{
-			Record* record = FindRecord(body.Entity);
-			if (record == nullptr || !record->Transform || !b2Body_IsValid(body.Id))
+			Entity entity = GetEntity(body.Entity);
+			TransformComponent* transformComponent = entity.Get<TransformComponent>();
+			if (transformComponent == nullptr || !b2Body_IsValid(body.Id))
 				continue;
 
-			const Transform& transform = record->Transform->Local;
+			const Transform& transform = transformComponent->Local;
 			b2Body_SetTransform(body.Id, { transform.Position.x, transform.Position.y }, b2MakeRot(transform.GetRotationZ()));
-			if (record->Rigidbody2D)
+			if (Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>())
 			{
-				b2Body_SetLinearVelocity(body.Id, { record->Rigidbody2D->LinearVelocity.x, record->Rigidbody2D->LinearVelocity.y });
-				float angular = record->Rigidbody2D->AngularVelocity;
-				if (record->Spin && !record->Rigidbody2D->FreezeRotation)
-					angular += record->Spin->Rate;
+				b2Body_SetLinearVelocity(body.Id, { rigidbody->LinearVelocity.x, rigidbody->LinearVelocity.y });
+				float angular = rigidbody->AngularVelocity;
+				SpinComponent* spin = entity.Get<SpinComponent>();
+				if (spin != nullptr && !rigidbody->FreezeRotation)
+					angular += spin->Rate;
 				b2Body_SetAngularVelocity(body.Id, angular);
 			}
 		}
@@ -246,31 +259,33 @@ namespace Lite {
 				if (!b2Body_IsValid(body))
 					return std::string("unknown");
 				auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(b2Body_GetUserData(body)));
-				Record* record = FindRecord(id);
-				if (record == nullptr || record->Name.empty())
+				Entity entity = GetEntity(id);
+				if (!entity || entity.GetName().empty())
 					return std::string("entity");
-				return record->Name;
+				return entity.GetName();
 			};
 			Console::Log(std::format("Collision: {} and {}", nameOf(first), nameOf(second)));
 		}
 
 		for (const PhysicsStorage::Body& body : m_Physics->Bodies)
 		{
-			Record* record = FindRecord(body.Entity);
-			if (record == nullptr || !record->Transform || !b2Body_IsValid(body.Id))
+			Entity entity = GetEntity(body.Entity);
+			TransformComponent* transform = entity.Get<TransformComponent>();
+			if (transform == nullptr || !b2Body_IsValid(body.Id))
 				continue;
 
 			b2Vec2 position = b2Body_GetPosition(body.Id);
-			record->Transform->Local.Position.x = position.x;
-			record->Transform->Local.Position.y = position.y;
-			record->Transform->Local.SetRotationZ(b2Rot_GetAngle(b2Body_GetRotation(body.Id)));
+			transform->Local.Position.x = position.x;
+			transform->Local.Position.y = position.y;
+			transform->Local.SetRotationZ(b2Rot_GetAngle(b2Body_GetRotation(body.Id)));
 
-			if (!body.HasRigidbody || !record->Rigidbody2D)
+			Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>();
+			if (!body.HasRigidbody || rigidbody == nullptr)
 				continue;
 
 			b2Vec2 velocity = b2Body_GetLinearVelocity(body.Id);
-			record->Rigidbody2D->LinearVelocity = { velocity.x, velocity.y };
-			record->Rigidbody2D->AngularVelocity = b2Body_GetAngularVelocity(body.Id);
+			rigidbody->LinearVelocity = { velocity.x, velocity.y };
+			rigidbody->AngularVelocity = b2Body_GetAngularVelocity(body.Id);
 		}
 	}
 

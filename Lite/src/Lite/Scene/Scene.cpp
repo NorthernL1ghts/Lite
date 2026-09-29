@@ -1,8 +1,9 @@
 #include <Lite/Scene/Scene.h>
 
+#include <Lite/Scene/Components/ComponentStorage.h>
+#include <Lite/Scene/Components/SceneText.h>
 #include <Lite/Scene/Console.h>
 
-#include <Lite/Assets/AssetRegistry.h>
 #include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Renderer/Renderer2D.h>
 
@@ -17,40 +18,6 @@ namespace Lite {
 	namespace {
 
 		Scene* s_Active = nullptr;
-
-		std::string Trim(std::string_view value)
-		{
-			size_t begin = 0;
-			while (begin < value.size() && (value[begin] == ' ' || value[begin] == '\t' || value[begin] == '\r'))
-				++begin;
-
-			size_t end = value.size();
-			while (end > begin && (value[end - 1] == ' ' || value[end - 1] == '\t' || value[end - 1] == '\r'))
-				--end;
-
-			return std::string(value.substr(begin, end - begin));
-		}
-
-		const char* MeshName(MeshType type)
-		{
-			switch (type)
-			{
-				case MeshType::Sprite: return "sprite";
-				case MeshType::Triangle: return "triangle";
-				case MeshType::Quad: return "quad";
-			}
-
-			return "quad";
-		}
-
-		MeshType ParseMesh(std::string_view type)
-		{
-			if (type == "sprite")
-				return MeshType::Sprite;
-			if (type == "triangle")
-				return MeshType::Triangle;
-			return MeshType::Quad;
-		}
 
 		std::filesystem::path SceneDirectory()
 		{
@@ -125,16 +92,6 @@ namespace Lite {
 			return inside;
 		}
 
-		void ReadVec3(std::istream& stream, Vec3& value)
-		{
-			stream >> value.x >> value.y >> value.z;
-		}
-
-		void ReadVec4(std::istream& stream, Vec4& value)
-		{
-			stream >> value.x >> value.y >> value.z >> value.w;
-		}
-
 	}
 
 	Entity::Entity(Scene* scene, uint32_t id)
@@ -162,103 +119,39 @@ namespace Lite {
 
 	void* Scene::AddComponent(ComponentId id, uint32_t entity)
 	{
-		Record* record = FindRecord(entity);
-		if (record == nullptr)
+		if (FindRecord(entity) == nullptr || m_Components == nullptr)
 			return nullptr;
 
-		switch (id)
-		{
-			case ComponentId::Transform:
-				if (!record->Transform)
-					record->Transform = TransformComponent{};
-				return &record->Transform.value();
-			case ComponentId::Camera:
-				if (!record->Camera)
-					record->Camera = CameraComponent{};
-				return &record->Camera.value();
-			case ComponentId::Mesh:
-				if (!record->Mesh)
-					record->Mesh = MeshComponent{};
-				return &record->Mesh.value();
-			case ComponentId::Material:
-				if (!record->Material)
-					record->Material = MaterialComponent{};
-				return &record->Material.value();
-			case ComponentId::Spin:
-				if (!record->Spin)
-					record->Spin = SpinComponent{};
-				return &record->Spin.value();
-			case ComponentId::Rigidbody2D:
-				if (!record->Rigidbody2D)
-					record->Rigidbody2D = Rigidbody2DComponent{};
-				return &record->Rigidbody2D.value();
-			case ComponentId::BoxCollider2D:
-				if (!record->BoxCollider2D)
-					record->BoxCollider2D = BoxCollider2DComponent{};
-				return &record->BoxCollider2D.value();
-			case ComponentId::CircleCollider2D:
-				if (!record->CircleCollider2D)
-					record->CircleCollider2D = CircleCollider2DComponent{};
-				return &record->CircleCollider2D.value();
-			case ComponentId::Sorting:
-				if (!record->Sorting)
-					record->Sorting = SortingComponent{};
-				return &record->Sorting.value();
-		}
-
-		return nullptr;
+		return m_Components->Emplace(id, entity);
 	}
 
 	void* Scene::GetComponent(ComponentId id, uint32_t entity)
 	{
-		Record* record = FindRecord(entity);
-		if (record == nullptr)
-			return nullptr;
+		return m_Components != nullptr ? m_Components->Find(id, entity) : nullptr;
+	}
 
-		switch (id)
-		{
-			case ComponentId::Transform: return record->Transform ? &record->Transform.value() : nullptr;
-			case ComponentId::Camera: return record->Camera ? &record->Camera.value() : nullptr;
-			case ComponentId::Mesh: return record->Mesh ? &record->Mesh.value() : nullptr;
-			case ComponentId::Material: return record->Material ? &record->Material.value() : nullptr;
-			case ComponentId::Spin: return record->Spin ? &record->Spin.value() : nullptr;
-			case ComponentId::Rigidbody2D: return record->Rigidbody2D ? &record->Rigidbody2D.value() : nullptr;
-			case ComponentId::BoxCollider2D: return record->BoxCollider2D ? &record->BoxCollider2D.value() : nullptr;
-			case ComponentId::CircleCollider2D: return record->CircleCollider2D ? &record->CircleCollider2D.value() : nullptr;
-			case ComponentId::Sorting: return record->Sorting ? &record->Sorting.value() : nullptr;
-		}
-
-		return nullptr;
+	const void* Scene::GetComponent(ComponentId id, uint32_t entity) const
+	{
+		return m_Components != nullptr ? m_Components->Find(id, entity) : nullptr;
 	}
 
 	void Scene::RemoveComponent(ComponentId id, uint32_t entity)
 	{
-		Record* record = FindRecord(entity);
-		if (record == nullptr)
-			return;
-
-		switch (id)
-		{
-			case ComponentId::Transform: record->Transform.reset(); break;
-			case ComponentId::Camera: record->Camera.reset(); break;
-			case ComponentId::Mesh: record->Mesh.reset(); break;
-			case ComponentId::Material: record->Material.reset(); break;
-			case ComponentId::Spin: record->Spin.reset(); break;
-			case ComponentId::Rigidbody2D: record->Rigidbody2D.reset(); break;
-			case ComponentId::BoxCollider2D: record->BoxCollider2D.reset(); break;
-			case ComponentId::CircleCollider2D: record->CircleCollider2D.reset(); break;
-			case ComponentId::Sorting: record->Sorting.reset(); break;
-		}
+		if (m_Components != nullptr)
+			m_Components->Erase(id, entity);
 	}
 
 	Scene::Scene(std::string name)
 		: m_Name(std::move(name))
+		, m_Components(new ComponentStorage())
 	{
 	}
 
 	Scene::~Scene()
 	{
 		Stop();
+		delete m_Components;
+		m_Components = nullptr;
 		if (s_Active == this)
 			s_Active = nullptr;
 	}
@@ -316,9 +209,10 @@ namespace Lite {
 		const Record* fallback = nullptr;
 		for (const Record& record : m_Records)
 		{
-			if (!record.Camera)
+			const auto* camera = static_cast<const CameraComponent*>(GetComponent(ComponentId::Camera, record.Id));
+			if (camera == nullptr)
 				continue;
-			if (record.Camera->Primary)
+			if (camera->Primary)
 				return &record;
 			if (fallback == nullptr)
 				fallback = &record;
@@ -346,8 +240,9 @@ namespace Lite {
 	{
 		for (Record& record : m_Records)
 		{
-			if (record.Camera)
-				record.Camera->Primary = record.Id == id;
+			auto* camera = static_cast<CameraComponent*>(GetComponent(ComponentId::Camera, record.Id));
+			if (camera != nullptr)
+				camera->Primary = record.Id == id;
 		}
 	}
 
@@ -434,10 +329,12 @@ namespace Lite {
 	Mat4 Scene::ViewProjection(float aspect, const Transform& fallbackTransform, const CameraComponent& fallbackCamera) const
 	{
 		const Record* record = IsPlaying() ? FindPrimaryCameraRecord() : nullptr;
-		if (record == nullptr || !record->Transform || !record->Camera)
+		const auto* transform = record != nullptr ? static_cast<const TransformComponent*>(GetComponent(ComponentId::Transform, record->Id)) : nullptr;
+		const auto* camera = record != nullptr ? static_cast<const CameraComponent*>(GetComponent(ComponentId::Camera, record->Id)) : nullptr;
+		if (transform == nullptr || camera == nullptr)
 			return CameraProjectionMatrix(fallbackCamera, aspect) * fallbackTransform.GetViewMatrix();
 
-		return CameraProjectionMatrix(*record->Camera, aspect) * record->Transform->Local.GetViewMatrix();
+		return CameraProjectionMatrix(*camera, aspect) * transform->Local.GetViewMatrix();
 	}
 
 	void Scene::Close(Scope<Scene>& scene)
@@ -453,54 +350,65 @@ namespace Lite {
 
 	void Scene::Render() const
 	{
-		std::vector<const Record*> draw;
+		struct DrawItem
+		{
+			uint32_t Id = 0;
+			int Order = 0;
+		};
+
+		std::vector<DrawItem> draw;
 		for (const Record& record : m_Records)
 		{
-			if (record.Mesh && record.Transform && record.Material)
-				draw.push_back(&record);
+			if (GetComponent(ComponentId::Mesh, record.Id) == nullptr || GetComponent(ComponentId::Transform, record.Id) == nullptr || GetComponent(ComponentId::Material, record.Id) == nullptr)
+				continue;
+
+			const auto* sorting = static_cast<const SortingComponent*>(GetComponent(ComponentId::Sorting, record.Id));
+			draw.push_back({ record.Id, sorting != nullptr ? sorting->Order : 0 });
 		}
 
-		std::stable_sort(draw.begin(), draw.end(), [](const Record* left, const Record* right)
+		std::stable_sort(draw.begin(), draw.end(), [](const DrawItem& left, const DrawItem& right)
 		{
-			int leftOrder = left->Sorting ? left->Sorting->Order : 0;
-			int rightOrder = right->Sorting ? right->Sorting->Order : 0;
-			return leftOrder < rightOrder;
+			return left.Order < right.Order;
 		});
 
-		for (const Record* record : draw)
+		for (const DrawItem& item : draw)
 		{
-			const Transform& transform = record->Transform->Local;
-			const MaterialComponent& material = *record->Material;
-			switch (record->Mesh->Type)
+			const auto* transform = static_cast<const TransformComponent*>(GetComponent(ComponentId::Transform, item.Id));
+			const auto* material = static_cast<const MaterialComponent*>(GetComponent(ComponentId::Material, item.Id));
+			const auto* mesh = static_cast<const MeshComponent*>(GetComponent(ComponentId::Mesh, item.Id));
+			if (transform == nullptr || material == nullptr || mesh == nullptr)
+				continue;
+
+			switch (mesh->Type)
 			{
 				case MeshType::Sprite:
-					if (material.UseVertexColors)
+					if (material->UseVertexColors)
 					{
 						Renderer2D::DrawQuad(
-							transform,
-							material.Texture,
-							material.Tiling,
-							material.Colors[0],
-							material.Colors[1],
-							material.Colors[2],
-							material.Colors[3]);
+							transform->Local,
+							material->Texture,
+							material->Tiling,
+							material->Colors[0],
+							material->Colors[1],
+							material->Colors[2],
+							material->Colors[3]);
 					}
 					else
 					{
-						Renderer2D::DrawQuad(transform, material.Texture, material.Tiling, material.Color);
+						Renderer2D::DrawQuad(transform->Local, material->Texture, material->Tiling, material->Color);
 					}
 					break;
 				case MeshType::Triangle:
-					Renderer2D::DrawTriangle(transform, material.Colors[0], material.Colors[1], material.Colors[2]);
+					Renderer2D::DrawTriangle(transform->Local, material->Colors[0], material->Colors[1], material->Colors[2]);
 					break;
 				case MeshType::Quad:
-					Renderer2D::DrawQuad(transform, material.Color);
+					Renderer2D::DrawQuad(transform->Local, material->Color);
 					break;
 			}
 		}
 	}
 
-	bool Scene::Read(std::istream& input)
+		bool Scene::Read(std::istream& input)
 	{
 		std::string magic;
 		int version = 0;
@@ -512,7 +420,9 @@ namespace Lite {
 		std::getline(input, rest);
 
 		Record* current = nullptr;
-		Section section = Section::None;
+		ComponentId active = ComponentId::Count;
+		bool legacy = false;
+		bool loose = false;
 		std::string line;
 		while (std::getline(input, line))
 		{
@@ -536,7 +446,9 @@ namespace Lite {
 			{
 				Entity entity = CreateEntity("Entity");
 				current = FindRecord(entity.GetId());
-				section = key == "object" ? Section::Legacy : Section::None;
+				active = ComponentId::Count;
+				legacy = key == "object";
+				loose = !legacy;
 				continue;
 			}
 
@@ -547,60 +459,17 @@ namespace Lite {
 			{
 				std::string component;
 				stream >> component;
-				if (component == "transform")
-					section = Section::Transform;
-				else if (component == "camera")
+				if (const ComponentOps* ops = FindComponentSection(component))
 				{
-					section = Section::Camera;
-					if (!current->Camera)
-						current->Camera = CameraComponent{};
+					AddComponent(ops->Id, current->Id);
+					active = ops->Id;
 				}
-				else if (component == "mesh")
-				{
-					section = Section::Mesh;
-					if (!current->Mesh)
-						current->Mesh = MeshComponent{};
-				}
-				else if (component == "material")
-				{
-					section = Section::Material;
-					if (!current->Material)
-						current->Material = MaterialComponent{};
-				}
-				else if (component == "spin")
-				{
-					section = Section::Spin;
-					if (!current->Spin)
-						current->Spin = SpinComponent{};
-				}
-				else if (component == "rigidbody2d")
-				{
-					section = Section::Rigidbody2D;
-					if (!current->Rigidbody2D)
-						current->Rigidbody2D = Rigidbody2DComponent{};
-				}
-				else if (component == "box-collider2d")
-				{
-					section = Section::BoxCollider2D;
-					if (!current->BoxCollider2D)
-						current->BoxCollider2D = BoxCollider2DComponent{};
-				}
-				else if (component == "circle-collider2d")
-				{
-					section = Section::CircleCollider2D;
-					if (!current->CircleCollider2D)
-						current->CircleCollider2D = CircleCollider2DComponent{};
-				}
-				else if (component == "sorting")
-				{
-					section = Section::Sorting;
-					if (!current->Sorting)
-						current->Sorting = SortingComponent{};
-				}
+				legacy = false;
+				loose = false;
 				continue;
 			}
 
-			if (key == "name" && (section == Section::None || section == Section::Legacy))
+			if (key == "name" && (loose || legacy))
 			{
 				std::string name;
 				std::getline(stream >> std::ws, name);
@@ -608,194 +477,23 @@ namespace Lite {
 				continue;
 			}
 
-			const bool transformSection = section == Section::Transform || section == Section::Legacy || section == Section::None;
-			if (transformSection && current->Transform)
+			for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
 			{
-				if (key == "position")
-				{
-					ReadVec3(stream, current->Transform->Local.Position);
+				const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
+				if (ops == nullptr || ops->Read == nullptr)
 					continue;
-				}
-				if (key == "rotation")
-				{
-					float radians = 0.0f;
-					stream >> radians;
-					current->Transform->Local.SetRotationZ(radians);
+
+				ComponentField field;
+				field.InSection = ops->Id == active;
+				field.Legacy = legacy && ops->ReadLegacy;
+				field.Loose = loose && ops->ReadLoose;
+				field.Extra = ops->ReadBeside != ComponentId::Count && ops->ReadBeside == active;
+				if (!field.InSection && !field.Legacy && !field.Loose && !field.Extra)
 					continue;
-				}
-				if (key == "scale")
-				{
-					ReadVec3(stream, current->Transform->Local.Scale);
-					continue;
-				}
+
+				if (ops->Read(*this, current->Id, key, stream, field))
+					break;
 			}
-
-			if (section == Section::Camera && current->Camera)
-			{
-				if (key == "size")
-					stream >> current->Camera->Size;
-				else if (key == "near")
-					stream >> current->Camera->Near;
-				else if (key == "far")
-					stream >> current->Camera->Far;
-				else if (key == "projection")
-				{
-					std::string projection;
-					stream >> projection;
-					current->Camera->Projection = projection == "perspective"
-						? CameraProjection::Perspective
-						: CameraProjection::Orthographic;
-				}
-				else if (key == "fov")
-					stream >> current->Camera->FieldOfView;
-				else if (key == "primary")
-				{
-					int primary = 0;
-					stream >> primary;
-					current->Camera->Primary = primary != 0;
-				}
-				continue;
-			}
-
-			if ((section == Section::Mesh || section == Section::Legacy) && (key == "type" || key == "kind"))
-			{
-				if (!current->Mesh)
-					current->Mesh = MeshComponent{};
-				std::string type;
-				stream >> type;
-				current->Mesh->Type = ParseMesh(type);
-				continue;
-			}
-
-			if (section == Section::Material || section == Section::Legacy || section == Section::Spin)
-			{
-				if (key == "shader" || key == "color" || key == "tiling" || key == "texture" || key == "vertex-colors" || key == "colors" || key == "corners")
-				{
-					if (!current->Material)
-						current->Material = MaterialComponent{};
-				}
-
-				if (current->Material)
-				{
-					if (key == "shader")
-					{
-						std::string shader;
-						std::getline(stream >> std::ws, shader);
-						current->Material->Shader = Trim(shader);
-						continue;
-					}
-					if (key == "color")
-					{
-						ReadVec4(stream, current->Material->Color);
-						continue;
-					}
-					if (key == "tiling")
-					{
-						stream >> current->Material->Tiling.x >> current->Material->Tiling.y;
-						continue;
-					}
-					if (key == "texture")
-					{
-						std::string texture;
-						std::getline(stream >> std::ws, texture);
-						current->Material->TexturePath = Trim(texture);
-						continue;
-					}
-					if (key == "vertex-colors")
-					{
-						int enabled = 0;
-						stream >> enabled;
-						current->Material->UseVertexColors = enabled != 0;
-						continue;
-					}
-					if (key == "colors" || key == "corners")
-					{
-						current->Material->UseVertexColors = true;
-						for (Vec4& color : current->Material->Colors)
-							ReadVec4(stream, color);
-						continue;
-					}
-				}
-			}
-
-			if ((section == Section::Spin || section == Section::Legacy) && (key == "rate" || key == "spin"))
-			{
-				float rate = 0.0f;
-				stream >> rate;
-				if (section == Section::Spin || rate != 0.0f)
-				{
-					if (!current->Spin)
-						current->Spin = SpinComponent{};
-					current->Spin->Rate = rate;
-				}
-				continue;
-			}
-
-			if (section == Section::Rigidbody2D && current->Rigidbody2D)
-			{
-				Rigidbody2DComponent& body = *current->Rigidbody2D;
-				if (key == "type")
-				{
-					std::string type;
-					stream >> type;
-					if (type == "static")
-						body.Type = BodyType::Static;
-					else if (type == "kinematic")
-						body.Type = BodyType::Kinematic;
-					else
-						body.Type = BodyType::Dynamic;
-				}
-				else if (key == "mass")
-					stream >> body.Mass;
-				else if (key == "gravity")
-					stream >> body.GravityScale;
-				else if (key == "velocity")
-					stream >> body.LinearVelocity.x >> body.LinearVelocity.y;
-				else if (key == "angular")
-					stream >> body.AngularVelocity;
-				else if (key == "freeze")
-				{
-					int freeze = 0;
-					stream >> freeze;
-					body.FreezeRotation = freeze != 0;
-				}
-				continue;
-			}
-
-			if (section == Section::BoxCollider2D && current->BoxCollider2D)
-			{
-				BoxCollider2DComponent& box = *current->BoxCollider2D;
-				if (key == "size")
-					stream >> box.Size.x >> box.Size.y;
-				else if (key == "offset")
-					stream >> box.Offset.x >> box.Offset.y;
-				else if (key == "trigger")
-				{
-					int trigger = 0;
-					stream >> trigger;
-					box.IsTrigger = trigger != 0;
-				}
-				continue;
-			}
-
-			if (section == Section::CircleCollider2D && current->CircleCollider2D)
-			{
-				CircleCollider2DComponent& circle = *current->CircleCollider2D;
-				if (key == "radius")
-					stream >> circle.Radius;
-				else if (key == "offset")
-					stream >> circle.Offset.x >> circle.Offset.y;
-				else if (key == "trigger")
-				{
-					int trigger = 0;
-					stream >> trigger;
-					circle.IsTrigger = trigger != 0;
-				}
-				continue;
-			}
-
-			if (section == Section::Sorting && current->Sorting && key == "order")
-				stream >> current->Sorting->Order;
 		}
 
 		if (m_Name.empty())
@@ -805,8 +503,6 @@ namespace Lite {
 		{
 			if (record.Name.empty())
 				record.Name = "Entity";
-			if (record.Material && record.Material->Shader.empty())
-				record.Material->Shader = kDefaultShader;
 		}
 
 		return true;
@@ -820,89 +516,14 @@ namespace Lite {
 		{
 			output << "entity\n";
 			output << std::format("name {}\n", record.Name);
-			if (record.Transform)
+			for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
 			{
-				const Vec3& position = record.Transform->Local.Position;
-				const Vec3& scale = record.Transform->Local.Scale;
-				output << "component transform\n";
-				output << std::format("position {:.4f} {:.4f} {:.4f}\n", position.x, position.y, position.z);
-				output << std::format("rotation {:.4f}\n", record.Transform->Local.GetRotationZ());
-				output << std::format("scale {:.4f} {:.4f} {:.4f}\n", scale.x, scale.y, scale.z);
-			}
-			if (record.Camera)
-			{
-				output << "component camera\n";
-				output << std::format("projection {}\n", record.Camera->Projection == CameraProjection::Perspective ? "perspective" : "orthographic");
-				output << std::format("size {:.4f}\n", record.Camera->Size);
-				output << std::format("fov {:.4f}\n", record.Camera->FieldOfView);
-				output << std::format("near {:.4f}\n", record.Camera->Near);
-				output << std::format("far {:.4f}\n", record.Camera->Far);
-				output << std::format("primary {}\n", record.Camera->Primary ? 1 : 0);
-			}
-			if (record.Mesh)
-			{
-				output << "component mesh\n";
-				output << std::format("type {}\n", MeshName(record.Mesh->Type));
-			}
-			if (record.Material)
-			{
-				const MaterialComponent& material = *record.Material;
-				output << "component material\n";
-				output << std::format("shader {}\n", material.Shader.empty() ? kDefaultShader : material.Shader);
-				output << std::format("color {:.4f} {:.4f} {:.4f} {:.4f}\n", material.Color.x, material.Color.y, material.Color.z, material.Color.w);
-				output << std::format("tiling {:.4f} {:.4f}\n", material.Tiling.x, material.Tiling.y);
-				if (!material.TexturePath.empty())
-					output << std::format("texture {}\n", material.TexturePath);
-				output << std::format("vertex-colors {}\n", material.UseVertexColors ? 1 : 0);
-				if (material.UseVertexColors)
-				{
-					output << "colors";
-					for (const Vec4& color : material.Colors)
-						output << std::format(" {:.4f} {:.4f} {:.4f} {:.4f}", color.x, color.y, color.z, color.w);
-					output << '\n';
-				}
-			}
-			if (record.Spin)
-			{
-				output << "component spin\n";
-				output << std::format("rate {:.4f}\n", record.Spin->Rate);
-			}
-			if (record.Rigidbody2D)
-			{
-				const char* type = "dynamic";
-				if (record.Rigidbody2D->Type == BodyType::Static)
-					type = "static";
-				else if (record.Rigidbody2D->Type == BodyType::Kinematic)
-					type = "kinematic";
-				const Rigidbody2DComponent& body = *record.Rigidbody2D;
-				output << "component rigidbody2d\n";
-				output << std::format("type {}\n", type);
-				output << std::format("mass {:.4f}\n", body.Mass);
-				output << std::format("gravity {:.4f}\n", body.GravityScale);
-				output << std::format("velocity {:.4f} {:.4f}\n", body.LinearVelocity.x, body.LinearVelocity.y);
-				output << std::format("angular {:.4f}\n", body.AngularVelocity);
-				output << std::format("freeze {}\n", body.FreezeRotation ? 1 : 0);
-			}
-			if (record.BoxCollider2D)
-			{
-				const BoxCollider2DComponent& box = *record.BoxCollider2D;
-				output << "component box-collider2d\n";
-				output << std::format("size {:.4f} {:.4f}\n", box.Size.x, box.Size.y);
-				output << std::format("offset {:.4f} {:.4f}\n", box.Offset.x, box.Offset.y);
-				output << std::format("trigger {}\n", box.IsTrigger ? 1 : 0);
-			}
-			if (record.CircleCollider2D)
-			{
-				const CircleCollider2DComponent& circle = *record.CircleCollider2D;
-				output << "component circle-collider2d\n";
-				output << std::format("radius {:.4f}\n", circle.Radius);
-				output << std::format("offset {:.4f} {:.4f}\n", circle.Offset.x, circle.Offset.y);
-				output << std::format("trigger {}\n", circle.IsTrigger ? 1 : 0);
-			}
-			if (record.Sorting)
-			{
-				output << "component sorting\n";
-				output << std::format("order {}\n", record.Sorting->Order);
+				const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
+				const void* data = GetComponent(static_cast<ComponentId>(index), record.Id);
+				if (ops == nullptr || ops->Write == nullptr || data == nullptr)
+					continue;
+
+				ops->Write(output, data);
 			}
 		}
 	}
@@ -911,16 +532,19 @@ namespace Lite {
 	{
 		for (Record& record : m_Records)
 		{
-			if (!record.Material || record.Material->TexturePath.empty())
-				continue;
+			for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
+			{
+				const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
+				if (ops == nullptr || ops->Finish == nullptr)
+					continue;
 
-			record.Material->Texture = AssetRegistry::Get().Load<Texture>(record.Material->TexturePath);
-			if (!record.Material->Texture)
-				Console::Log(std::format("Failed to load texture {}", record.Material->TexturePath));
+				if (void* data = GetComponent(ops->Id, record.Id))
+					ops->Finish(data);
+			}
 		}
 	}
 
-	bool Scene::Save()
+bool Scene::Save()
 	{
 		if (m_Path.empty())
 			return false;

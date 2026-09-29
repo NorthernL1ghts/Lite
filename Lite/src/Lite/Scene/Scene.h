@@ -1,13 +1,12 @@
 #pragma once
 
-#include <Lite/Assets/Texture.h>
 #include <Lite/Core/Base.h>
 #include <Lite/Math/Math.h>
+#include <Lite/Scene/Components/Components.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <iosfwd>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -31,136 +30,8 @@ namespace Lite {
 		}
 	}
 
-	enum class MeshType
-	{
-		Quad,
-		Triangle,
-		Sprite
-	};
-
-	struct TransformComponent
-	{
-		Transform Local;
-	};
-
-	inline constexpr float kDefaultFieldOfView = 60.0f * (3.14159265f / 180.0f);
-	inline constexpr const char* kDefaultShader = "Batch";
-
-	enum class CameraProjection
-	{
-		Orthographic,
-		Perspective
-	};
-
-	struct CameraComponent
-	{
-		CameraProjection Projection = CameraProjection::Orthographic;
-		float Size = 2.0f;
-		float FieldOfView = kDefaultFieldOfView;
-		float Near = -1.0f;
-		float Far = 1.0f;
-		bool Primary = false;
-	};
-
-	inline Mat4 CameraProjectionMatrix(const CameraComponent& camera, float aspect)
-	{
-		if (camera.Projection == CameraProjection::Perspective)
-		{
-			float zNear = camera.Near > 0.0f ? camera.Near : 0.1f;
-			float zFar = camera.Far > zNear ? camera.Far : zNear + 100.0f;
-			float fov = camera.FieldOfView > 0.0f ? camera.FieldOfView : kDefaultFieldOfView;
-			return Mat4::Perspective(fov, aspect, zNear, zFar);
-		}
-
-		float halfHeight = camera.Size * 0.5f;
-		float halfWidth = halfHeight * aspect;
-		return Mat4::Orthographic(-halfWidth, halfWidth, -halfHeight, halfHeight, camera.Near, camera.Far);
-	}
-
-	struct MeshComponent
-	{
-		MeshType Type = MeshType::Quad;
-	};
-
-	struct MaterialComponent
-	{
-		std::string Shader = kDefaultShader;
-		Vec4 Color { 1.0f, 1.0f, 1.0f, 1.0f };
-		Vec4 Colors[4] {};
-		bool UseVertexColors = false;
-		Vec2 Tiling { 1.0f, 1.0f };
-		std::string TexturePath;
-		Ref<Texture> Texture;
-	};
-
-	struct SpinComponent
-	{
-		float Rate = 0.0f;
-	};
-
-	enum class BodyType
-	{
-		Static,
-		Kinematic,
-		Dynamic
-	};
-
-	struct Rigidbody2DComponent
-	{
-		BodyType Type = BodyType::Dynamic;
-		float Mass = 1.0f;
-		float GravityScale = 1.0f;
-		Vec2 LinearVelocity {};
-		float AngularVelocity = 0.0f;
-		bool FreezeRotation = false;
-	};
-
-	struct BoxCollider2DComponent
-	{
-		Vec2 Size { 1.0f, 1.0f };
-		Vec2 Offset {};
-		bool IsTrigger = false;
-	};
-
-	struct CircleCollider2DComponent
-	{
-		float Radius = 0.5f;
-		Vec2 Offset {};
-		bool IsTrigger = false;
-	};
-
-	struct SortingComponent
-	{
-		int Order = 0;
-	};
-
-	enum class ComponentId : uint8_t
-	{
-		Transform,
-		Camera,
-		Mesh,
-		Material,
-		Spin,
-		Rigidbody2D,
-		BoxCollider2D,
-		CircleCollider2D,
-		Sorting
-	};
-
-	template<typename T>
-	struct ComponentInfo;
-
-	template<> struct ComponentInfo<TransformComponent> { static constexpr ComponentId Id = ComponentId::Transform; };
-	template<> struct ComponentInfo<CameraComponent> { static constexpr ComponentId Id = ComponentId::Camera; };
-	template<> struct ComponentInfo<MeshComponent> { static constexpr ComponentId Id = ComponentId::Mesh; };
-	template<> struct ComponentInfo<MaterialComponent> { static constexpr ComponentId Id = ComponentId::Material; };
-	template<> struct ComponentInfo<SpinComponent> { static constexpr ComponentId Id = ComponentId::Spin; };
-	template<> struct ComponentInfo<Rigidbody2DComponent> { static constexpr ComponentId Id = ComponentId::Rigidbody2D; };
-	template<> struct ComponentInfo<BoxCollider2DComponent> { static constexpr ComponentId Id = ComponentId::BoxCollider2D; };
-	template<> struct ComponentInfo<CircleCollider2DComponent> { static constexpr ComponentId Id = ComponentId::CircleCollider2D; };
-	template<> struct ComponentInfo<SortingComponent> { static constexpr ComponentId Id = ComponentId::Sorting; };
-
 	class Scene;
+	class ComponentStorage;
 
 	class LITE_API Entity
 	{
@@ -191,6 +62,25 @@ namespace Lite {
 		Scene* m_Scene = nullptr;
 		uint32_t m_Id = 0;
 	};
+
+	struct ComponentOps
+	{
+		ComponentId Id = ComponentId::Count;
+		const char* Section = nullptr;
+		const char* CatalogName = nullptr;
+		const char* (*Label)(Entity entity) = nullptr;
+		void (*Add)(Entity entity) = nullptr;
+		bool (*Read)(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField field) = nullptr;
+		void (*Write)(std::ostream& output, const void* component) = nullptr;
+		void (*Finish)(void* component) = nullptr;
+		bool ReadLegacy = false;
+		bool ReadLoose = false;
+		ComponentId ReadBeside = ComponentId::Count;
+	};
+
+	LITE_API void RegisterComponent(const ComponentOps& ops);
+	LITE_API const ComponentOps* FindComponent(ComponentId id);
+	LITE_API const ComponentOps* FindComponentSection(std::string_view section);
 
 	struct ComponentEntry
 	{
@@ -247,45 +137,23 @@ namespace Lite {
 		static void SetActive(Scene* scene);
 		static Scene* GetActive();
 
+		void* AddComponent(ComponentId id, uint32_t entity);
+		void* GetComponent(ComponentId id, uint32_t entity);
+		const void* GetComponent(ComponentId id, uint32_t entity) const;
+		void RemoveComponent(ComponentId id, uint32_t entity);
+
 	private:
 		friend class Entity;
-
-		enum class Section
-		{
-			None,
-			Legacy,
-			Transform,
-			Camera,
-			Mesh,
-			Material,
-			Spin,
-			Rigidbody2D,
-			BoxCollider2D,
-			CircleCollider2D,
-			Sorting
-		};
 
 		struct Record
 		{
 			uint32_t Id = 0;
 			std::string Name;
-			std::optional<TransformComponent> Transform;
-			std::optional<CameraComponent> Camera;
-			std::optional<MeshComponent> Mesh;
-			std::optional<MaterialComponent> Material;
-			std::optional<SpinComponent> Spin;
-			std::optional<Rigidbody2DComponent> Rigidbody2D;
-			std::optional<BoxCollider2DComponent> BoxCollider2D;
-			std::optional<CircleCollider2DComponent> CircleCollider2D;
-			std::optional<SortingComponent> Sorting;
 		};
 
 		Record* FindRecord(uint32_t id);
 		const Record* FindRecord(uint32_t id) const;
 		const Record* FindPrimaryCameraRecord() const;
-		void* AddComponent(ComponentId id, uint32_t entity);
-		void* GetComponent(ComponentId id, uint32_t entity);
-		void RemoveComponent(ComponentId id, uint32_t entity);
 		bool Read(std::istream& input);
 		void Write(std::ostream& output) const;
 		void ResolveTextures();
@@ -296,6 +164,7 @@ namespace Lite {
 
 		struct PhysicsStorage;
 		PhysicsStorage* m_Physics = nullptr;
+		ComponentStorage* m_Components = nullptr;
 
 		std::string m_Name;
 		std::string m_Path;
@@ -316,20 +185,20 @@ namespace Lite {
 	{
 		if (m_Scene == nullptr)
 			return nullptr;
-		return static_cast<T*>(m_Scene->GetComponent(ComponentInfo<T>::Id, m_Id));
+		return static_cast<T*>(m_Scene->GetComponent(ComponentTraits<T>::Id, m_Id));
 	}
 
 	template<typename T>
 	T& Entity::Add()
 	{
-		return *static_cast<T*>(m_Scene->AddComponent(ComponentInfo<T>::Id, m_Id));
+		return *static_cast<T*>(m_Scene->AddComponent(ComponentTraits<T>::Id, m_Id));
 	}
 
 	template<typename T>
 	void Entity::Remove()
 	{
 		if (m_Scene != nullptr)
-			m_Scene->RemoveComponent(ComponentInfo<T>::Id, m_Id);
+			m_Scene->RemoveComponent(ComponentTraits<T>::Id, m_Id);
 	}
 
 }
