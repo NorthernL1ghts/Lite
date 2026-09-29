@@ -170,9 +170,12 @@ void EditorLayer::OnAttach()
 	Lite::Console::Log(std::format("Project loaded: {} ({})", project->GetConfig().Name, projectPath.string()));
 
 	const std::filesystem::path& start = project->GetConfig().StartScene;
+	std::filesystem::path scene;
 	if (!start.empty())
-		OpenScene(Lite::Project::GetAssetFileSystemPath(start).string());
-	if (!m_Scene || !SceneMatches(Lite::Project::GetAssetFileSystemPath(start)))
+		scene = Lite::Project::GetAssetFileSystemPath(start);
+	if (!scene.empty())
+		OpenScene(scene.string());
+	if (scene.empty() || !SceneMatches(scene))
 		NewScene();
 }
 
@@ -604,19 +607,36 @@ void EditorLayer::DrawScene()
 
 	size_t componentCount = 0;
 	const Lite::ComponentEntry* catalog = Lite::ComponentCatalog(componentCount);
-	for (Lite::Entity entity : m_Scene->GetEntities())
+	ImGuiTreeNodeFlags planeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+	for (const Lite::Scene::Plane& plane : m_Scene->GetPlanes())
 	{
-		std::string label = std::format("{}##entity{}", entity.GetName(), entity.GetId());
-		if (ImGui::Selectable(label.c_str(), m_Selected == entity.GetId()))
-			m_Selected = entity.GetId();
+		std::string planeLabel = std::format("{}##plane{}", plane.Name, plane.Id);
+		if (!ImGui::TreeNodeEx(planeLabel.c_str(), planeFlags))
+			continue;
 
-		ImGui::Indent();
-		for (size_t index = 0; index < componentCount; ++index)
+		for (Lite::Entity entity : m_Scene->GetEntities(plane.Id))
 		{
-			if (const char* component = catalog[index].Label(entity))
-				ImGui::TextDisabled("%s", component);
+			std::string label = std::format("{}##entity{}", entity.GetName(), entity.GetId());
+			ImGuiTreeNodeFlags entityFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+			if (m_Selected == entity.GetId())
+				entityFlags |= ImGuiTreeNodeFlags_Selected;
+
+			bool open = ImGui::TreeNodeEx(label.c_str(), entityFlags);
+			if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+				m_Selected = entity.GetId();
+
+			if (!open)
+				continue;
+
+			for (size_t index = 0; index < componentCount; ++index)
+			{
+				if (const char* component = catalog[index].Label(entity))
+					ImGui::TextDisabled("%s", component);
+			}
+			ImGui::TreePop();
 		}
-		ImGui::Unindent();
+
+		ImGui::TreePop();
 	}
 	ImGui::End();
 }

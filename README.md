@@ -55,7 +55,7 @@ Editor opens `Sandbox/Sandbox.lite`. That project names the start scene and the 
 
 The window is a dockspace:
 
-- **Scene** lists every entity and the components on it.
+- **Scene** lists planes, then the entities on each plane, then the components on each entity.
 - **Viewport** shows the scene. While stopped or paused, click an entity here to select it. The frontmost object wins.
 - **Inspector** edits the selected entity. While the scene is playing, fields stay locked until you pause.
 - **Console** shows scene, physics, and selection messages.
@@ -76,7 +76,7 @@ The window is a dockspace:
 
 Project files are YAML documents named `*.lite`. A project stores its name, start scene, asset directory, and script module path. The start scene and asset directory are relative to the project file. Open and Save use the same file browser, filtered to `*.lite`.
 
-Open and Save As use a file browser. Save Scene writes the scene that is already open. A new scene with no path opens Save As. Scene files are YAML documents named `*.scene`. The document has a `name` and an `entities` list. Each entity has a `name` and one map per component, such as `transform`, `camera`, `mesh`, and `rigidbody2d`.
+Open and Save As use a file browser. Save Scene writes the scene that is already open. A new scene with no path opens Save As. Scene files are YAML documents named `*.scene`. The document has a `name` and a `planes` list. Each plane has a `name` and an `entities` list. Each entity has a `name` and one map per component, such as `transform`, `camera`, `mesh`, and `rigidbody2d`.
 
 ### Playback
 
@@ -92,7 +92,7 @@ While the scene is stopped, Q and E rotate the editor camera and the scroll whee
 
 ## Scenes
 
-A scene is a list of entities. `CreateEntity` gives the entity a transform. Other components are added on the entity:
+A scene is a list of planes. Each plane holds entities. A new scene starts with a World plane. `CreateEntity` puts the entity on that plane and gives it a transform. Other components are added on the entity:
 
 ```cpp
 Entity quad = scene->CreateEntity("Quad");
@@ -118,7 +118,7 @@ quad.Add<BoxCollider2DComponent>();
 
 A collider with no rigidbody is a static body. Trigger colliders overlap and do not block. Dynamic bodies fall. Kinematic bodies move with their velocity and are not pushed. Static bodies stay where they are.
 
-The example scene has a camera, a checkerboard background, a triangle, a dynamic quad, and a static ground. Press play and the quad falls onto the ground. The console reports `Box2D started` and the collision.
+The example scene has a Background plane for the checkerboard and a World plane for the camera, triangle, dynamic quad, and static ground. Press play and the quad falls onto the ground. The console reports `Box2D started` and the collision.
 
 ## Sandbox
 

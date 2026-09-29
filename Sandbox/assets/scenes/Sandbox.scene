@@ -1,126 +1,130 @@
 name: Sandbox
-entities:
-  - name: Camera
-    transform:
-      position: [0, 0, 0]
-      rotation: 0
-      scale: [1, 1, 1]
-    camera:
-      projection: orthographic
-      size: 2
-      fov: 1.0472
-      near: -1
-      far: 1
-      primary: true
-  - name: Checkerboard
-    transform:
-      position: [0, 0, 0]
-      rotation: 0
-      scale: [8, 8, 1]
-    mesh:
-      type: sprite
-    material:
-      shader: Batch
-      color: [1, 1, 1, 1]
-      tiling: [8, 8]
-      texture: assets/Checkerboard.png
-      vertex-colors: true
-      colors:
-        - [0.16, 0.28, 0.62, 1]
-        - [0.12, 0.52, 0.58, 1]
-        - [0.93, 0.58, 0.24, 1]
-        - [0.4599, 0.2252, 0.6403, 1]
-    rigidbody2d:
-      type: static
-      mass: 1
-      gravity: 1
-      velocity: [0, 0]
-      angular: 0
-      freeze: true
-    box-collider2d:
-      size: [1, 1]
-      offset: [0, 0]
-      trigger: true
-    sorting:
-      order: -10
-  - name: Triangle
-    transform:
-      position: [0, 0, 0]
-      rotation: 0
-      scale: [1, 1, 1]
-    mesh:
-      type: triangle
-    material:
-      shader: Batch
-      color: [1, 1, 1, 1]
-      tiling: [1, 1]
-      vertex-colors: true
-      colors:
-        - [0.93, 0.22, 0.28, 1]
-        - [0.08, 0.78, 0.42, 1]
-        - [0.16, 0.36, 0.96, 1]
-        - [1, 1, 1, 1]
-    rigidbody2d:
-      type: static
-      mass: 1
-      gravity: 1
-      velocity: [0, 0]
-      angular: 0
-      freeze: true
-    circle-collider2d:
-      radius: 0.7
-      offset: [0, 0]
-      trigger: false
-    sorting:
-      order: 0
-  - name: Quad
-    transform:
-      position: [1.15, 0.55, 0]
-      rotation: 0
-      scale: [0.62, 0.62, 1]
-    mesh:
-      type: quad
-    material:
-      shader: Batch
-      color: [0.86, 0.16, 0.18, 1]
-      tiling: [1, 1]
-      vertex-colors: false
-    spin:
-      rate: 1.15
-    rigidbody2d:
-      type: dynamic
-      mass: 1
-      gravity: 1
-      velocity: [0, 0]
-      angular: 0
-      freeze: false
-    box-collider2d:
-      size: [1, 1]
-      offset: [0, 0]
-      trigger: false
-    sorting:
-      order: 1
-  - name: Ground
-    transform:
-      position: [0, -0.88, 0]
-      rotation: 0
-      scale: [3.4, 0.16, 1]
-    mesh:
-      type: quad
-    material:
-      shader: Batch
-      color: [0.22, 0.24, 0.28, 1]
-      tiling: [1, 1]
-    rigidbody2d:
-      type: static
-      mass: 1
-      gravity: 1
-      velocity: [0, 0]
-      angular: 0
-      freeze: true
-    box-collider2d:
-      size: [1, 1]
-      offset: [0, 0]
-      trigger: false
-    sorting:
-      order: 2
+planes:
+  - name: Background
+    entities:
+      - name: Checkerboard
+        transform:
+          position: [0, 0, 0]
+          rotation: 0
+          scale: [8, 8, 1]
+        mesh:
+          type: sprite
+        material:
+          shader: Batch
+          color: [1, 1, 1, 1]
+          tiling: [8, 8]
+          texture: assets/Checkerboard.png
+          vertex-colors: true
+          colors:
+            - [0.16, 0.28, 0.62, 1]
+            - [0.12, 0.52, 0.58, 1]
+            - [0.93, 0.58, 0.24, 1]
+            - [0.4599, 0.2252, 0.6403, 1]
+        rigidbody2d:
+          type: static
+          mass: 1
+          gravity: 1
+          velocity: [0, 0]
+          angular: 0
+          freeze: true
+        box-collider2d:
+          size: [1, 1]
+          offset: [0, 0]
+          trigger: true
+        sorting:
+          order: -10
+  - name: World
+    entities:
+      - name: Camera
+        transform:
+          position: [0, 0, 0]
+          rotation: 0
+          scale: [1, 1, 1]
+        camera:
+          projection: orthographic
+          size: 2
+          fov: 1.0472
+          near: -1
+          far: 1
+          primary: true
+      - name: Triangle
+        transform:
+          position: [0, 0, 0]
+          rotation: 0
+          scale: [1, 1, 1]
+        mesh:
+          type: triangle
+        material:
+          shader: Batch
+          color: [1, 1, 1, 1]
+          tiling: [1, 1]
+          vertex-colors: true
+          colors:
+            - [0.93, 0.22, 0.28, 1]
+            - [0.08, 0.78, 0.42, 1]
+            - [0.16, 0.36, 0.96, 1]
+            - [1, 1, 1, 1]
+        rigidbody2d:
+          type: static
+          mass: 1
+          gravity: 1
+          velocity: [0, 0]
+          angular: 0
+          freeze: true
+        circle-collider2d:
+          radius: 0.7
+          offset: [0, 0]
+          trigger: false
+        sorting:
+          order: 0
+      - name: Quad
+        transform:
+          position: [1.15, 0.55, 0]
+          rotation: 0
+          scale: [0.62, 0.62, 1]
+        mesh:
+          type: quad
+        material:
+          shader: Batch
+          color: [0.86, 0.16, 0.18, 1]
+          tiling: [1, 1]
+          vertex-colors: false
+        spin:
+          rate: 1.15
+        rigidbody2d:
+          type: dynamic
+          mass: 1
+          gravity: 1
+          velocity: [0, 0]
+          angular: 0
+          freeze: false
+        box-collider2d:
+          size: [1, 1]
+          offset: [0, 0]
+          trigger: false
+        sorting:
+          order: 1
+      - name: Ground
+        transform:
+          position: [0, -0.88, 0]
+          rotation: 0
+          scale: [3.4, 0.16, 1]
+        mesh:
+          type: quad
+        material:
+          shader: Batch
+          color: [0.22, 0.24, 0.28, 1]
+          tiling: [1, 1]
+        rigidbody2d:
+          type: static
+          mass: 1
+          gravity: 1
+          velocity: [0, 0]
+          angular: 0
+          freeze: true
+        box-collider2d:
+          size: [1, 1]
+          offset: [0, 0]
+          trigger: false
+        sorting:
+          order: 2

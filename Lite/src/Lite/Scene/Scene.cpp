@@ -119,10 +119,48 @@ namespace Lite {
 		return nullptr;
 	}
 
+	uint32_t Scene::CreatePlane(std::string name)
+	{
+		if (name.empty())
+			name = "Plane";
+
+		Plane plane;
+		plane.Id = m_NextPlane++;
+		plane.Name = std::move(name);
+		m_Planes.push_back(std::move(plane));
+		return m_Planes.back().Id;
+	}
+
 	Entity Scene::CreateEntity(std::string name)
 	{
+		if (m_Planes.empty())
+			CreatePlane("World");
+		return CreateEntity(std::move(name), m_Planes.front().Id);
+	}
+
+	Entity Scene::CreateEntity(std::string name, uint32_t plane)
+	{
+		bool found = false;
+		for (const Plane& item : m_Planes)
+		{
+			if (item.Id == plane)
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+		{
+			if (m_Planes.empty())
+				plane = CreatePlane("World");
+			else
+				plane = m_Planes.front().Id;
+		}
+
 		Record record;
 		record.Id = m_NextId++;
+		record.Plane = plane;
 		record.Name = std::move(name);
 		m_Records.push_back(std::move(record));
 		AddComponent(ComponentId::Transform, m_Records.back().Id);
@@ -172,8 +210,25 @@ namespace Lite {
 	{
 		std::vector<Entity> entities;
 		entities.reserve(m_Records.size());
+		for (const Plane& plane : m_Planes)
+		{
+			for (const Record& record : m_Records)
+			{
+				if (record.Plane == plane.Id)
+					entities.emplace_back(this, record.Id);
+			}
+		}
+		return entities;
+	}
+
+	std::vector<Entity> Scene::GetEntities(uint32_t plane)
+	{
+		std::vector<Entity> entities;
 		for (const Record& record : m_Records)
-			entities.emplace_back(this, record.Id);
+		{
+			if (record.Plane == plane)
+				entities.emplace_back(this, record.Id);
+		}
 		return entities;
 	}
 
@@ -192,6 +247,9 @@ namespace Lite {
 		if (m_Loaded)
 			return;
 
+		if (m_Planes.empty())
+			CreatePlane("World");
+
 		m_Loaded = true;
 		m_Playback = ScenePlayback::Stopped;
 		Console::Log(std::format("Scene created: {}", m_Name));
@@ -207,8 +265,15 @@ namespace Lite {
 			Console::Log(std::format("Scene loaded: {}", m_Name));
 		else
 			Console::Log(std::format("Scene loaded: {} ({})", m_Name, m_Path));
-		for (const Record& record : m_Records)
-			Console::Log(std::format("  {}", record.Name));
+		for (const Plane& plane : m_Planes)
+		{
+			Console::Log(std::format("  {}", plane.Name));
+			for (const Record& record : m_Records)
+			{
+				if (record.Plane == plane.Id)
+					Console::Log(std::format("    {}", record.Name));
+			}
+		}
 	}
 
 	void Scene::Play()
@@ -367,35 +432,65 @@ namespace Lite {
 		if (root["name"])
 			m_Name = root["name"].as<std::string>();
 
-		const YAML::Node entities = root["entities"];
-		if (entities && entities.IsSequence())
+		auto readEntity = [this](uint32_t plane, const YAML::Node& entityNode)
 		{
-			for (const YAML::Node& entityNode : entities)
+			if (!entityNode || !entityNode.IsMap())
+				return;
+
+			std::string name = "Entity";
+			if (entityNode["name"])
+				name = entityNode["name"].as<std::string>();
+			if (name.empty())
+				name = "Entity";
+
+			Entity entity = CreateEntity(name, plane);
+			for (YAML::const_iterator it = entityNode.begin(); it != entityNode.end(); ++it)
 			{
-				if (!entityNode || !entityNode.IsMap())
+				const std::string key = it->first.as<std::string>();
+				if (key == "name")
 					continue;
 
-				std::string name = "Entity";
-				if (entityNode["name"])
-					name = entityNode["name"].as<std::string>();
+				const ComponentOps* ops = FindComponentSection(key);
+				if (ops == nullptr || ops->Read == nullptr)
+					continue;
+
+				ops->Read(*this, entity.GetId(), it->second);
+			}
+		};
+
+		auto readEntities = [&readEntity](uint32_t plane, const YAML::Node& entities)
+		{
+			if (!entities || !entities.IsSequence())
+				return;
+
+			for (const YAML::Node& entityNode : entities)
+				readEntity(plane, entityNode);
+		};
+
+		const YAML::Node planes = root["planes"];
+		if (planes && planes.IsSequence())
+		{
+			for (const YAML::Node& planeNode : planes)
+			{
+				if (!planeNode || !planeNode.IsMap())
+					continue;
+
+				std::string name = "Plane";
+				if (planeNode["name"])
+					name = planeNode["name"].as<std::string>();
 				if (name.empty())
-					name = "Entity";
+					name = "Plane";
 
-				Entity entity = CreateEntity(name);
-				for (YAML::const_iterator it = entityNode.begin(); it != entityNode.end(); ++it)
-				{
-					const std::string key = it->first.as<std::string>();
-					if (key == "name")
-						continue;
-
-					const ComponentOps* ops = FindComponentSection(key);
-					if (ops == nullptr || ops->Read == nullptr)
-						continue;
-
-					ops->Read(*this, entity.GetId(), it->second);
-				}
+				readEntities(CreatePlane(name), planeNode["entities"]);
 			}
 		}
+		else
+		{
+			readEntities(CreatePlane("World"), root["entities"]);
+		}
+
+		if (m_Planes.empty())
+			CreatePlane("World");
 
 		if (m_Name.empty())
 			m_Name = "Untitled";
@@ -408,26 +503,39 @@ namespace Lite {
 		YAML::Node root;
 		root["name"] = m_Name;
 
-		YAML::Node entities(YAML::NodeType::Sequence);
-		for (const Record& record : m_Records)
+		YAML::Node planes(YAML::NodeType::Sequence);
+		for (const Plane& plane : m_Planes)
 		{
-			YAML::Node entity;
-			entity["name"] = record.Name;
-			for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
+			YAML::Node planeNode;
+			planeNode["name"] = plane.Name;
+
+			YAML::Node entities(YAML::NodeType::Sequence);
+			for (const Record& record : m_Records)
 			{
-				const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
-				const void* data = GetComponent(static_cast<ComponentId>(index), record.Id);
-				if (ops == nullptr || ops->Write == nullptr || ops->Section == nullptr || data == nullptr)
+				if (record.Plane != plane.Id)
 					continue;
 
-				YAML::Node component(YAML::NodeType::Map);
-				ops->Write(component, data);
-				entity[ops->Section] = component;
+				YAML::Node entity;
+				entity["name"] = record.Name;
+				for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
+				{
+					const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
+					const void* data = GetComponent(static_cast<ComponentId>(index), record.Id);
+					if (ops == nullptr || ops->Write == nullptr || ops->Section == nullptr || data == nullptr)
+						continue;
+
+					YAML::Node component(YAML::NodeType::Map);
+					ops->Write(component, data);
+					entity[ops->Section] = component;
+				}
+				entities.push_back(entity);
 			}
-			entities.push_back(entity);
+
+			planeNode["entities"] = entities;
+			planes.push_back(planeNode);
 		}
 
-		root["entities"] = entities;
+		root["planes"] = planes;
 		output << root;
 	}
 

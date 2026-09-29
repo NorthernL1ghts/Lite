@@ -86,11 +86,22 @@ namespace Lite {
 		const std::string& GetPath() const { return m_Path; }
 		ScenePlayback GetPlayback() const { return m_Playback; }
 
+		struct Plane
+		{
+			uint32_t Id = 0;
+			std::string Name;
+		};
+
+		uint32_t CreatePlane(std::string name);
+		const std::vector<Plane>& GetPlanes() const { return m_Planes; }
+
 		Entity CreateEntity(std::string name);
+		Entity CreateEntity(std::string name, uint32_t plane);
 		Entity Find(std::string_view name);
 		Entity GetEntity(uint32_t id);
 		Entity GetPrimaryCamera();
 		std::vector<Entity> GetEntities();
+		std::vector<Entity> GetEntities(uint32_t plane);
 		void SetPrimaryCamera(uint32_t id);
 
 		void Create();
@@ -129,6 +140,7 @@ namespace Lite {
 		struct Record
 		{
 			uint32_t Id = 0;
+			uint32_t Plane = 0;
 			std::string Name;
 		};
 
@@ -149,7 +161,9 @@ namespace Lite {
 
 		std::string m_Name;
 		std::string m_Path;
+		std::vector<Plane> m_Planes;
 		std::vector<Record> m_Records;
+		uint32_t m_NextPlane = 1;
 		uint32_t m_NextId = 1;
 		bool m_Loaded = false;
 		ScenePlayback m_Playback = ScenePlayback::Stopped;
