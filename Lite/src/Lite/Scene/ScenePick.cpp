@@ -1,6 +1,7 @@
 #include <Lite/Scene/Scene.h>
 
 #include <Lite/Renderer/MeshShape.h>
+#include <Lite/Scene/SceneCamera.h>
 
 #include <algorithm>
 #include <vector>
@@ -8,26 +9,6 @@
 namespace Lite {
 
 	namespace {
-
-		bool Contains(Vec2 point, const Vec2* vertices, int count)
-		{
-			bool positive = false;
-			bool negative = false;
-			for (int index = 0; index < count; ++index)
-			{
-				const Vec2& current = vertices[index];
-				const Vec2& next = vertices[(index + 1) % count];
-				float cross = (next.x - current.x) * (point.y - current.y) - (next.y - current.y) * (point.x - current.x);
-				if (cross > 0.0f)
-					positive = true;
-				if (cross < 0.0f)
-					negative = true;
-				if (positive && negative)
-					return false;
-			}
-
-			return true;
-		}
 
 		bool Hits(MeshType type, const Transform& transform, Vec2 point)
 		{
@@ -40,21 +21,16 @@ namespace Lite {
 				world[index] = { transformed.x, transformed.y };
 			}
 
-			return Contains(point, world, count);
+			return PointInPolygon(point, world, count);
 		}
 
 	}
 
 	uint32_t Scene::Pick(const Mat4& viewProjection, float mouseX, float mouseY, float windowW, float windowH)
 	{
-		if (windowW <= 1.0f || windowH <= 1.0f)
+		Vec2 world;
+		if (!ScreenToWorld(viewProjection, windowW, windowH, mouseX, mouseY, world))
 			return 0;
-
-		float ndcX = (mouseX / windowW) * 2.0f - 1.0f;
-		float ndcY = 1.0f - (mouseY / windowH) * 2.0f;
-		Vec4 world = viewProjection.Inverse() * Vec4(ndcX, ndcY, 0.0f, 1.0f);
-		if (world.w != 0.0f)
-			world /= world.w;
 
 		struct Candidate
 		{

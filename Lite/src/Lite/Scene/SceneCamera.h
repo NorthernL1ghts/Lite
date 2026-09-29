@@ -55,4 +55,33 @@ namespace Lite {
 		return fit * viewProjection;
 	}
 
+	inline bool ScreenToWorld(const Mat4& viewProjection, float windowW, float windowH, float x, float y, Vec2& world)
+	{
+		if (windowW <= 1.0f || windowH <= 1.0f)
+			return false;
+
+		float ndcX = (x / windowW) * 2.0f - 1.0f;
+		float ndcY = 1.0f - (y / windowH) * 2.0f;
+		Vec4 point = viewProjection.Inverse() * Vec4(ndcX, ndcY, 0.0f, 1.0f);
+		if (point.w != 0.0f)
+			point /= point.w;
+		world = { point.x, point.y };
+		return true;
+	}
+
+	inline bool WorldToScreen(const Mat4& viewProjection, float windowW, float windowH, Vec2 world, Vec2& screen)
+	{
+		if (windowW <= 1.0f || windowH <= 1.0f)
+			return false;
+
+		Vec4 clip = viewProjection * Vec4(world.x, world.y, 0.0f, 1.0f);
+		if (clip.w == 0.0f)
+			return false;
+
+		clip /= clip.w;
+		screen.x = (clip.x * 0.5f + 0.5f) * windowW;
+		screen.y = (1.0f - (clip.y * 0.5f + 0.5f)) * windowH;
+		return true;
+	}
+
 }

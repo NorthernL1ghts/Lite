@@ -7,6 +7,7 @@
 #include <Lite/Core/Layer.h>
 #include <Lite/Renderer/OrthographicCamera.h>
 #include <Lite/Scene/Scene.h>
+#include <Lite/Scene/SceneGizmo.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -44,17 +45,7 @@ private:
 	void PickObject(float mouseX, float mouseY);
 	void DropSprite(const std::string& path, float mouseX, float mouseY);
 	void ApplyPlayCamera();
-	bool BeginGizmo(float mouseX, float mouseY);
-	void ApplyGizmo(float mouseX, float mouseY);
 	void DrawGizmo();
-
-	enum class GizmoAction
-	{
-		None,
-		Move,
-		Rotate,
-		Scale
-	};
 
 	Lite::OrthographicCamera m_Camera;
 	Lite::Mat4 m_ViewProjection = Lite::Mat4::Identity();
@@ -70,14 +61,7 @@ private:
 	Lite::Scene* m_NamedScene = nullptr;
 	char m_Name[128] {};
 	uint32_t m_Selected = 0;
-	GizmoAction m_Gizmo = GizmoAction::None;
-	int m_GizmoCorner = 0;
-	float m_GizmoAngle = 0.0f;
-	float m_GizmoSpin = 0.0f;
-	Lite::Vec2 m_GizmoMouse {};
-	Lite::Vec3 m_GizmoPosition {};
-	float m_GizmoRotation = 0.0f;
-	Lite::Vec3 m_GizmoScale { 1.0f, 1.0f, 1.0f };
+	Lite::GizmoDrag m_Gizmo;
 	Inspector m_Inspector;
 	SceneBrowser m_Browser;
 	Explorer m_Explorer;

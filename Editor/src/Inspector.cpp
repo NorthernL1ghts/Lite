@@ -1,7 +1,5 @@
 #include <Inspector.h>
 
-#include <Lite/Assets/AssetRegistry.h>
-#include <Lite/Assets/Texture.h>
 #include <Lite/Scene/Console.h>
 #include <Lite/Scene/Scene.h>
 
@@ -64,23 +62,15 @@ void Inspector::Reset()
 void Inspector::ApplyTexture(std::uint32_t selected, const std::string& path)
 {
 	Lite::Scene* scene = Lite::Scene::GetActive();
-	Lite::Entity entity = scene != nullptr ? scene->GetEntity(selected) : Lite::Entity{};
-	Lite::MaterialComponent* material = entity ? entity.Get<Lite::MaterialComponent>() : nullptr;
-	if (material == nullptr)
+	if (scene == nullptr || !scene->AssignTexture(selected, path))
 	{
 		Lite::Console::Log("Drop a texture onto an entity with a material");
 		return;
 	}
 
-	material->TexturePath = path;
 	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", path.c_str());
-	material->Texture = path.empty()
-		? Lite::Ref<Lite::Texture>{}
-		: Lite::AssetRegistry::Get().Load<Lite::Texture>(path);
-	if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
-		mesh->Type = Lite::MeshType::Sprite;
-
-	if (!path.empty() && !material->Texture)
+	Lite::MaterialComponent* material = scene->GetEntity(selected).Get<Lite::MaterialComponent>();
+	if (!path.empty() && (material == nullptr || !material->Texture))
 		Lite::Console::Log(std::format("Failed to load texture {}", path));
 	else
 		Lite::Console::Log(std::format("Texture set: {}", path));
@@ -248,12 +238,7 @@ void Inspector::Draw(std::uint32_t selected)
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(-1.0f);
 			if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
-			{
-				material->TexturePath = m_TextureText;
-				material->Texture = material->TexturePath.empty()
-					? Lite::Ref<Lite::Texture>{}
-					: Lite::AssetRegistry::Get().Load<Lite::Texture>(material->TexturePath);
-			}
+				scene->AssignTexture(entity.GetId(), m_TextureText);
 		}
 		}
 		ImGui::EndGroup();

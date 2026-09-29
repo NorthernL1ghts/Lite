@@ -105,6 +105,22 @@ namespace Lite {
 		return std::filesystem::exists(path, error);
 	}
 
+	std::filesystem::path FileSystem::Unused(const std::filesystem::path& parent, const std::string& stem, std::string_view extension)
+	{
+		auto candidate = [&](int index)
+		{
+			std::string name = index <= 1 ? stem : stem + " " + std::to_string(index);
+			name.append(extension);
+			return parent / name;
+		};
+
+		std::filesystem::path path = candidate(1);
+		std::error_code error;
+		for (int index = 2; std::filesystem::exists(path, error); ++index)
+			path = candidate(index);
+		return path;
+	}
+
 	std::vector<uint8_t> FileSystem::ReadBinary(const std::filesystem::path& path)
 	{
 		std::error_code error;

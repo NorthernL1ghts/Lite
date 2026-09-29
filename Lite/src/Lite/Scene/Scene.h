@@ -119,6 +119,17 @@ namespace Lite {
 		void Render() const;
 		Mat4 ViewProjection(float aspect, const Transform& fallbackTransform, const CameraComponent& fallbackCamera) const;
 		uint32_t Pick(const Mat4& viewProjection, float mouseX, float mouseY, float windowW, float windowH);
+		uint32_t NextEntity(uint32_t id) const;
+		bool AssignTexture(uint32_t entityId, const std::string& path);
+
+		struct SpritePlacement
+		{
+			uint32_t Entity = 0;
+			bool Background = false;
+			bool Loaded = false;
+		};
+
+		SpritePlacement PlaceSprite(const std::string& texturePath, Vec2 world, Vec2 viewCenter, float viewSize, float aspect);
 
 		static void Close(Scope<Scene>& scene);
 

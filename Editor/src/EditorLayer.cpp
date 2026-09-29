@@ -1,7 +1,5 @@
 #include <EditorLayer.h>
 
-#include <Lite/Assets/AssetRegistry.h>
-#include <Lite/Assets/Texture.h>
 #include <Lite/Core/Events/KeyEvent.h>
 #include <Lite/Core/Events/MouseEvent.h>
 #include <Lite/Core/Log/Logger.h>
@@ -9,8 +7,8 @@
 #include <Lite/ImGui/Instrumentation.h>
 #include <Lite/Input/Input.h>
 #include <Lite/Input/KeyCodes.h>
+#include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Project/Project.h>
-#include <Lite/Renderer/MeshShape.h>
 #include <Lite/Renderer/Renderer.h>
 #include <Lite/Renderer/Renderer2D.h>
 #include <Lite/Scene/Console.h>
@@ -19,7 +17,6 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -29,8 +26,6 @@
 #include <vector>
 
 namespace {
-
-	bool Unproject(const Lite::Mat4& viewProjection, float windowW, float windowH, float mouseX, float mouseY, Lite::Vec2& world);
 
 	const char* kEditorWindows[] = { "Scene", "Viewport", "Inspector", "Console", "Explorer" };
 
@@ -222,28 +217,6 @@ void EditorLayer::OnRender()
 	m_Scene->Render();
 }
 
-namespace {
-
-	std::filesystem::path UnusedDirectory(const std::filesystem::path& parent, const std::string& stem)
-	{
-		std::filesystem::path folder = parent / stem;
-		std::error_code error;
-		for (int index = 2; std::filesystem::exists(folder, error); ++index)
-			folder = parent / (stem + " " + std::to_string(index));
-		return folder;
-	}
-
-	std::filesystem::path UnusedScene(const std::filesystem::path& directory, const std::string& stem)
-	{
-		std::filesystem::path file = directory / (stem + ".scene");
-		std::error_code error;
-		for (int index = 2; std::filesystem::exists(file, error); ++index)
-			file = directory / (stem + " " + std::to_string(index) + ".scene");
-		return file;
-	}
-
-}
-
 void EditorLayer::NewProject()
 {
 	std::filesystem::path parent = std::filesystem::current_path();
@@ -253,7 +226,7 @@ void EditorLayer::NewProject()
 			parent = current->GetProjectDirectory().parent_path();
 	}
 
-	std::filesystem::path folder = UnusedDirectory(parent, "Untitled");
+	std::filesystem::path folder = Lite::FileSystem::Unused(parent, "Untitled", "");
 	std::error_code error;
 	std::filesystem::create_directories(folder, error);
 
@@ -343,7 +316,7 @@ void EditorLayer::NewScene()
 	{
 		if (!project->GetProjectDirectory().empty())
 		{
-			std::filesystem::path file = UnusedScene(Lite::Project::GetAssetDirectory() / "scenes", "Untitled");
+			std::filesystem::path file = Lite::FileSystem::Unused(Lite::Project::GetAssetDirectory() / "scenes", "Untitled", ".scene");
 			m_Scene->SetName(file.stem().string());
 			if (m_Scene->SaveAs(file.string()) && project->GetConfig().StartScene.empty())
 			{
@@ -374,7 +347,7 @@ void EditorLayer::OpenScene(const std::string& path)
 	m_Scene = std::move(scene);
 	Lite::Project::EnsureContentFolders();
 	Lite::Scene::SetActive(m_Scene.get());
-	m_Gizmo = GizmoAction::None;
+	m_Gizmo = {};
 	m_Selected = 0;
 	for (Lite::Entity entity : m_Scene->GetEntities())
 	{
@@ -429,29 +402,10 @@ void EditorLayer::DeleteSelected()
 	if (!entity)
 		return;
 
-	uint32_t next = 0;
-	uint32_t previous = 0;
-	bool passed = false;
-	for (Lite::Entity item : m_Scene->GetEntities())
-	{
-		if (item.GetId() == m_Selected)
-		{
-			passed = true;
-			continue;
-		}
-
-		if (!passed)
-			previous = item.GetId();
-		else
-		{
-			next = item.GetId();
-			break;
-		}
-	}
-
+	uint32_t next = m_Scene->NextEntity(m_Selected);
 	std::string name = entity.GetName();
 	m_Scene->DestroyEntity(m_Selected);
-	m_Selected = next != 0 ? next : previous;
+	m_Selected = next;
 	m_Inspector.Reset();
 	Lite::Console::Log(std::format("Deleted {}", name));
 }
@@ -491,97 +445,20 @@ void EditorLayer::DropSprite(const std::string& path, float mouseX, float mouseY
 		return;
 
 	Lite::Vec2 world {};
-	if (!Unproject(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY, world))
-		world = {};
+	Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY, world);
+	float aspect = m_ViewportH > 1.0f ? m_ViewportW / m_ViewportH : 1.0f;
+	Lite::Vec2 viewCenter { m_Camera.GetPosition().x, m_Camera.GetPosition().y };
+	Lite::Scene::SpritePlacement placed = m_Scene->PlaceSprite(path, world, viewCenter, m_ViewSize, aspect);
+	if (placed.Entity == 0)
+		return;
 
-	auto planeName = [](const std::string& value)
-	{
-		std::string name = value;
-		for (char& character : name)
-		{
-			if (character >= 'A' && character <= 'Z')
-				character = static_cast<char>(character - 'A' + 'a');
-		}
-		return name;
-	};
-
-	uint32_t backgroundPlane = 0;
-	uint32_t worldPlane = 0;
-	for (const Lite::Scene::Plane& item : m_Scene->GetPlanes())
-	{
-		const std::string name = planeName(item.Name);
-		if (name == "background")
-			backgroundPlane = item.Id;
-		else if (worldPlane == 0)
-			worldPlane = item.Id;
-	}
-	if (worldPlane == 0)
-		worldPlane = backgroundPlane != 0 ? backgroundPlane : (m_Scene->GetPlanes().empty() ? 0 : m_Scene->GetPlanes().front().Id);
-
-	bool backgroundEmpty = backgroundPlane != 0;
-	if (backgroundEmpty)
-	{
-		for (Lite::Entity item : m_Scene->GetEntities(backgroundPlane))
-		{
-			if (item.Has<Lite::MeshComponent>())
-			{
-				backgroundEmpty = false;
-				break;
-			}
-		}
-	}
-
-	const bool asBackground = backgroundEmpty;
-	const uint32_t plane = asBackground ? backgroundPlane : worldPlane;
-
-	std::filesystem::path file(path);
-	std::string name = file.stem().string();
-	if (name.empty())
-		name = "Sprite";
-
-	Lite::Entity entity = plane != 0 ? m_Scene->CreateEntity(name, plane) : m_Scene->CreateEntity(name);
-	Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>();
-	if (transform != nullptr)
-	{
-		if (asBackground)
-		{
-			transform->Local.Position = { m_Camera.GetPosition().x, m_Camera.GetPosition().y, 0.0f };
-			float height = m_ViewSize > 0.0f ? m_ViewSize * 4.0f : 8.0f;
-			float aspect = m_ViewportH > 1.0f ? m_ViewportW / m_ViewportH : 1.0f;
-			transform->Local.Scale = { height * aspect, height, 1.0f };
-		}
-		else
-		{
-			transform->Local.Position = { world.x, world.y, 0.0f };
-			transform->Local.Scale = { 1.0f, 1.0f, 1.0f };
-		}
-	}
-
-	int order = 1;
-	if (!asBackground)
-	{
-		for (Lite::Entity item : m_Scene->GetEntities())
-		{
-			if (Lite::SortingComponent* sorting = item.Get<Lite::SortingComponent>())
-				order = std::max(order, sorting->Order + 1);
-		}
-	}
-
-	entity.Add<Lite::MeshComponent>().Type = Lite::MeshType::Sprite;
-	Lite::MaterialComponent& material = entity.Add<Lite::MaterialComponent>();
-	material.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
-	material.UseVertexColors = false;
-	material.Tiling = { 1.0f, 1.0f };
-	material.TexturePath = path;
-	material.Texture = Lite::AssetRegistry::Get().Load<Lite::Texture>(path);
-	entity.Add<Lite::SortingComponent>().Order = asBackground ? -10 : order;
-
-	m_Gizmo = GizmoAction::None;
-	m_Selected = entity.GetId();
+	m_Gizmo = {};
+	m_Selected = placed.Entity;
 	m_Inspector.Reset();
-	if (!material.Texture)
+	std::string name = m_Scene->GetEntity(placed.Entity).GetName();
+	if (!placed.Loaded)
 		Lite::Console::Log(std::format("Failed to load texture {}", path));
-	else if (asBackground)
+	else if (placed.Background)
 		Lite::Console::Log(std::format("Placed {} as the background", name));
 	else
 		Lite::Console::Log(std::format("Placed {}", name));
@@ -934,261 +811,6 @@ void EditorLayer::DrawScene()
 	ImGui::End();
 }
 
-namespace {
-
-	constexpr float kHandleSize = 7.0f;
-	constexpr float kRingGap = 16.0f;
-	constexpr float kRingHit = 7.0f;
-	constexpr float kMinRing = 36.0f;
-	constexpr float kPi = 3.14159265f;
-
-	struct GizmoLayout
-	{
-		bool Ok = false;
-		Lite::Vec2 CenterWorld {};
-		ImVec2 Center {};
-		Lite::Vec2 World[4] {};
-		ImVec2 Screen[4] {};
-		int Count = 0;
-		float Ring = kMinRing;
-	};
-
-	bool Contains(Lite::Vec2 point, const Lite::Vec2* vertices, int count)
-	{
-		bool positive = false;
-		bool negative = false;
-		for (int index = 0; index < count; ++index)
-		{
-			const Lite::Vec2& current = vertices[index];
-			const Lite::Vec2& next = vertices[(index + 1) % count];
-			float cross = (next.x - current.x) * (point.y - current.y) - (next.y - current.y) * (point.x - current.x);
-			if (cross > 0.0f)
-				positive = true;
-			if (cross < 0.0f)
-				negative = true;
-			if (positive && negative)
-				return false;
-		}
-
-		return true;
-	}
-
-	float WrapAngle(float radians)
-	{
-		while (radians > kPi)
-			radians -= kPi * 2.0f;
-		while (radians < -kPi)
-			radians += kPi * 2.0f;
-		return radians;
-	}
-
-	float ScreenDistance(ImVec2 left, ImVec2 right)
-	{
-		float x = left.x - right.x;
-		float y = left.y - right.y;
-		return std::sqrt(x * x + y * y);
-	}
-
-	bool Project(const Lite::Mat4& viewProjection, float windowW, float windowH, Lite::Vec2 world, ImVec2& screen)
-	{
-		if (windowW <= 1.0f || windowH <= 1.0f)
-			return false;
-
-		Lite::Vec4 clip = viewProjection * Lite::Vec4(world.x, world.y, 0.0f, 1.0f);
-		if (clip.w == 0.0f)
-			return false;
-
-		clip /= clip.w;
-		screen.x = (clip.x * 0.5f + 0.5f) * windowW;
-		screen.y = (1.0f - (clip.y * 0.5f + 0.5f)) * windowH;
-		return true;
-	}
-
-	bool Unproject(const Lite::Mat4& viewProjection, float windowW, float windowH, float mouseX, float mouseY, Lite::Vec2& world)
-	{
-		if (windowW <= 1.0f || windowH <= 1.0f)
-			return false;
-
-		float ndcX = (mouseX / windowW) * 2.0f - 1.0f;
-		float ndcY = 1.0f - (mouseY / windowH) * 2.0f;
-		Lite::Vec4 point = viewProjection.Inverse() * Lite::Vec4(ndcX, ndcY, 0.0f, 1.0f);
-		if (point.w != 0.0f)
-			point /= point.w;
-		world = { point.x, point.y };
-		return true;
-	}
-
-	bool BuildGizmo(const Lite::Mat4& viewProjection, float windowW, float windowH, Lite::Entity entity, GizmoLayout& layout)
-	{
-		Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>();
-		if (transform == nullptr)
-			return false;
-
-		const Lite::Vec2* local = Lite::kQuadCorners;
-		int count = 4;
-		if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
-		{
-			if (mesh->Type == Lite::MeshType::Triangle)
-			{
-				local = Lite::kTriangleCorners;
-				count = 3;
-			}
-		}
-
-		layout = {};
-		layout.CenterWorld = { transform->Local.Position.x, transform->Local.Position.y };
-		if (!Project(viewProjection, windowW, windowH, layout.CenterWorld, layout.Center))
-			return false;
-
-		layout.Count = count;
-		float reach = 0.0f;
-		for (int index = 0; index < count; ++index)
-		{
-			Lite::Vec3 transformed = transform->Local.TransformPoint({ local[index].x, local[index].y, 0.0f });
-			layout.World[index] = { transformed.x, transformed.y };
-			if (!Project(viewProjection, windowW, windowH, layout.World[index], layout.Screen[index]))
-				return false;
-			reach = std::max(reach, ScreenDistance(layout.Center, layout.Screen[index]));
-		}
-
-		layout.Ring = std::max(reach + kRingGap, kMinRing);
-		layout.Ok = true;
-		return true;
-	}
-
-	int HitScale(const GizmoLayout& layout, ImVec2 mouse)
-	{
-		int hit = -1;
-		float best = kHandleSize + 3.0f;
-		for (int index = 0; index < layout.Count; ++index)
-		{
-			float distance = ScreenDistance(mouse, layout.Screen[index]);
-			if (distance > best)
-				continue;
-			best = distance;
-			hit = index;
-		}
-
-		return hit;
-	}
-
-	bool HitRing(const GizmoLayout& layout, ImVec2 mouse)
-	{
-		float distance = ScreenDistance(mouse, layout.Center);
-		return std::abs(distance - layout.Ring) <= kRingHit;
-	}
-
-	Lite::Vec2 LocalOnPlane(const Lite::Transform& transform, Lite::Vec2 world)
-	{
-		Lite::Vec3 offset { world.x - transform.Position.x, world.y - transform.Position.y, 0.0f };
-		Lite::Vec3 local = transform.Rotation.Normalized().Conjugate().Rotate(offset);
-		return { local.x, local.y };
-	}
-
-}
-
-bool EditorLayer::BeginGizmo(float mouseX, float mouseY)
-{
-	m_Gizmo = GizmoAction::None;
-	if (m_Scene == nullptr || m_Selected == 0)
-		return false;
-
-	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
-	Lite::TransformComponent* transform = entity ? entity.Get<Lite::TransformComponent>() : nullptr;
-	if (transform == nullptr)
-		return false;
-
-	GizmoLayout layout;
-	if (!BuildGizmo(m_ViewProjection, m_WindowW, m_WindowH, entity, layout))
-		return false;
-
-	ImVec2 mouse { mouseX, mouseY };
-	Lite::Vec2 world;
-	if (!Unproject(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY, world))
-		return false;
-
-	int corner = HitScale(layout, mouse);
-	if (corner >= 0)
-		m_Gizmo = GizmoAction::Scale;
-	else if (HitRing(layout, mouse))
-		m_Gizmo = GizmoAction::Rotate;
-	else if (Contains(world, layout.World, layout.Count))
-		m_Gizmo = GizmoAction::Move;
-	else
-		return false;
-
-	m_GizmoCorner = corner;
-	m_GizmoMouse = world;
-	m_GizmoPosition = transform->Local.Position;
-	m_GizmoRotation = transform->Local.GetRotationZ();
-	m_GizmoScale = transform->Local.Scale;
-	m_GizmoAngle = std::atan2(world.y - m_GizmoPosition.y, world.x - m_GizmoPosition.x);
-	m_GizmoSpin = 0.0f;
-	return true;
-}
-
-void EditorLayer::ApplyGizmo(float mouseX, float mouseY)
-{
-	if (m_Scene == nullptr || m_Gizmo == GizmoAction::None)
-		return;
-
-	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
-	Lite::TransformComponent* transform = entity ? entity.Get<Lite::TransformComponent>() : nullptr;
-	Lite::Vec2 world;
-	if (transform == nullptr || !Unproject(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY, world))
-	{
-		m_Gizmo = GizmoAction::None;
-		return;
-	}
-
-	switch (m_Gizmo)
-	{
-		case GizmoAction::Move:
-			transform->Local.Position.x = m_GizmoPosition.x + (world.x - m_GizmoMouse.x);
-			transform->Local.Position.y = m_GizmoPosition.y + (world.y - m_GizmoMouse.y);
-			break;
-		case GizmoAction::Rotate:
-		{
-			float angle = std::atan2(world.y - m_GizmoPosition.y, world.x - m_GizmoPosition.x);
-			m_GizmoSpin += WrapAngle(angle - m_GizmoAngle);
-			m_GizmoAngle = angle;
-			transform->Local.SetRotationZ(m_GizmoRotation + m_GizmoSpin);
-			break;
-		}
-		case GizmoAction::Scale:
-		{
-			const Lite::Vec2* local = Lite::kQuadCorners;
-			if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
-			{
-				if (mesh->Type == Lite::MeshType::Triangle)
-					local = Lite::kTriangleCorners;
-			}
-
-			Lite::Transform basis;
-			basis.Position = m_GizmoPosition;
-			basis.SetRotationZ(m_GizmoRotation);
-			basis.Scale = { 1.0f, 1.0f, 1.0f };
-			Lite::Vec2 point = LocalOnPlane(basis, world);
-			Lite::Vec2 corner = local[m_GizmoCorner];
-			Lite::Vec3 scale = m_GizmoScale;
-			if (std::abs(corner.x) > 0.001f)
-				scale.x = point.x / corner.x;
-			if (std::abs(corner.y) > 0.001f)
-				scale.y = point.y / corner.y;
-			if (std::abs(scale.x) < 0.02f)
-				scale.x = scale.x < 0.0f ? -0.02f : 0.02f;
-			if (std::abs(scale.y) < 0.02f)
-				scale.y = scale.y < 0.0f ? -0.02f : 0.02f;
-			transform->Local.Scale.x = scale.x;
-			transform->Local.Scale.y = scale.y;
-			break;
-		}
-		default:
-			break;
-	}
-
-	m_Scene->RefreshPhysics(entity.GetId());
-}
 
 void EditorLayer::DrawGizmo()
 {
@@ -1196,72 +818,71 @@ void EditorLayer::DrawGizmo()
 		return;
 
 	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
-	GizmoLayout layout;
-	if (!entity || !BuildGizmo(m_ViewProjection, m_WindowW, m_WindowH, entity, layout))
+	Lite::GizmoLayout layout;
+	if (!entity || !Lite::BuildGizmo(m_ViewProjection, m_WindowW, m_WindowH, entity, layout))
 		return;
 
 	ImDrawList* draw = ImGui::GetWindowDrawList();
 	ImVec2 mouse = ImGui::GetIO().MousePos;
-	int hotCorner = m_Gizmo == GizmoAction::Scale ? m_GizmoCorner : -1;
-	bool hotRing = m_Gizmo == GizmoAction::Rotate;
-	bool hotMove = m_Gizmo == GizmoAction::Move;
-	if (m_Gizmo == GizmoAction::None && ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
+	Lite::GizmoHot hot;
+	if (m_Gizmo.Action != Lite::GizmoAction::None)
 	{
-		hotCorner = HitScale(layout, mouse);
-		hotRing = hotCorner < 0 && HitRing(layout, mouse);
+		hot.Action = m_Gizmo.Action;
+		hot.Corner = m_Gizmo.Corner;
+	}
+	else if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
+	{
 		Lite::Vec2 world;
-		hotMove = hotCorner < 0 && !hotRing && Unproject(m_ViewProjection, m_WindowW, m_WindowH, mouse.x, mouse.y, world) && Contains(world, layout.World, layout.Count);
+		const Lite::Vec2* point = Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouse.x, mouse.y, world) ? &world : nullptr;
+		hot = Lite::HitGizmo(layout, { mouse.x, mouse.y }, point);
 	}
 
-	if (hotMove)
+	if (hot.Action == Lite::GizmoAction::Move)
 		ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-	else if (hotRing)
+	else if (hot.Action == Lite::GizmoAction::Rotate)
 		ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-	else if (hotCorner >= 0)
+	else if (hot.Action == Lite::GizmoAction::Scale)
 		ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
 
-	const ImU32 outline = IM_COL32(236, 240, 246, 210);
-	const ImU32 ring = hotRing ? IM_COL32(170, 220, 255, 255) : IM_COL32(110, 176, 240, 210);
-	draw->AddPolyline(layout.Screen, layout.Count, outline, 1.6f, ImDrawFlags_Closed);
-	draw->AddCircle(layout.Center, layout.Ring, ring, 48, hotRing ? 2.4f : 1.5f);
+	ImVec2 screen[4];
+	for (int index = 0; index < layout.Count; ++index)
+		screen[index] = { layout.Screen[index].x, layout.Screen[index].y };
+	ImVec2 center { layout.Center.x, layout.Center.y };
 
-	Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>();
-	if (transform != nullptr)
+	const ImU32 outline = IM_COL32(236, 240, 246, 210);
+	const bool hotRing = hot.Action == Lite::GizmoAction::Rotate;
+	const ImU32 ring = hotRing ? IM_COL32(170, 220, 255, 255) : IM_COL32(110, 176, 240, 210);
+	draw->AddPolyline(screen, layout.Count, outline, 1.6f, ImDrawFlags_Closed);
+	draw->AddCircle(center, layout.Ring, ring, 48, hotRing ? 2.4f : 1.5f);
+
+	auto axis = [&](Lite::Vec2 world, ImU32 color)
+	{
+		Lite::Vec2 point;
+		if (!Lite::WorldToScreen(m_ViewProjection, m_WindowW, m_WindowH, world, point))
+			return;
+		ImVec2 direction { point.x - center.x, point.y - center.y };
+		float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+		if (length <= 0.001f)
+			return;
+		direction.x = direction.x / length * 22.0f;
+		direction.y = direction.y / length * 22.0f;
+		draw->AddLine(center, { center.x + direction.x, center.y + direction.y }, color, 2.0f);
+	};
+
+	if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
 	{
 		Lite::Vec3 axisX = transform->Local.TransformPoint({ 1.0f, 0.0f, 0.0f });
 		Lite::Vec3 axisY = transform->Local.TransformPoint({ 0.0f, 1.0f, 0.0f });
-		ImVec2 screenX;
-		ImVec2 screenY;
-		if (Project(m_ViewProjection, m_WindowW, m_WindowH, { axisX.x, axisX.y }, screenX))
-		{
-			ImVec2 direction { screenX.x - layout.Center.x, screenX.y - layout.Center.y };
-			float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-			if (length > 0.001f)
-			{
-				direction.x = direction.x / length * 22.0f;
-				direction.y = direction.y / length * 22.0f;
-				draw->AddLine(layout.Center, { layout.Center.x + direction.x, layout.Center.y + direction.y }, IM_COL32(230, 74, 74, 230), 2.0f);
-			}
-		}
-		if (Project(m_ViewProjection, m_WindowW, m_WindowH, { axisY.x, axisY.y }, screenY))
-		{
-			ImVec2 direction { screenY.x - layout.Center.x, screenY.y - layout.Center.y };
-			float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-			if (length > 0.001f)
-			{
-				direction.x = direction.x / length * 22.0f;
-				direction.y = direction.y / length * 22.0f;
-				draw->AddLine(layout.Center, { layout.Center.x + direction.x, layout.Center.y + direction.y }, IM_COL32(78, 206, 96, 230), 2.0f);
-			}
-		}
+		axis({ axisX.x, axisX.y }, IM_COL32(230, 74, 74, 230));
+		axis({ axisY.x, axisY.y }, IM_COL32(78, 206, 96, 230));
 	}
 
 	for (int index = 0; index < layout.Count; ++index)
 	{
-		ImVec2 corner = layout.Screen[index];
-		ImVec2 min { corner.x - kHandleSize, corner.y - kHandleSize };
-		ImVec2 max { corner.x + kHandleSize, corner.y + kHandleSize };
-		ImU32 fill = index == hotCorner ? IM_COL32(255, 214, 96, 255) : IM_COL32(246, 248, 252, 240);
+		ImVec2 corner = screen[index];
+		ImVec2 min { corner.x - Lite::kGizmoHandle, corner.y - Lite::kGizmoHandle };
+		ImVec2 max { corner.x + Lite::kGizmoHandle, corner.y + Lite::kGizmoHandle };
+		ImU32 fill = hot.Action == Lite::GizmoAction::Scale && index == hot.Corner ? IM_COL32(255, 214, 96, 255) : IM_COL32(246, 248, 252, 240);
 		draw->AddRectFilled(min, max, fill);
 		draw->AddRect(min, max, IM_COL32(24, 28, 34, 255));
 	}
@@ -1289,16 +910,16 @@ void EditorLayer::DrawViewport()
 		ImGui::EndDragDropTarget();
 	}
 	ImVec2 mouse = ImGui::GetIO().MousePos;
-	if (m_Gizmo != GizmoAction::None)
+	if (m_Gizmo.Action != Lite::GizmoAction::None)
 	{
-		if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
-			ApplyGizmo(mouse.x, mouse.y);
+		if (m_Scene != nullptr && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+			Lite::ApplyGizmo(*m_Scene, m_ViewProjection, m_WindowW, m_WindowH, m_Selected, mouse.x, mouse.y, m_Gizmo);
 		else
-			m_Gizmo = GizmoAction::None;
+			m_Gizmo = {};
 	}
-	else if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+	else if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && m_Scene != nullptr)
 	{
-		if (!BeginGizmo(mouse.x, mouse.y))
+		if (!Lite::BeginGizmo(*m_Scene, m_ViewProjection, m_WindowW, m_WindowH, m_Selected, mouse.x, mouse.y, m_Gizmo))
 			PickObject(mouse.x, mouse.y);
 	}
 	DrawGizmo();

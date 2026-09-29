@@ -4,6 +4,8 @@
 #include <Lite/Scene/Components/ComponentStorage.h>
 #include <Lite/Scene/Console.h>
 
+#include <Lite/Assets/AssetRegistry.h>
+#include <Lite/Assets/Texture.h>
 #include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Renderer/Renderer2D.h>
 
@@ -274,6 +276,137 @@ namespace Lite {
 			m_Records.erase(record);
 			break;
 		}
+	}
+
+	uint32_t Scene::NextEntity(uint32_t id) const
+	{
+		uint32_t next = 0;
+		uint32_t previous = 0;
+		bool passed = false;
+		for (const Plane& plane : m_Planes)
+		{
+			for (const Record& record : m_Records)
+			{
+				if (record.Plane != plane.Id)
+					continue;
+				if (record.Id == id)
+				{
+					passed = true;
+					continue;
+				}
+
+				if (!passed)
+					previous = record.Id;
+				else if (next == 0)
+					next = record.Id;
+			}
+		}
+
+		return next != 0 ? next : previous;
+	}
+
+	bool Scene::AssignTexture(uint32_t entityId, const std::string& path)
+	{
+		Entity entity = GetEntity(entityId);
+		MaterialComponent* material = entity ? entity.Get<MaterialComponent>() : nullptr;
+		if (material == nullptr)
+			return false;
+
+		material->TexturePath = path;
+		material->Texture = path.empty() ? Ref<Texture>{} : AssetRegistry::Get().Load<Texture>(path);
+		if (MeshComponent* mesh = entity.Get<MeshComponent>())
+			mesh->Type = MeshType::Sprite;
+		return true;
+	}
+
+	Scene::SpritePlacement Scene::PlaceSprite(const std::string& texturePath, Vec2 world, Vec2 viewCenter, float viewSize, float aspect)
+	{
+		SpritePlacement placed;
+		if (texturePath.empty())
+			return placed;
+
+		auto lower = [](std::string value)
+		{
+			for (char& character : value)
+			{
+				if (character >= 'A' && character <= 'Z')
+					character = static_cast<char>(character - 'A' + 'a');
+			}
+			return value;
+		};
+
+		uint32_t backgroundPlane = 0;
+		uint32_t worldPlane = 0;
+		for (const Plane& item : m_Planes)
+		{
+			const std::string name = lower(item.Name);
+			if (name == "background")
+				backgroundPlane = item.Id;
+			else if (worldPlane == 0)
+				worldPlane = item.Id;
+		}
+		if (worldPlane == 0)
+			worldPlane = backgroundPlane != 0 ? backgroundPlane : (m_Planes.empty() ? 0 : m_Planes.front().Id);
+
+		bool backgroundEmpty = backgroundPlane != 0;
+		if (backgroundEmpty)
+		{
+			for (const Record& record : m_Records)
+			{
+				if (record.Plane != backgroundPlane)
+					continue;
+				if (GetComponent(ComponentId::Mesh, record.Id) != nullptr)
+				{
+					backgroundEmpty = false;
+					break;
+				}
+			}
+		}
+
+		placed.Background = backgroundEmpty;
+		const uint32_t plane = placed.Background ? backgroundPlane : worldPlane;
+		std::string name = std::filesystem::path(texturePath).stem().string();
+		if (name.empty())
+			name = "Sprite";
+
+		Entity entity = plane != 0 ? CreateEntity(name, plane) : CreateEntity(name);
+		if (TransformComponent* transform = entity.Get<TransformComponent>())
+		{
+			if (placed.Background)
+			{
+				transform->Local.Position = { viewCenter.x, viewCenter.y, 0.0f };
+				float height = viewSize > 0.0f ? viewSize * 4.0f : 8.0f;
+				transform->Local.Scale = { height * aspect, height, 1.0f };
+			}
+			else
+			{
+				transform->Local.Position = { world.x, world.y, 0.0f };
+				transform->Local.Scale = { 1.0f, 1.0f, 1.0f };
+			}
+		}
+
+		int order = 1;
+		if (!placed.Background)
+		{
+			for (const Record& record : m_Records)
+			{
+				const auto* sorting = static_cast<const SortingComponent*>(GetComponent(ComponentId::Sorting, record.Id));
+				if (sorting != nullptr)
+					order = std::max(order, sorting->Order + 1);
+			}
+		}
+
+		entity.Add<MeshComponent>().Type = MeshType::Sprite;
+		MaterialComponent& material = entity.Add<MaterialComponent>();
+		material.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		material.UseVertexColors = false;
+		material.Tiling = { 1.0f, 1.0f };
+		AssignTexture(entity.GetId(), texturePath);
+		entity.Add<SortingComponent>().Order = placed.Background ? -10 : order;
+
+		placed.Entity = entity.GetId();
+		placed.Loaded = static_cast<bool>(material.Texture);
+		return placed;
 	}
 
 	Entity Scene::Find(std::string_view name)
