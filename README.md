@@ -14,7 +14,7 @@ Rendering is Vulkan. 2D drawing goes through one batch renderer, so quads, trian
 - CMake
 - The Vulkan SDK, with `VULKAN_SDK` set by the installer
 
-spdlog, GLFW, Dear ImGui (docking branch), GLM, and Box2D are git submodules. If `Lite/src/vendor` is empty after clone, run:
+spdlog, GLFW, Dear ImGui (docking branch), GLM, Box2D, and yaml-cpp are git submodules. If `Lite/src/vendor` is empty after clone, run:
 
 ```bat
 git submodule update --init --recursive
@@ -71,7 +71,7 @@ The window is a dockspace:
 | Save Scene | Ctrl+S |
 | Save Scene As... | — |
 
-Open and Save As use a file browser. Save Scene writes the scene that is already open. A new scene with no path opens Save As. Scene files are text, named `*.scene`, and start with `lite-scene 1`.
+Open and Save As use a file browser. Save Scene writes the scene that is already open. A new scene with no path opens Save As. Scene files are YAML documents named `*.scene`. The document has a `name` and an `entities` list. Each entity has a `name` and one map per component, such as `transform`, `camera`, `mesh`, and `rigidbody2d`.
 
 ### Playback
 

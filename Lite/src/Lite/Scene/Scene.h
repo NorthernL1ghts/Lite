@@ -63,25 +63,6 @@ namespace Lite {
 		uint32_t m_Id = 0;
 	};
 
-	struct ComponentOps
-	{
-		ComponentId Id = ComponentId::Count;
-		const char* Section = nullptr;
-		const char* CatalogName = nullptr;
-		const char* (*Label)(Entity entity) = nullptr;
-		void (*Add)(Entity entity) = nullptr;
-		bool (*Read)(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField field) = nullptr;
-		void (*Write)(std::ostream& output, const void* component) = nullptr;
-		void (*Finish)(void* component) = nullptr;
-		bool ReadLegacy = false;
-		bool ReadLoose = false;
-		ComponentId ReadBeside = ComponentId::Count;
-	};
-
-	LITE_API void RegisterComponent(const ComponentOps& ops);
-	LITE_API const ComponentOps* FindComponent(ComponentId id);
-	LITE_API const ComponentOps* FindComponentSection(std::string_view section);
-
 	struct ComponentEntry
 	{
 		const char* Name = nullptr;

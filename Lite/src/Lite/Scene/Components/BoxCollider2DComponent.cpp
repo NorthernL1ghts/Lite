@@ -1,9 +1,7 @@
 #include <Lite/Scene/Components/BoxCollider2DComponent.h>
-
+#include <Lite/Scene/Components/ComponentOps.h>
 #include <Lite/Scene/Components/ComponentStorage.h>
-#include <Lite/Scene/Scene.h>
-
-#include <format>
+#include <Lite/Scene/Components/SceneYaml.h>
 
 namespace Lite {
 
@@ -19,35 +17,26 @@ namespace Lite {
 			entity.Add<BoxCollider2DComponent>();
 		}
 
-		bool Read(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField)
+		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
 		{
-			auto* box = static_cast<BoxCollider2DComponent*>(scene.GetComponent(ComponentId::BoxCollider2D, entity));
+			auto* box = static_cast<BoxCollider2DComponent*>(scene.AddComponent(ComponentId::BoxCollider2D, entity));
 			if (box == nullptr)
-				return false;
+				return;
 
-			if (key == "size")
-				stream >> box->Size.x >> box->Size.y;
-			else if (key == "offset")
-				stream >> box->Offset.x >> box->Offset.y;
-			else if (key == "trigger")
-			{
-				int trigger = 0;
-				stream >> trigger;
-				box->IsTrigger = trigger != 0;
-			}
-			else
-				return false;
-
-			return true;
+			if (node["size"])
+				box->Size = ReadVec2(node["size"], box->Size);
+			if (node["offset"])
+				box->Offset = ReadVec2(node["offset"], box->Offset);
+			if (node["trigger"])
+				box->IsTrigger = node["trigger"].as<bool>();
 		}
 
-		void Write(std::ostream& output, const void* component)
+		void Write(YAML::Node& node, const void* component)
 		{
 			const auto& box = *static_cast<const BoxCollider2DComponent*>(component);
-			output << "component box-collider2d\n";
-			output << std::format("size {:.4f} {:.4f}\n", box.Size.x, box.Size.y);
-			output << std::format("offset {:.4f} {:.4f}\n", box.Offset.x, box.Offset.y);
-			output << std::format("trigger {}\n", box.IsTrigger ? 1 : 0);
+			node["size"] = WriteVec2(box.Size);
+			node["offset"] = WriteVec2(box.Offset);
+			node["trigger"] = box.IsTrigger;
 		}
 
 		struct Registration

@@ -1,17 +1,18 @@
 #include <Lite/Scene/Scene.h>
 
+#include <Lite/Scene/Components/ComponentOps.h>
 #include <Lite/Scene/Components/ComponentStorage.h>
-#include <Lite/Scene/Components/SceneText.h>
 #include <Lite/Scene/Console.h>
 
 #include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Renderer/Renderer2D.h>
 
+#include <yaml-cpp/yaml.h>
+
 #include <algorithm>
 #include <filesystem>
 #include <format>
 #include <fstream>
-#include <sstream>
 
 namespace Lite {
 
@@ -408,124 +409,86 @@ namespace Lite {
 		}
 	}
 
-		bool Scene::Read(std::istream& input)
+	bool Scene::Read(std::istream& input)
 	{
-		std::string magic;
-		int version = 0;
-		input >> magic >> version;
-		if (!input || magic != "lite-scene" || version != 1)
+		YAML::Node root;
+		try
+		{
+			root = YAML::Load(input);
+		}
+		catch (const YAML::Exception&)
+		{
+			return false;
+		}
+
+		if (!root || !root.IsMap())
 			return false;
 
-		std::string rest;
-		std::getline(input, rest);
+		if (root["name"])
+			m_Name = root["name"].as<std::string>();
 
-		Record* current = nullptr;
-		ComponentId active = ComponentId::Count;
-		bool legacy = false;
-		bool loose = false;
-		std::string line;
-		while (std::getline(input, line))
+		const YAML::Node entities = root["entities"];
+		if (entities && entities.IsSequence())
 		{
-			line = Trim(line);
-			if (line.empty() || line[0] == '#')
-				continue;
-
-			std::istringstream stream(line);
-			std::string key;
-			stream >> key;
-
-			if (key == "name" && current == nullptr)
+			for (const YAML::Node& entityNode : entities)
 			{
-				std::string name;
-				std::getline(stream >> std::ws, name);
-				m_Name = Trim(name);
-				continue;
-			}
+				if (!entityNode || !entityNode.IsMap())
+					continue;
 
-			if (key == "entity" || key == "object")
-			{
-				Entity entity = CreateEntity("Entity");
-				current = FindRecord(entity.GetId());
-				active = ComponentId::Count;
-				legacy = key == "object";
-				loose = !legacy;
-				continue;
-			}
+				std::string name = "Entity";
+				if (entityNode["name"])
+					name = entityNode["name"].as<std::string>();
+				if (name.empty())
+					name = "Entity";
 
-			if (current == nullptr)
-				continue;
-
-			if (key == "component")
-			{
-				std::string component;
-				stream >> component;
-				if (const ComponentOps* ops = FindComponentSection(component))
+				Entity entity = CreateEntity(name);
+				for (YAML::const_iterator it = entityNode.begin(); it != entityNode.end(); ++it)
 				{
-					AddComponent(ops->Id, current->Id);
-					active = ops->Id;
+					const std::string key = it->first.as<std::string>();
+					if (key == "name")
+						continue;
+
+					const ComponentOps* ops = FindComponentSection(key);
+					if (ops == nullptr || ops->Read == nullptr)
+						continue;
+
+					ops->Read(*this, entity.GetId(), it->second);
 				}
-				legacy = false;
-				loose = false;
-				continue;
-			}
-
-			if (key == "name" && (loose || legacy))
-			{
-				std::string name;
-				std::getline(stream >> std::ws, name);
-				current->Name = Trim(name);
-				continue;
-			}
-
-			for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
-			{
-				const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
-				if (ops == nullptr || ops->Read == nullptr)
-					continue;
-
-				ComponentField field;
-				field.InSection = ops->Id == active;
-				field.Legacy = legacy && ops->ReadLegacy;
-				field.Loose = loose && ops->ReadLoose;
-				field.Extra = ops->ReadBeside != ComponentId::Count && ops->ReadBeside == active;
-				if (!field.InSection && !field.Legacy && !field.Loose && !field.Extra)
-					continue;
-
-				if (ops->Read(*this, current->Id, key, stream, field))
-					break;
 			}
 		}
 
 		if (m_Name.empty())
 			m_Name = "Untitled";
 
-		for (Record& record : m_Records)
-		{
-			if (record.Name.empty())
-				record.Name = "Entity";
-		}
-
 		return true;
 	}
 
 	void Scene::Write(std::ostream& output) const
 	{
-		output << "lite-scene 1\n";
-		output << std::format("name {}\n", m_Name);
+		YAML::Node root;
+		root["name"] = m_Name;
+
+		YAML::Node entities(YAML::NodeType::Sequence);
 		for (const Record& record : m_Records)
 		{
-			output << "entity\n";
-			output << std::format("name {}\n", record.Name);
+			YAML::Node entity;
+			entity["name"] = record.Name;
 			for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
 			{
 				const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
 				const void* data = GetComponent(static_cast<ComponentId>(index), record.Id);
-				if (ops == nullptr || ops->Write == nullptr || data == nullptr)
+				if (ops == nullptr || ops->Write == nullptr || ops->Section == nullptr || data == nullptr)
 					continue;
 
-				ops->Write(output, data);
+				YAML::Node component(YAML::NodeType::Map);
+				ops->Write(component, data);
+				entity[ops->Section] = component;
 			}
+			entities.push_back(entity);
 		}
+
+		root["entities"] = entities;
+		output << root;
 	}
 
 	void Scene::ResolveTextures()
@@ -544,7 +507,7 @@ namespace Lite {
 		}
 	}
 
-bool Scene::Save()
+	bool Scene::Save()
 	{
 		if (m_Path.empty())
 			return false;

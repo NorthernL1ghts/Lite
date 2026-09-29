@@ -25,6 +25,13 @@ set(BOX2D_BENCHMARKS OFF CACHE BOOL "" FORCE)
 set(BOX2D_VALIDATE OFF CACHE BOOL "" FORCE)
 add_subdirectory(src/vendor/box2d)
 
+set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_FORMAT_SOURCE OFF CACHE BOOL "" FORCE)
+add_subdirectory(src/vendor/yaml-cpp)
+
 lite_sources(Lite)
 
 target_include_directories(Lite
@@ -70,6 +77,7 @@ target_link_libraries(Lite
     PRIVATE
         glfw
         box2d
+        yaml-cpp
 )
 
 lite_bin_dir(Lite lite)

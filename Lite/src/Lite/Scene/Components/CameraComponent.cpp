@@ -1,9 +1,7 @@
 #include <Lite/Scene/Components/CameraComponent.h>
-
+#include <Lite/Scene/Components/ComponentOps.h>
 #include <Lite/Scene/Components/ComponentStorage.h>
-#include <Lite/Scene/Scene.h>
 
-#include <format>
 #include <string>
 
 namespace Lite {
@@ -23,48 +21,38 @@ namespace Lite {
 			entity.Add<CameraComponent>();
 		}
 
-		bool Read(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField)
+		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
 		{
-			auto* camera = static_cast<CameraComponent*>(scene.GetComponent(ComponentId::Camera, entity));
+			auto* camera = static_cast<CameraComponent*>(scene.AddComponent(ComponentId::Camera, entity));
 			if (camera == nullptr)
-				return false;
+				return;
 
-			if (key == "size")
-				stream >> camera->Size;
-			else if (key == "near")
-				stream >> camera->Near;
-			else if (key == "far")
-				stream >> camera->Far;
-			else if (key == "projection")
+			if (node["projection"])
 			{
-				std::string projection;
-				stream >> projection;
+				std::string projection = node["projection"].as<std::string>();
 				camera->Projection = projection == "perspective" ? CameraProjection::Perspective : CameraProjection::Orthographic;
 			}
-			else if (key == "fov")
-				stream >> camera->FieldOfView;
-			else if (key == "primary")
-			{
-				int primary = 0;
-				stream >> primary;
-				camera->Primary = primary != 0;
-			}
-			else
-				return false;
-
-			return true;
+			if (node["size"])
+				camera->Size = node["size"].as<float>();
+			if (node["fov"])
+				camera->FieldOfView = node["fov"].as<float>();
+			if (node["near"])
+				camera->Near = node["near"].as<float>();
+			if (node["far"])
+				camera->Far = node["far"].as<float>();
+			if (node["primary"])
+				camera->Primary = node["primary"].as<bool>();
 		}
 
-		void Write(std::ostream& output, const void* component)
+		void Write(YAML::Node& node, const void* component)
 		{
 			const auto& camera = *static_cast<const CameraComponent*>(component);
-			output << "component camera\n";
-			output << std::format("projection {}\n", camera.Projection == CameraProjection::Perspective ? "perspective" : "orthographic");
-			output << std::format("size {:.4f}\n", camera.Size);
-			output << std::format("fov {:.4f}\n", camera.FieldOfView);
-			output << std::format("near {:.4f}\n", camera.Near);
-			output << std::format("far {:.4f}\n", camera.Far);
-			output << std::format("primary {}\n", camera.Primary ? 1 : 0);
+			node["projection"] = camera.Projection == CameraProjection::Perspective ? "perspective" : "orthographic";
+			node["size"] = camera.Size;
+			node["fov"] = camera.FieldOfView;
+			node["near"] = camera.Near;
+			node["far"] = camera.Far;
+			node["primary"] = camera.Primary;
 		}
 
 		struct Registration

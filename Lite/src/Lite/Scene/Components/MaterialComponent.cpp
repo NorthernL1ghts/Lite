@@ -1,10 +1,10 @@
+#include <Lite/Scene/Components/ComponentOps.h>
+#include <Lite/Scene/Components/ComponentStorage.h>
 #include <Lite/Scene/Components/MaterialComponent.h>
+#include <Lite/Scene/Components/SceneYaml.h>
 
 #include <Lite/Assets/AssetRegistry.h>
-#include <Lite/Scene/Components/ComponentStorage.h>
-#include <Lite/Scene/Components/SceneText.h>
 #include <Lite/Scene/Console.h>
-#include <Lite/Scene/Scene.h>
 
 #include <format>
 #include <string>
@@ -23,64 +23,50 @@ namespace Lite {
 			entity.Add<MaterialComponent>();
 		}
 
-		bool Read(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField)
+		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
 		{
-			bool known = key == "shader" || key == "color" || key == "tiling" || key == "texture" || key == "vertex-colors" || key == "colors" || key == "corners";
-			if (!known)
-				return false;
-
 			auto* material = static_cast<MaterialComponent*>(scene.AddComponent(ComponentId::Material, entity));
 			if (material == nullptr)
-				return false;
+				return;
 
-			if (key == "shader")
-			{
-				std::string shader;
-				std::getline(stream >> std::ws, shader);
-				material->Shader = Trim(shader);
-			}
-			else if (key == "color")
-				ReadVec4(stream, material->Color);
-			else if (key == "tiling")
-				stream >> material->Tiling.x >> material->Tiling.y;
-			else if (key == "texture")
-			{
-				std::string texture;
-				std::getline(stream >> std::ws, texture);
-				material->TexturePath = Trim(texture);
-			}
-			else if (key == "vertex-colors")
-			{
-				int enabled = 0;
-				stream >> enabled;
-				material->UseVertexColors = enabled != 0;
-			}
-			else
+			if (node["shader"])
+				material->Shader = node["shader"].as<std::string>();
+			if (node["color"])
+				material->Color = ReadVec4(node["color"], material->Color);
+			if (node["tiling"])
+				material->Tiling = ReadVec2(node["tiling"], material->Tiling);
+			if (node["texture"])
+				material->TexturePath = node["texture"].as<std::string>();
+			if (node["vertex-colors"])
+				material->UseVertexColors = node["vertex-colors"].as<bool>();
+			if (node["colors"] && node["colors"].IsSequence())
 			{
 				material->UseVertexColors = true;
-				for (Vec4& color : material->Colors)
-					ReadVec4(stream, color);
+				int index = 0;
+				for (const YAML::Node& color : node["colors"])
+				{
+					if (index >= 4)
+						break;
+					material->Colors[index++] = ReadVec4(color, {});
+				}
 			}
-
-			return true;
 		}
 
-		void Write(std::ostream& output, const void* component)
+		void Write(YAML::Node& node, const void* component)
 		{
 			const auto& material = *static_cast<const MaterialComponent*>(component);
-			output << "component material\n";
-			output << std::format("shader {}\n", material.Shader.empty() ? kDefaultShader : material.Shader);
-			output << std::format("color {:.4f} {:.4f} {:.4f} {:.4f}\n", material.Color.x, material.Color.y, material.Color.z, material.Color.w);
-			output << std::format("tiling {:.4f} {:.4f}\n", material.Tiling.x, material.Tiling.y);
+			node["shader"] = material.Shader.empty() ? kDefaultShader : material.Shader;
+			node["color"] = WriteVec4(material.Color);
+			node["tiling"] = WriteVec2(material.Tiling);
 			if (!material.TexturePath.empty())
-				output << std::format("texture {}\n", material.TexturePath);
-			output << std::format("vertex-colors {}\n", material.UseVertexColors ? 1 : 0);
+				node["texture"] = material.TexturePath;
+			node["vertex-colors"] = material.UseVertexColors;
 			if (material.UseVertexColors)
 			{
-				output << "colors";
+				YAML::Node colors(YAML::NodeType::Sequence);
 				for (const Vec4& color : material.Colors)
-					output << std::format(" {:.4f} {:.4f} {:.4f} {:.4f}", color.x, color.y, color.z, color.w);
-				output << '\n';
+					colors.push_back(WriteVec4(color));
+				node["colors"] = colors;
 			}
 		}
 
@@ -110,8 +96,6 @@ namespace Lite {
 				ops.Read = Read;
 				ops.Write = Write;
 				ops.Finish = Finish;
-				ops.ReadLegacy = true;
-				ops.ReadBeside = ComponentId::Spin;
 				RegisterComponent(ops);
 				RegisterComponentPool(ComponentId::Material, []() -> ComponentPool* { return new TypedPool<MaterialComponent>(); });
 			}

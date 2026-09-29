@@ -1,9 +1,7 @@
 #include <Lite/Scene/Components/CircleCollider2DComponent.h>
-
+#include <Lite/Scene/Components/ComponentOps.h>
 #include <Lite/Scene/Components/ComponentStorage.h>
-#include <Lite/Scene/Scene.h>
-
-#include <format>
+#include <Lite/Scene/Components/SceneYaml.h>
 
 namespace Lite {
 
@@ -19,35 +17,26 @@ namespace Lite {
 			entity.Add<CircleCollider2DComponent>();
 		}
 
-		bool Read(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField)
+		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
 		{
-			auto* circle = static_cast<CircleCollider2DComponent*>(scene.GetComponent(ComponentId::CircleCollider2D, entity));
+			auto* circle = static_cast<CircleCollider2DComponent*>(scene.AddComponent(ComponentId::CircleCollider2D, entity));
 			if (circle == nullptr)
-				return false;
+				return;
 
-			if (key == "radius")
-				stream >> circle->Radius;
-			else if (key == "offset")
-				stream >> circle->Offset.x >> circle->Offset.y;
-			else if (key == "trigger")
-			{
-				int trigger = 0;
-				stream >> trigger;
-				circle->IsTrigger = trigger != 0;
-			}
-			else
-				return false;
-
-			return true;
+			if (node["radius"])
+				circle->Radius = node["radius"].as<float>();
+			if (node["offset"])
+				circle->Offset = ReadVec2(node["offset"], circle->Offset);
+			if (node["trigger"])
+				circle->IsTrigger = node["trigger"].as<bool>();
 		}
 
-		void Write(std::ostream& output, const void* component)
+		void Write(YAML::Node& node, const void* component)
 		{
 			const auto& circle = *static_cast<const CircleCollider2DComponent*>(component);
-			output << "component circle-collider2d\n";
-			output << std::format("radius {:.4f}\n", circle.Radius);
-			output << std::format("offset {:.4f} {:.4f}\n", circle.Offset.x, circle.Offset.y);
-			output << std::format("trigger {}\n", circle.IsTrigger ? 1 : 0);
+			node["radius"] = circle.Radius;
+			node["offset"] = WriteVec2(circle.Offset);
+			node["trigger"] = circle.IsTrigger;
 		}
 
 		struct Registration

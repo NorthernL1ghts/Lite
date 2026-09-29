@@ -1,9 +1,6 @@
-#include <Lite/Scene/Components/SortingComponent.h>
-
+#include <Lite/Scene/Components/ComponentOps.h>
 #include <Lite/Scene/Components/ComponentStorage.h>
-#include <Lite/Scene/Scene.h>
-
-#include <format>
+#include <Lite/Scene/Components/SortingComponent.h>
 
 namespace Lite {
 
@@ -19,24 +16,19 @@ namespace Lite {
 			entity.Add<SortingComponent>();
 		}
 
-		bool Read(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField)
+		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
 		{
-			if (key != "order")
-				return false;
+			auto* sorting = static_cast<SortingComponent*>(scene.AddComponent(ComponentId::Sorting, entity));
+			if (sorting == nullptr || !node["order"])
+				return;
 
-			auto* sorting = static_cast<SortingComponent*>(scene.GetComponent(ComponentId::Sorting, entity));
-			if (sorting == nullptr)
-				return false;
-
-			stream >> sorting->Order;
-			return true;
+			sorting->Order = node["order"].as<int>();
 		}
 
-		void Write(std::ostream& output, const void* component)
+		void Write(YAML::Node& node, const void* component)
 		{
 			const auto& sorting = *static_cast<const SortingComponent*>(component);
-			output << "component sorting\n";
-			output << std::format("order {}\n", sorting.Order);
+			node["order"] = sorting.Order;
 		}
 
 		struct Registration

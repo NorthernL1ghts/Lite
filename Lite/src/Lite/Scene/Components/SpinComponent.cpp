@@ -1,9 +1,6 @@
-#include <Lite/Scene/Components/SpinComponent.h>
-
+#include <Lite/Scene/Components/ComponentOps.h>
 #include <Lite/Scene/Components/ComponentStorage.h>
-#include <Lite/Scene/Scene.h>
-
-#include <format>
+#include <Lite/Scene/Components/SpinComponent.h>
 
 namespace Lite {
 
@@ -19,29 +16,19 @@ namespace Lite {
 			entity.Add<SpinComponent>();
 		}
 
-		bool Read(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField field)
+		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
 		{
-			if (key != "rate" && key != "spin")
-				return false;
-
-			float rate = 0.0f;
-			stream >> rate;
-			if (!field.InSection && rate == 0.0f)
-				return true;
-
 			auto* spin = static_cast<SpinComponent*>(scene.AddComponent(ComponentId::Spin, entity));
-			if (spin == nullptr)
-				return false;
+			if (spin == nullptr || !node["rate"])
+				return;
 
-			spin->Rate = rate;
-			return true;
+			spin->Rate = node["rate"].as<float>();
 		}
 
-		void Write(std::ostream& output, const void* component)
+		void Write(YAML::Node& node, const void* component)
 		{
 			const auto& spin = *static_cast<const SpinComponent*>(component);
-			output << "component spin\n";
-			output << std::format("rate {:.4f}\n", spin.Rate);
+			node["rate"] = spin.Rate;
 		}
 
 		struct Registration
@@ -56,7 +43,6 @@ namespace Lite {
 				ops.Add = Add;
 				ops.Read = Read;
 				ops.Write = Write;
-				ops.ReadLegacy = true;
 				RegisterComponent(ops);
 				RegisterComponentPool(ComponentId::Spin, []() -> ComponentPool* { return new TypedPool<SpinComponent>(); });
 			}

@@ -21,12 +21,4 @@ namespace Lite {
 	template<typename T>
 	struct ComponentTraits;
 
-	struct ComponentField
-	{
-		bool InSection = false;
-		bool Legacy = false;
-		bool Loose = false;
-		bool Extra = false;
-	};
-
 }

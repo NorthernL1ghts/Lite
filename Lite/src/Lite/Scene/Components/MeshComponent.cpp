@@ -1,10 +1,9 @@
+#include <Lite/Scene/Components/ComponentOps.h>
+#include <Lite/Scene/Components/ComponentStorage.h>
 #include <Lite/Scene/Components/MeshComponent.h>
 
-#include <Lite/Scene/Components/ComponentStorage.h>
-#include <Lite/Scene/Scene.h>
-
-#include <format>
 #include <string>
+#include <string_view>
 
 namespace Lite {
 
@@ -47,26 +46,19 @@ namespace Lite {
 			entity.Add<MeshComponent>();
 		}
 
-		bool Read(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField)
+		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
 		{
-			if (key != "type" && key != "kind")
-				return false;
-
 			auto* mesh = static_cast<MeshComponent*>(scene.AddComponent(ComponentId::Mesh, entity));
-			if (mesh == nullptr)
-				return false;
+			if (mesh == nullptr || !node["type"])
+				return;
 
-			std::string type;
-			stream >> type;
-			mesh->Type = ParseMesh(type);
-			return true;
+			mesh->Type = ParseMesh(node["type"].as<std::string>());
 		}
 
-		void Write(std::ostream& output, const void* component)
+		void Write(YAML::Node& node, const void* component)
 		{
 			const auto& mesh = *static_cast<const MeshComponent*>(component);
-			output << "component mesh\n";
-			output << std::format("type {}\n", MeshName(mesh.Type));
+			node["type"] = MeshName(mesh.Type);
 		}
 
 		struct Registration
@@ -81,7 +73,6 @@ namespace Lite {
 				ops.Add = Add;
 				ops.Read = Read;
 				ops.Write = Write;
-				ops.ReadLegacy = true;
 				RegisterComponent(ops);
 				RegisterComponentPool(ComponentId::Mesh, []() -> ComponentPool* { return new TypedPool<MeshComponent>(); });
 			}

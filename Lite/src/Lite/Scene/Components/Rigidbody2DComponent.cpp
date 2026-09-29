@@ -1,9 +1,8 @@
-#include <Lite/Scene/Components/Rigidbody2DComponent.h>
-
+#include <Lite/Scene/Components/ComponentOps.h>
 #include <Lite/Scene/Components/ComponentStorage.h>
-#include <Lite/Scene/Scene.h>
+#include <Lite/Scene/Components/Rigidbody2DComponent.h>
+#include <Lite/Scene/Components/SceneYaml.h>
 
-#include <format>
 #include <string>
 
 namespace Lite {
@@ -28,16 +27,15 @@ namespace Lite {
 			entity.Add<Rigidbody2DComponent>();
 		}
 
-		bool Read(Scene& scene, uint32_t entity, std::string_view key, std::istream& stream, ComponentField)
+		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
 		{
-			auto* body = static_cast<Rigidbody2DComponent*>(scene.GetComponent(ComponentId::Rigidbody2D, entity));
+			auto* body = static_cast<Rigidbody2DComponent*>(scene.AddComponent(ComponentId::Rigidbody2D, entity));
 			if (body == nullptr)
-				return false;
+				return;
 
-			if (key == "type")
+			if (node["type"])
 			{
-				std::string type;
-				stream >> type;
+				std::string type = node["type"].as<std::string>();
 				if (type == "static")
 					body->Type = BodyType::Static;
 				else if (type == "kinematic")
@@ -45,27 +43,19 @@ namespace Lite {
 				else
 					body->Type = BodyType::Dynamic;
 			}
-			else if (key == "mass")
-				stream >> body->Mass;
-			else if (key == "gravity")
-				stream >> body->GravityScale;
-			else if (key == "velocity")
-				stream >> body->LinearVelocity.x >> body->LinearVelocity.y;
-			else if (key == "angular")
-				stream >> body->AngularVelocity;
-			else if (key == "freeze")
-			{
-				int freeze = 0;
-				stream >> freeze;
-				body->FreezeRotation = freeze != 0;
-			}
-			else
-				return false;
-
-			return true;
+			if (node["mass"])
+				body->Mass = node["mass"].as<float>();
+			if (node["gravity"])
+				body->GravityScale = node["gravity"].as<float>();
+			if (node["velocity"])
+				body->LinearVelocity = ReadVec2(node["velocity"], body->LinearVelocity);
+			if (node["angular"])
+				body->AngularVelocity = node["angular"].as<float>();
+			if (node["freeze"])
+				body->FreezeRotation = node["freeze"].as<bool>();
 		}
 
-		void Write(std::ostream& output, const void* component)
+		void Write(YAML::Node& node, const void* component)
 		{
 			const auto& body = *static_cast<const Rigidbody2DComponent*>(component);
 			const char* type = "dynamic";
@@ -74,13 +64,12 @@ namespace Lite {
 			else if (body.Type == BodyType::Kinematic)
 				type = "kinematic";
 
-			output << "component rigidbody2d\n";
-			output << std::format("type {}\n", type);
-			output << std::format("mass {:.4f}\n", body.Mass);
-			output << std::format("gravity {:.4f}\n", body.GravityScale);
-			output << std::format("velocity {:.4f} {:.4f}\n", body.LinearVelocity.x, body.LinearVelocity.y);
-			output << std::format("angular {:.4f}\n", body.AngularVelocity);
-			output << std::format("freeze {}\n", body.FreezeRotation ? 1 : 0);
+			node["type"] = type;
+			node["mass"] = body.Mass;
+			node["gravity"] = body.GravityScale;
+			node["velocity"] = WriteVec2(body.LinearVelocity);
+			node["angular"] = body.AngularVelocity;
+			node["freeze"] = body.FreezeRotation;
 		}
 
 		struct Registration

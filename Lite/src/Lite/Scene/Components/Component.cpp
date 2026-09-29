@@ -1,3 +1,4 @@
+#include <Lite/Scene/Components/ComponentOps.h>
 #include <Lite/Scene/Scene.h>
 
 namespace Lite {
