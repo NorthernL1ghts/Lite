@@ -7,6 +7,7 @@
 #include <Lite/ImGui/Instrumentation.h>
 #include <Lite/Input/Input.h>
 #include <Lite/Input/KeyCodes.h>
+#include <Lite/Project/Project.h>
 #include <Lite/Renderer/Renderer.h>
 #include <Lite/Renderer/Renderer2D.h>
 #include <Lite/Scene/Console.h>
@@ -17,6 +18,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <format>
 #include <string>
 #include <vector>
@@ -156,10 +158,21 @@ EditorLayer::EditorLayer()
 
 void EditorLayer::OnAttach()
 {
-	std::string scenePath = Lite::Scene::Locate("assets/scenes/Sandbox.scene");
-	if (!scenePath.empty())
-		OpenScene(scenePath);
-	if (!m_Scene)
+	std::filesystem::path projectPath = Lite::Project::Locate("Sandbox/Sandbox.lite");
+	if (projectPath.empty() || !Lite::Project::Load(projectPath))
+	{
+		NewProject();
+		return;
+	}
+
+	m_ProjectPath = projectPath;
+	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
+	Lite::Console::Log(std::format("Project loaded: {} ({})", project->GetConfig().Name, projectPath.string()));
+
+	const std::filesystem::path& start = project->GetConfig().StartScene;
+	if (!start.empty())
+		OpenScene(Lite::Project::GetAssetFileSystemPath(start).string());
+	if (!m_Scene || !SceneMatches(Lite::Project::GetAssetFileSystemPath(start)))
 		NewScene();
 }
 
@@ -190,6 +203,73 @@ void EditorLayer::OnRender()
 
 	ApplyPlayCamera();
 	m_Scene->Render();
+}
+
+void EditorLayer::NewProject()
+{
+	Lite::Ref<Lite::Project> project = Lite::Project::New();
+	project->GetConfig().Name = "Untitled";
+	project->GetConfig().AssetDirectory = "assets";
+	m_ProjectPath.clear();
+	NewScene();
+	Lite::Console::Log("Project created: Untitled");
+}
+
+void EditorLayer::OpenProject(const std::filesystem::path& path)
+{
+	if (!Lite::Project::Load(path))
+		return;
+
+	m_ProjectPath = path;
+	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
+	Lite::Console::Log(std::format("Project loaded: {} ({})", project->GetConfig().Name, path.string()));
+
+	const std::filesystem::path& start = project->GetConfig().StartScene;
+	std::filesystem::path scene;
+	if (!start.empty())
+		scene = Lite::Project::GetAssetFileSystemPath(start);
+	if (!scene.empty())
+		OpenScene(scene.string());
+	if (!m_Scene || !SceneMatches(scene))
+		NewScene();
+}
+
+bool EditorLayer::SaveProjectTo(const std::filesystem::path& path)
+{
+	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
+	if (!project)
+		project = Lite::Project::New();
+
+	project->GetConfig().Name = path.stem().string();
+	if (m_Scene && !m_Scene->GetPath().empty())
+	{
+		std::filesystem::path assetRoot = path.parent_path() / project->GetConfig().AssetDirectory;
+		std::error_code error;
+		std::filesystem::path scene = std::filesystem::weakly_canonical(m_Scene->GetPath(), error);
+		std::filesystem::path root = std::filesystem::weakly_canonical(assetRoot, error);
+		std::filesystem::path relative = std::filesystem::relative(scene, root, error);
+		bool inside = !error && (relative.empty() || relative.begin()->string() != "..");
+		if (inside)
+			project->GetConfig().StartScene = relative.generic_string();
+	}
+
+	if (!Lite::Project::SaveActive(path))
+		return false;
+
+	m_ProjectPath = path;
+	Lite::Console::Log(std::format("Project saved: {}", path.string()));
+	return true;
+}
+
+void EditorLayer::SaveProject()
+{
+	if (m_ProjectPath.empty())
+	{
+		m_Browser.ShowSaveProject();
+		return;
+	}
+
+	SaveProjectTo(m_ProjectPath);
 }
 
 void EditorLayer::NewScene()
@@ -224,6 +304,17 @@ void EditorLayer::OpenScene(const std::string& path)
 	}
 	m_Inspector.Reset();
 	SyncName();
+}
+
+bool EditorLayer::SceneMatches(const std::filesystem::path& path) const
+{
+	if (!m_Scene || m_Scene->GetPath().empty() || path.empty())
+		return false;
+
+	std::error_code error;
+	std::filesystem::path current = std::filesystem::weakly_canonical(m_Scene->GetPath(), error);
+	std::filesystem::path expected = std::filesystem::weakly_canonical(path, error);
+	return !error && current == expected;
 }
 
 void EditorLayer::SyncName()
@@ -292,6 +383,25 @@ void EditorLayer::OnEvent(Lite::Event& event)
 		}
 
 		bool control = Lite::Input::IsKeyPressed(Lite::Key::LeftControl) || Lite::Input::IsKeyPressed(Lite::Key::RightControl);
+		bool shift = Lite::Input::IsKeyPressed(Lite::Key::LeftShift) || Lite::Input::IsKeyPressed(Lite::Key::RightShift);
+		if (control && shift && key.GetKeyCode() == Lite::Key::N)
+		{
+			NewProject();
+			return true;
+		}
+
+		if (control && shift && key.GetKeyCode() == Lite::Key::S)
+		{
+			SaveProject();
+			return true;
+		}
+
+		if (control && shift && key.GetKeyCode() == Lite::Key::O)
+		{
+			m_Browser.ShowOpenProject();
+			return true;
+		}
+
 		if (control && key.GetKeyCode() == Lite::Key::N)
 		{
 			NewScene();
@@ -360,6 +470,13 @@ void EditorLayer::DrawMenu()
 
 	if (ImGui::BeginMenu("File"))
 	{
+		if (ImGui::MenuItem("New Project", "Ctrl+Shift+N"))
+			NewProject();
+		if (ImGui::MenuItem("Open Project...", "Ctrl+Shift+O"))
+			m_Browser.ShowOpenProject();
+		if (ImGui::MenuItem("Save Project", "Ctrl+Shift+S"))
+			SaveProject();
+		ImGui::Separator();
 		if (ImGui::MenuItem("New Scene", "Ctrl+N"))
 			NewScene();
 		if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
@@ -446,12 +563,24 @@ void EditorLayer::OnImGuiRender()
 		Lite::DrawInstrumentation(!m_InfoPlaced);
 		m_InfoPlaced = true;
 	}
-	m_Browser.Draw(m_Scene.get(), [this](const std::string& path) { OpenScene(path); }, [this] { SyncName(); });
+	m_Browser.Draw(
+		m_Scene.get(),
+		[this](const std::string& path) { OpenScene(path); },
+		[this] { SyncName(); },
+		[this](const std::string& path) { OpenProject(path); },
+		[this](const std::string& path) { return SaveProjectTo(path); });
 }
 
 void EditorLayer::DrawScene()
 {
 	ImGui::Begin("Scene");
+	if (Lite::Ref<Lite::Project> project = Lite::Project::GetActive())
+	{
+		ImGui::TextDisabled("%s", project->GetConfig().Name.c_str());
+		if (!m_ProjectPath.empty())
+			ImGui::TextWrapped("%s", m_ProjectPath.string().c_str());
+	}
+
 	if (m_Scene)
 	{
 		if (m_NamedScene != m_Scene.get())

@@ -51,7 +51,7 @@ That configures, builds, and opens Editor. `Debug` and `x64` are the defaults.
 
 ## Editor
 
-Editor opens `Sandbox/assets/scenes/Sandbox.scene` and saves back to that file. The path is shown in the Scene panel and in the console when the scene loads.
+Editor opens `Sandbox/Sandbox.lite`. That project names the start scene and the asset folder. The start scene is `assets/scenes/Sandbox.scene`, resolved from the project directory. The project path and the scene path are shown in the Scene panel and in the console when they load.
 
 The window is a dockspace:
 
@@ -66,10 +66,15 @@ The window is a dockspace:
 
 | Action | Shortcut |
 | --- | --- |
+| New Project | Ctrl+Shift+N |
+| Open Project... | Ctrl+Shift+O |
+| Save Project | Ctrl+Shift+S |
 | New Scene | Ctrl+N |
 | Open Scene... | Ctrl+O |
 | Save Scene | Ctrl+S |
 | Save Scene As... | — |
+
+Project files are YAML documents named `*.lite`. A project stores its name, start scene, asset directory, and script module path. The start scene and asset directory are relative to the project file. Open and Save use the same file browser, filtered to `*.lite`.
 
 Open and Save As use a file browser. Save Scene writes the scene that is already open. A new scene with no path opens Save As. Scene files are YAML documents named `*.scene`. The document has a `name` and an `entities` list. Each entity has a `name` and one map per component, such as `transform`, `camera`, `mesh`, and `rigidbody2d`.
 

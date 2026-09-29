@@ -1,6 +1,7 @@
 #include <SceneBrowser.h>
 
 #include <Lite/Core/IO/FileSystem.h>
+#include <Lite/Project/Project.h>
 #include <Lite/Scene/Scene.h>
 
 #include <imgui.h>
@@ -21,22 +22,54 @@ void SceneBrowser::ShowSave()
 	m_ShowSave = true;
 }
 
-void SceneBrowser::Prepare(Lite::Scene* scene)
+void SceneBrowser::ShowOpenProject()
+{
+	m_ShowOpenProject = true;
+}
+
+void SceneBrowser::ShowSaveProject()
+{
+	m_ShowSaveProject = true;
+}
+
+void SceneBrowser::Prepare(Lite::Scene* scene, bool project)
 {
 	std::filesystem::path directory;
-	std::string fileName = scene != nullptr ? scene->GetName() : "Untitled";
-	if (scene != nullptr && !scene->GetPath().empty())
+	std::string fileName = "Untitled";
+	Lite::Ref<Lite::Project> active = Lite::Project::GetActive();
+
+	if (project)
 	{
-		std::filesystem::path current(scene->GetPath());
-		if (current.has_parent_path())
-			directory = current.parent_path();
-		if (!current.stem().empty())
-			fileName = current.stem().string();
+		if (active)
+		{
+			fileName = active->GetConfig().Name;
+			if (!active->GetProjectDirectory().empty())
+				directory = active->GetProjectDirectory();
+		}
+	}
+	else
+	{
+		fileName = scene != nullptr ? scene->GetName() : "Untitled";
+		if (scene != nullptr && !scene->GetPath().empty())
+		{
+			std::filesystem::path current(scene->GetPath());
+			if (current.has_parent_path())
+				directory = current.parent_path();
+			if (!current.stem().empty())
+				fileName = current.stem().string();
+		}
+
+		if (directory.empty() && active && !active->GetProjectDirectory().empty())
+		{
+			std::filesystem::path scenes = Lite::Project::GetAssetDirectory() / "scenes";
+			std::error_code error;
+			directory = std::filesystem::is_directory(scenes, error) ? scenes : Lite::Project::GetAssetDirectory();
+		}
 	}
 
 	if (directory.empty())
 	{
-		std::string scenes = Lite::Scene::Locate("assets/scenes");
+		std::string scenes = Lite::Scene::Locate(project ? "Sandbox" : "assets/scenes");
 		if (!scenes.empty())
 			directory = scenes;
 	}
@@ -79,7 +112,7 @@ void SceneBrowser::ApplyDirectoryText()
 	}
 }
 
-std::string SceneBrowser::Selection() const
+std::string SceneBrowser::Selection(const char* extension) const
 {
 	std::filesystem::path entered(m_FileName);
 	if (entered.empty())
@@ -93,13 +126,21 @@ std::string SceneBrowser::Selection() const
 	}
 
 	if (entered.extension().empty())
-		entered.replace_extension(".scene");
+		entered.replace_extension(extension);
 
 	return entered.lexically_normal().string();
 }
 
-void SceneBrowser::DrawFiles(bool save, Lite::Scene* scene, const std::function<void(const std::string&)>& openScene, const std::function<void()>& onSaved)
+void SceneBrowser::DrawFiles(
+	bool save,
+	bool project,
+	Lite::Scene* scene,
+	const std::function<void(const std::string&)>& openScene,
+	const std::function<void()>& onSaved,
+	const std::function<void(const std::string&)>& openProject,
+	const std::function<bool(const std::string&)>& saveProject)
 {
+	const char* extension = project ? ".lite" : ".scene";
 	ImGuiInputTextFlags directoryFlags = ImGuiInputTextFlags_EnterReturnsTrue;
 	ImGui::SetNextItemWidth(-1.0f);
 	if (ImGui::InputText("##Directory", m_DirectoryText, sizeof(m_DirectoryText), directoryFlags) || ImGui::IsItemDeactivatedAfterEdit())
@@ -150,7 +191,7 @@ void SceneBrowser::DrawFiles(bool save, Lite::Scene* scene, const std::function<
 			bool directory = entry.is_directory(fileError);
 			if (fileError)
 				continue;
-			if (!directory && entry.path().extension() != ".scene")
+			if (!directory && entry.path().extension() != extension)
 				continue;
 
 			BrowserEntry item;
@@ -183,7 +224,10 @@ void SceneBrowser::DrawFiles(bool save, Lite::Scene* scene, const std::function<
 			std::snprintf(m_FileName, sizeof(m_FileName), "%s", entry.Path.stem().string().c_str());
 			if (!save && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 			{
-				openScene(entry.Path.string());
+				if (project)
+					openProject(entry.Path.string());
+				else
+					openScene(entry.Path.string());
 				ImGui::CloseCurrentPopup();
 			}
 		}
@@ -203,19 +247,28 @@ void SceneBrowser::DrawFiles(bool save, Lite::Scene* scene, const std::function<
 	const char* action = save ? "Save" : "Open";
 	if (ImGui::Button(action, ImVec2(96.0f, 0.0f)) || confirm)
 	{
-		std::string path = Selection();
+		std::string path = Selection(extension);
 		if (!path.empty())
 		{
-			if (save && scene != nullptr && scene->SaveAs(path))
+			bool closed = false;
+			if (save && project)
+				closed = saveProject(path);
+			else if (save && scene != nullptr && scene->SaveAs(path))
 			{
 				onSaved();
-				ImGui::CloseCurrentPopup();
+				closed = true;
 			}
 			else if (!save)
 			{
-				openScene(path);
-				ImGui::CloseCurrentPopup();
+				if (project)
+					openProject(path);
+				else
+					openScene(path);
+				closed = true;
 			}
+
+			if (closed)
+				ImGui::CloseCurrentPopup();
 		}
 	}
 	ImGui::SameLine();
@@ -223,11 +276,16 @@ void SceneBrowser::DrawFiles(bool save, Lite::Scene* scene, const std::function<
 		ImGui::CloseCurrentPopup();
 }
 
-void SceneBrowser::Draw(Lite::Scene* scene, const std::function<void(const std::string&)>& openScene, const std::function<void()>& onSaved)
+void SceneBrowser::Draw(
+	Lite::Scene* scene,
+	const std::function<void(const std::string&)>& openScene,
+	const std::function<void()>& onSaved,
+	const std::function<void(const std::string&)>& openProject,
+	const std::function<bool(const std::string&)>& saveProject)
 {
 	if (m_ShowOpen)
 	{
-		Prepare(scene);
+		Prepare(scene, false);
 		ImGui::OpenPopup("Open Scene");
 		m_ShowOpen = false;
 	}
@@ -235,13 +293,13 @@ void SceneBrowser::Draw(Lite::Scene* scene, const std::function<void(const std::
 	ImGui::SetNextWindowSize(ImVec2(560.0f, 460.0f), ImGuiCond_Appearing);
 	if (ImGui::BeginPopupModal("Open Scene", nullptr, ImGuiWindowFlags_NoResize))
 	{
-		DrawFiles(false, scene, openScene, onSaved);
+		DrawFiles(false, false, scene, openScene, onSaved, openProject, saveProject);
 		ImGui::EndPopup();
 	}
 
 	if (m_ShowSave)
 	{
-		Prepare(scene);
+		Prepare(scene, false);
 		ImGui::OpenPopup("Save Scene");
 		m_ShowSave = false;
 	}
@@ -249,7 +307,35 @@ void SceneBrowser::Draw(Lite::Scene* scene, const std::function<void(const std::
 	ImGui::SetNextWindowSize(ImVec2(560.0f, 460.0f), ImGuiCond_Appearing);
 	if (ImGui::BeginPopupModal("Save Scene", nullptr, ImGuiWindowFlags_NoResize))
 	{
-		DrawFiles(true, scene, openScene, onSaved);
+		DrawFiles(true, false, scene, openScene, onSaved, openProject, saveProject);
+		ImGui::EndPopup();
+	}
+
+	if (m_ShowOpenProject)
+	{
+		Prepare(scene, true);
+		ImGui::OpenPopup("Open Project");
+		m_ShowOpenProject = false;
+	}
+
+	ImGui::SetNextWindowSize(ImVec2(560.0f, 460.0f), ImGuiCond_Appearing);
+	if (ImGui::BeginPopupModal("Open Project", nullptr, ImGuiWindowFlags_NoResize))
+	{
+		DrawFiles(false, true, scene, openScene, onSaved, openProject, saveProject);
+		ImGui::EndPopup();
+	}
+
+	if (m_ShowSaveProject)
+	{
+		Prepare(scene, true);
+		ImGui::OpenPopup("Save Project");
+		m_ShowSaveProject = false;
+	}
+
+	ImGui::SetNextWindowSize(ImVec2(560.0f, 460.0f), ImGuiCond_Appearing);
+	if (ImGui::BeginPopupModal("Save Project", nullptr, ImGuiWindowFlags_NoResize))
+	{
+		DrawFiles(true, true, scene, openScene, onSaved, openProject, saveProject);
 		ImGui::EndPopup();
 	}
 }

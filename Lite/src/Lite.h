@@ -22,6 +22,7 @@
 #include <Lite/Renderer/RendererAPI.h>
 #include <Lite/Renderer/Renderer.h>
 #include <Lite/Renderer/Renderer2D.h>
+#include <Lite/Project/Project.h>
 #include <Lite/Scene/Console.h>
 #include <Lite/Scene/Scene.h>
 #include <Lite/Core/Events/Event.h>

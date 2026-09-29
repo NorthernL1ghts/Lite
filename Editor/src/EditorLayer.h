@@ -8,6 +8,7 @@
 #include <Lite/Scene/Scene.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
 
 class EditorLayer final : public Lite::Layer
@@ -28,10 +29,15 @@ private:
 	void DrawViewport();
 	void DrawConsole();
 
+	void NewProject();
+	void OpenProject(const std::filesystem::path& path);
+	bool SaveProjectTo(const std::filesystem::path& path);
+	void SaveProject();
 	void NewScene();
 	void OpenScene(const std::string& path);
 	void SaveScene();
 	void SyncName();
+	bool SceneMatches(const std::filesystem::path& path) const;
 	void PickObject(float mouseX, float mouseY);
 	void ApplyPlayCamera();
 
@@ -45,6 +51,7 @@ private:
 	float m_WindowW = 0.0f;
 	float m_WindowH = 0.0f;
 	Lite::Scope<Lite::Scene> m_Scene;
+	std::filesystem::path m_ProjectPath;
 	Lite::Scene* m_NamedScene = nullptr;
 	char m_Name[128] {};
 	uint32_t m_Selected = 0;

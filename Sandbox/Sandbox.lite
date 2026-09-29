@@ -1,0 +1,5 @@
+Project:
+  Name: Sandbox
+  StartScene: scenes/Sandbox.scene
+  AssetDirectory: assets
+  ScriptModulePath: ""
