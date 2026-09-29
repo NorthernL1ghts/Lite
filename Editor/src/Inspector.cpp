@@ -61,6 +61,31 @@ void Inspector::Reset()
 	m_SyncedId = 0;
 }
 
+void Inspector::ApplyTexture(std::uint32_t selected, const std::string& path)
+{
+	Lite::Scene* scene = Lite::Scene::GetActive();
+	Lite::Entity entity = scene != nullptr ? scene->GetEntity(selected) : Lite::Entity{};
+	Lite::MaterialComponent* material = entity ? entity.Get<Lite::MaterialComponent>() : nullptr;
+	if (material == nullptr)
+	{
+		Lite::Console::Log("Drop a texture onto an entity with a material");
+		return;
+	}
+
+	material->TexturePath = path;
+	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", path.c_str());
+	material->Texture = path.empty()
+		? Lite::Ref<Lite::Texture>{}
+		: Lite::AssetRegistry::Get().Load<Lite::Texture>(path);
+	if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
+		mesh->Type = Lite::MeshType::Sprite;
+
+	if (!path.empty() && !material->Texture)
+		Lite::Console::Log(std::format("Failed to load texture {}", path));
+	else
+		Lite::Console::Log(std::format("Texture set: {}", path));
+}
+
 void Inspector::Draw(std::uint32_t selected)
 {
 	ImGui::Begin("Inspector");
@@ -182,6 +207,7 @@ void Inspector::Draw(std::uint32_t selected)
 
 	if (Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>())
 	{
+		ImGui::BeginGroup();
 		if (ComponentHeader("Material", "Material"))
 		{
 			entity.Remove<Lite::MaterialComponent>();
@@ -210,6 +236,10 @@ void Inspector::Draw(std::uint32_t selected)
 			ColorField("Color", material->Color);
 		}
 
+		float opacity = material->Color.w;
+		if (ImGui::SliderFloat("Opacity", &opacity, 0.0f, 1.0f))
+			material->Color.w = opacity;
+
 		if (mesh != nullptr && mesh->Type == Lite::MeshType::Sprite)
 		{
 			ImGui::DragFloat2("Tiling", &material->Tiling.x, 0.01f);
@@ -225,6 +255,13 @@ void Inspector::Draw(std::uint32_t selected)
 					: Lite::AssetRegistry::Get().Load<Lite::Texture>(material->TexturePath);
 			}
 		}
+		}
+		ImGui::EndGroup();
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LITE_TEXTURE"))
+				ApplyTexture(entity.GetId(), static_cast<const char*>(payload->Data));
+			ImGui::EndDragDropTarget();
 		}
 	}
 

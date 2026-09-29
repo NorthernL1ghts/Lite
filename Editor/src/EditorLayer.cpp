@@ -1,5 +1,7 @@
 #include <EditorLayer.h>
 
+#include <Lite/Assets/AssetRegistry.h>
+#include <Lite/Assets/Texture.h>
 #include <Lite/Core/Events/KeyEvent.h>
 #include <Lite/Core/Events/MouseEvent.h>
 #include <Lite/Core/Log/Logger.h>
@@ -17,6 +19,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -26,6 +29,8 @@
 #include <vector>
 
 namespace {
+
+	bool Unproject(const Lite::Mat4& viewProjection, float windowW, float windowH, float mouseX, float mouseY, Lite::Vec2& world);
 
 	const char* kEditorWindows[] = { "Scene", "Viewport", "Inspector", "Console", "Explorer" };
 
@@ -305,6 +310,7 @@ void EditorLayer::OpenScene(const std::string& path)
 
 	m_Scene = std::move(scene);
 	Lite::Scene::SetActive(m_Scene.get());
+	m_Gizmo = GizmoAction::None;
 	m_Selected = 0;
 	for (Lite::Entity entity : m_Scene->GetEntities())
 	{
@@ -413,6 +419,108 @@ void EditorLayer::ApplyPlayCamera()
 	Lite::Mat4 viewProjection = m_Scene->ViewProjection(aspect, m_Camera.GetTransform(), camera);
 	m_ViewProjection = Lite::FitViewport(viewProjection, m_ViewportX, m_ViewportY, m_ViewportW, m_ViewportH, m_WindowW, m_WindowH);
 	Lite::Renderer2D::SetViewProjection(m_ViewProjection);
+}
+
+void EditorLayer::DropSprite(const std::string& path, float mouseX, float mouseY)
+{
+	if (m_Scene == nullptr || path.empty())
+		return;
+
+	Lite::Vec2 world {};
+	if (!Unproject(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY, world))
+		world = {};
+
+	auto planeName = [](const std::string& value)
+	{
+		std::string name = value;
+		for (char& character : name)
+		{
+			if (character >= 'A' && character <= 'Z')
+				character = static_cast<char>(character - 'A' + 'a');
+		}
+		return name;
+	};
+
+	uint32_t backgroundPlane = 0;
+	uint32_t worldPlane = 0;
+	for (const Lite::Scene::Plane& item : m_Scene->GetPlanes())
+	{
+		const std::string name = planeName(item.Name);
+		if (name == "background")
+			backgroundPlane = item.Id;
+		else if (worldPlane == 0)
+			worldPlane = item.Id;
+	}
+	if (worldPlane == 0)
+		worldPlane = backgroundPlane != 0 ? backgroundPlane : (m_Scene->GetPlanes().empty() ? 0 : m_Scene->GetPlanes().front().Id);
+
+	bool backgroundEmpty = backgroundPlane != 0;
+	if (backgroundEmpty)
+	{
+		for (Lite::Entity item : m_Scene->GetEntities(backgroundPlane))
+		{
+			if (item.Has<Lite::MeshComponent>())
+			{
+				backgroundEmpty = false;
+				break;
+			}
+		}
+	}
+
+	const bool asBackground = backgroundEmpty;
+	const uint32_t plane = asBackground ? backgroundPlane : worldPlane;
+
+	std::filesystem::path file(path);
+	std::string name = file.stem().string();
+	if (name.empty())
+		name = "Sprite";
+
+	Lite::Entity entity = plane != 0 ? m_Scene->CreateEntity(name, plane) : m_Scene->CreateEntity(name);
+	Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>();
+	if (transform != nullptr)
+	{
+		if (asBackground)
+		{
+			transform->Local.Position = { m_Camera.GetPosition().x, m_Camera.GetPosition().y, 0.0f };
+			float height = m_ViewSize > 0.0f ? m_ViewSize * 4.0f : 8.0f;
+			float aspect = m_ViewportH > 1.0f ? m_ViewportW / m_ViewportH : 1.0f;
+			transform->Local.Scale = { height * aspect, height, 1.0f };
+		}
+		else
+		{
+			transform->Local.Position = { world.x, world.y, 0.0f };
+			transform->Local.Scale = { 1.0f, 1.0f, 1.0f };
+		}
+	}
+
+	int order = 1;
+	if (!asBackground)
+	{
+		for (Lite::Entity item : m_Scene->GetEntities())
+		{
+			if (Lite::SortingComponent* sorting = item.Get<Lite::SortingComponent>())
+				order = std::max(order, sorting->Order + 1);
+		}
+	}
+
+	entity.Add<Lite::MeshComponent>().Type = Lite::MeshType::Sprite;
+	Lite::MaterialComponent& material = entity.Add<Lite::MaterialComponent>();
+	material.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+	material.UseVertexColors = false;
+	material.Tiling = { 1.0f, 1.0f };
+	material.TexturePath = path;
+	material.Texture = Lite::AssetRegistry::Get().Load<Lite::Texture>(path);
+	entity.Add<Lite::SortingComponent>().Order = asBackground ? -10 : order;
+
+	m_Gizmo = GizmoAction::None;
+	m_Selected = entity.GetId();
+	m_Inspector.Reset();
+	if (!material.Texture)
+		Lite::Console::Log(std::format("Failed to load texture {}", path));
+	else if (asBackground)
+		Lite::Console::Log(std::format("Placed {} as the background", name));
+	else
+		Lite::Console::Log(std::format("Placed {}", name));
 }
 
 void EditorLayer::PickObject(float mouseX, float mouseY)
@@ -742,6 +850,14 @@ void EditorLayer::DrawScene()
 	if (ImGui::Button("Delete"))
 		DeleteSelected();
 	ImGui::EndDisabled();
+
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	if (ImGui::BeginDragDropTargetCustom(window->InnerRect, ImGui::GetID("##SceneFileDrop")))
+	{
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LITE_SCENE"))
+			OpenScene(static_cast<const char*>(payload->Data));
+		ImGui::EndDragDropTarget();
+	}
 	ImGui::End();
 }
 
@@ -1088,6 +1204,17 @@ void EditorLayer::DrawViewport()
 	m_ViewportW = size.x;
 	m_ViewportH = size.y;
 	ImGui::InvisibleButton("##ViewportPick", size);
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LITE_SCENE"))
+			OpenScene(static_cast<const char*>(payload->Data));
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LITE_TEXTURE"))
+		{
+			ImVec2 mouse = ImGui::GetIO().MousePos;
+			DropSprite(static_cast<const char*>(payload->Data), mouse.x, mouse.y);
+		}
+		ImGui::EndDragDropTarget();
+	}
 	ImVec2 mouse = ImGui::GetIO().MousePos;
 	if (m_Gizmo != GizmoAction::None)
 	{

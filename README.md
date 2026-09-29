@@ -59,7 +59,7 @@ The window is a dockspace:
 - **Viewport** shows the scene. While stopped or paused, click an entity here to select it. The frontmost object wins. Drag the selected entity to move it. The corner squares scale it, and the ring around it rotates it.
 - **Inspector** edits the selected entity. Number fields slide when dragged and take a typed value when clicked. Physics checkboxes and body settings apply to the simulation immediately, including while the scene is playing.
 - **Console** shows scene, physics, and selection messages.
-- **Explorer** is the tab next to the console. Assets, Scripts, and Prefabs are shown as folder icons. Double-click a folder to open it, and double-click a scene to load it. New Folder creates a folder in the current view. Import copies content files into that folder.
+- **Explorer** is the tab next to the console. Assets, Scripts, and Prefabs are shown as folder icons. Double-click a folder to open it, and double-click a scene to load it. Drag a texture onto a material to assign it. Drag a texture into the viewport to place it. The first image dropped while the Background plane is empty fills the view behind everything. Later drops are normal sprites at the cursor, in front, and selected so they can be moved and scaled. Opacity on the material fades a sprite over whatever is behind it. Drag a scene file onto the viewport or the scene panel to open it. New Folder creates a folder in the current view. Import copies content files into that folder.
 
 `View > Instrumentation` (I) adds Profile, Draw, GPU, and Swapchain panels.
 

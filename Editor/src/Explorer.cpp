@@ -141,6 +141,31 @@ namespace {
 		}
 	}
 
+	std::string DragPath(const std::filesystem::path& path)
+	{
+		std::error_code error;
+		std::filesystem::path canonical = std::filesystem::weakly_canonical(path, error);
+		if (error)
+			canonical = path;
+		return canonical.generic_string();
+	}
+
+	void BeginFileDrag(const std::filesystem::path& path, IconKind kind, const std::string& label)
+	{
+		const char* type = nullptr;
+		if (kind == IconKind::Image)
+			type = "LITE_TEXTURE";
+		else if (kind == IconKind::Scene)
+			type = "LITE_SCENE";
+		if (type == nullptr || !ImGui::BeginDragDropSource())
+			return;
+
+		const std::string payload = DragPath(path);
+		ImGui::SetDragDropPayload(type, payload.c_str(), payload.size() + 1);
+		ImGui::TextUnformatted(label.c_str());
+		ImGui::EndDragDropSource();
+	}
+
 	std::string FitLabel(const std::string& text, float width)
 	{
 		ImFont* font = ImGui::GetFont();
@@ -262,6 +287,7 @@ void Explorer::DrawGrid(
 		const std::filesystem::path& child = entry.path();
 		std::error_code fileError;
 		const bool directoryEntry = entry.is_directory(fileError);
+		const IconKind kind = KindFor(child, directoryEntry);
 		const std::string name = child.filename().string();
 		if (column > 0)
 			ImGui::SameLine(0.0f, spacing);
@@ -273,6 +299,8 @@ void Explorer::DrawGrid(
 		const bool selected = m_Selected == child;
 		if (ImGui::IsItemClicked())
 			m_Selected = child;
+		if (!directoryEntry)
+			BeginFileDrag(child, kind, name);
 
 		ImDrawList* draw = ImGui::GetWindowDrawList();
 		ImU32 background = 0;
@@ -285,7 +313,7 @@ void Explorer::DrawGrid(
 
 		ImVec2 iconMin { origin.x + 22.0f, origin.y + 8.0f };
 		ImVec2 iconMax { origin.x + 62.0f, origin.y + 46.0f };
-		DrawIcon(draw, iconMin, iconMax, KindFor(child, directoryEntry));
+		DrawIcon(draw, iconMin, iconMax, kind);
 
 		const std::string label = FitLabel(name, tileWidth - 8.0f);
 		ImVec2 textSize = ImGui::CalcTextSize(label.c_str());

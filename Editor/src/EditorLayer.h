@@ -42,6 +42,7 @@ private:
 	void SyncName();
 	bool SceneMatches(const std::filesystem::path& path) const;
 	void PickObject(float mouseX, float mouseY);
+	void DropSprite(const std::string& path, float mouseX, float mouseY);
 	void ApplyPlayCamera();
 	bool BeginGizmo(float mouseX, float mouseY);
 	void ApplyGizmo(float mouseX, float mouseY);
