@@ -3,6 +3,7 @@
 #include <Lite/Core/Events/MouseEvent.h>
 #include <Lite/Core/Log/Logger.h>
 #include <Lite/Core/Profile/Profiler.h>
+#include <Lite/Project/Project.h>
 #include <Lite/Renderer/Renderer.h>
 
 SandboxLayer::SandboxLayer()
@@ -13,11 +14,23 @@ SandboxLayer::SandboxLayer()
 void SandboxLayer::OnAttach()
 {
 	LITE_CLIENT_INFO("Layer attached");
-	if (m_Player.Open("assets/scenes/Sandbox.scene"))
+	std::filesystem::path projectPath = Lite::Project::Locate("Sandbox/Sandbox.lite");
+	if (projectPath.empty() || !Lite::Project::Load(projectPath))
 	{
-		if (Lite::Scene* scene = m_Player.GetScene())
-			scene->Play();
+		LITE_CLIENT_ERROR("Failed to open Sandbox/Sandbox.lite");
+		return;
 	}
+
+	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
+	std::filesystem::path scenePath = Lite::Project::GetAssetFileSystemPath(project->GetConfig().StartScene);
+	if (scenePath.empty() || !m_Player.Open(scenePath.string()))
+	{
+		LITE_CLIENT_ERROR("Failed to open the project start scene");
+		return;
+	}
+
+	if (Lite::Scene* scene = m_Player.GetScene())
+		scene->Play();
 }
 
 void SandboxLayer::OnUpdate(Lite::Timestep timestep)

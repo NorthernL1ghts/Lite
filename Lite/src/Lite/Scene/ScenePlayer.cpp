@@ -3,12 +3,15 @@
 #include <Lite/Renderer/Renderer2D.h>
 #include <Lite/Scene/SceneCamera.h>
 
+#include <filesystem>
+
 namespace Lite {
 
 	bool ScenePlayer::Open(std::string_view relativePath)
 	{
 		Close();
-		std::string path = Scene::Locate(relativePath);
+		std::filesystem::path file(relativePath);
+		std::string path = file.is_absolute() ? file.string() : Scene::Locate(relativePath);
 		if (path.empty())
 			return false;
 

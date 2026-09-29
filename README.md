@@ -123,7 +123,7 @@ The example scene has a Background plane for the checkerboard and a World plane 
 
 ## Sandbox
 
-`build/bin/sandbox/Sandbox.exe` loads the same example scene and plays it immediately. It is the scene without the editor around it.
+`build/bin/sandbox/Sandbox.exe` opens `Sandbox/Sandbox.lite` and plays that project's start scene. It is the project without the editor around it.
 
 ## License
 
