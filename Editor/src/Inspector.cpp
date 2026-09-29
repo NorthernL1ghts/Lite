@@ -62,15 +62,15 @@ void Inspector::Reset()
 void Inspector::ApplyTexture(std::uint32_t selected, const std::string& path)
 {
 	Lite::Scene* scene = Lite::Scene::GetActive();
-	if (scene == nullptr || !scene->AssignTexture(selected, path))
+	const Lite::Scene::TextureAssign assigned = scene != nullptr ? scene->AssignTexture(selected, path) : Lite::Scene::TextureAssign {};
+	if (!assigned.Applied)
 	{
 		Lite::Console::Log("Drop a texture onto an entity with a material");
 		return;
 	}
 
 	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", path.c_str());
-	Lite::MaterialComponent* material = scene->GetEntity(selected).Get<Lite::MaterialComponent>();
-	if (!path.empty() && (material == nullptr || !material->Texture))
+	if (!path.empty() && !assigned.Loaded)
 		Lite::Console::Log(std::format("Failed to load texture {}", path));
 	else
 		Lite::Console::Log(std::format("Texture set: {}", path));

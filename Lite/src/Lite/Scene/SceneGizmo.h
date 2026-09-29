@@ -6,7 +6,11 @@
 #include <Lite/Scene/SceneCamera.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <numbers>
+#include <optional>
+#include <span>
 
 namespace Lite {
 
@@ -23,8 +27,8 @@ namespace Lite {
 		bool Ok = false;
 		Vec2 CenterWorld {};
 		Vec2 Center {};
-		Vec2 World[4] {};
-		Vec2 Screen[4] {};
+		std::array<Vec2, 4> World {};
+		std::array<Vec2, 4> Screen {};
 		int Count = 0;
 		float Ring = 36.0f;
 	};
@@ -52,40 +56,38 @@ namespace Lite {
 	inline constexpr float kGizmoRingHit = 7.0f;
 	inline constexpr float kGizmoMinRing = 36.0f;
 
-	inline const Vec2* MeshCorners(const MeshComponent* mesh, int& count)
+	inline std::span<const Vec2> MeshCorners(const MeshComponent* mesh)
 	{
 		if (mesh != nullptr && mesh->Type == MeshType::Triangle)
-		{
-			count = 3;
 			return kTriangleCorners;
-		}
-
-		count = 4;
 		return kQuadCorners;
 	}
 
-	inline bool BuildGizmo(const Mat4& viewProjection, float windowW, float windowH, Entity entity, GizmoLayout& layout)
+	inline bool BuildGizmo(const Mat4& viewProjection, float windowW, float windowH, const Entity& entity, GizmoLayout& layout)
 	{
-		TransformComponent* transform = entity.Get<TransformComponent>();
+		const TransformComponent* transform = entity.Get<TransformComponent>();
 		if (transform == nullptr)
 			return false;
 
-		int count = 0;
-		const Vec2* local = MeshCorners(entity.Get<MeshComponent>(), count);
+		const std::span<const Vec2> local = MeshCorners(entity.Get<MeshComponent>());
 		layout = {};
 		layout.CenterWorld = { transform->Local.Position.x, transform->Local.Position.y };
-		if (!WorldToScreen(viewProjection, windowW, windowH, layout.CenterWorld, layout.Center))
+		const std::optional<Vec2> center = WorldToScreen(viewProjection, windowW, windowH, layout.CenterWorld);
+		if (!center)
 			return false;
+		layout.Center = *center;
 
-		layout.Count = count;
+		layout.Count = static_cast<int>(local.size());
 		float reach = 0.0f;
-		for (int index = 0; index < count; ++index)
+		for (int index = 0; index < layout.Count; ++index)
 		{
-			Vec3 transformed = transform->Local.TransformPoint({ local[index].x, local[index].y, 0.0f });
-			layout.World[index] = { transformed.x, transformed.y };
-			if (!WorldToScreen(viewProjection, windowW, windowH, layout.World[index], layout.Screen[index]))
+			const Vec3 transformed = transform->Local.TransformPoint({ local[static_cast<size_t>(index)].x, local[static_cast<size_t>(index)].y, 0.0f });
+			layout.World[static_cast<size_t>(index)] = { transformed.x, transformed.y };
+			const std::optional<Vec2> screen = WorldToScreen(viewProjection, windowW, windowH, layout.World[static_cast<size_t>(index)]);
+			if (!screen)
 				return false;
-			reach = std::max(reach, (layout.Center - layout.Screen[index]).Length());
+			layout.Screen[static_cast<size_t>(index)] = *screen;
+			reach = std::max(reach, (layout.Center - layout.Screen[static_cast<size_t>(index)]).Length());
 		}
 
 		layout.Ring = std::max(reach + kGizmoRingGap, kGizmoMinRing);
@@ -99,7 +101,7 @@ namespace Lite {
 		float best = kGizmoHandle + 3.0f;
 		for (int index = 0; index < layout.Count; ++index)
 		{
-			float distance = (mouse - layout.Screen[index]).Length();
+			const float distance = (mouse - layout.Screen[static_cast<size_t>(index)]).Length();
 			if (distance > best)
 				continue;
 			best = distance;
@@ -111,14 +113,14 @@ namespace Lite {
 
 	inline bool HitGizmoRing(const GizmoLayout& layout, Vec2 mouse)
 	{
-		float distance = (mouse - layout.Center).Length();
+		const float distance = (mouse - layout.Center).Length();
 		return std::abs(distance - layout.Ring) <= kGizmoRingHit;
 	}
 
-	inline GizmoHot HitGizmo(const GizmoLayout& layout, Vec2 mouse, const Vec2* world)
+	inline GizmoHot HitGizmo(const GizmoLayout& layout, Vec2 mouse, std::optional<Vec2> world)
 	{
 		GizmoHot hot;
-		int corner = HitGizmoScale(layout, mouse);
+		const int corner = HitGizmoScale(layout, mouse);
 		if (corner >= 0)
 		{
 			hot.Action = GizmoAction::Scale;
@@ -132,7 +134,8 @@ namespace Lite {
 			return hot;
 		}
 
-		if (world != nullptr && PointInPolygon(*world, layout.World, layout.Count))
+		const std::span<const Vec2> outline { layout.World.data(), static_cast<size_t>(layout.Count) };
+		if (world && PointInPolygon(*world, outline))
 			hot.Action = GizmoAction::Move;
 		return hot;
 	}
@@ -140,27 +143,27 @@ namespace Lite {
 	inline bool BeginGizmo(Scene& scene, const Mat4& viewProjection, float windowW, float windowH, uint32_t entityId, float mouseX, float mouseY, GizmoDrag& drag)
 	{
 		drag = {};
-		Entity entity = scene.GetEntity(entityId);
-		TransformComponent* transform = entity ? entity.Get<TransformComponent>() : nullptr;
+		const Entity entity = scene.GetEntity(entityId);
+		const TransformComponent* transform = entity ? entity.Get<TransformComponent>() : nullptr;
 		GizmoLayout layout;
 		if (transform == nullptr || !BuildGizmo(viewProjection, windowW, windowH, entity, layout))
 			return false;
 
-		Vec2 world;
-		if (!ScreenToWorld(viewProjection, windowW, windowH, mouseX, mouseY, world))
+		const std::optional<Vec2> world = ScreenToWorld(viewProjection, windowW, windowH, mouseX, mouseY);
+		if (!world)
 			return false;
 
-		GizmoHot hot = HitGizmo(layout, { mouseX, mouseY }, &world);
+		const GizmoHot hot = HitGizmo(layout, { mouseX, mouseY }, world);
 		if (hot.Action == GizmoAction::None)
 			return false;
 
 		drag.Action = hot.Action;
 		drag.Corner = hot.Corner;
-		drag.Grab = world;
+		drag.Grab = *world;
 		drag.Position = transform->Local.Position;
 		drag.Rotation = transform->Local.GetRotationZ();
 		drag.Scale = transform->Local.Scale;
-		drag.Angle = std::atan2(world.y - drag.Position.y, world.x - drag.Position.x);
+		drag.Angle = std::atan2(world->y - drag.Position.y, world->x - drag.Position.x);
 		return true;
 	}
 
@@ -168,8 +171,8 @@ namespace Lite {
 	{
 		Entity entity = scene.GetEntity(entityId);
 		TransformComponent* transform = entity ? entity.Get<TransformComponent>() : nullptr;
-		Vec2 world;
-		if (transform == nullptr || drag.Action == GizmoAction::None || !ScreenToWorld(viewProjection, windowW, windowH, mouseX, mouseY, world))
+		const std::optional<Vec2> world = ScreenToWorld(viewProjection, windowW, windowH, mouseX, mouseY);
+		if (transform == nullptr || drag.Action == GizmoAction::None || !world)
 		{
 			drag.Action = GizmoAction::None;
 			return false;
@@ -178,13 +181,13 @@ namespace Lite {
 		switch (drag.Action)
 		{
 			case GizmoAction::Move:
-				transform->Local.Position.x = drag.Position.x + (world.x - drag.Grab.x);
-				transform->Local.Position.y = drag.Position.y + (world.y - drag.Grab.y);
+				transform->Local.Position.x = drag.Position.x + (world->x - drag.Grab.x);
+				transform->Local.Position.y = drag.Position.y + (world->y - drag.Grab.y);
 				break;
 			case GizmoAction::Rotate:
 			{
-				constexpr float pi = 3.14159265f;
-				float angle = std::atan2(world.y - drag.Position.y, world.x - drag.Position.x);
+				constexpr float pi = std::numbers::pi_v<float>;
+				const float angle = std::atan2(world->y - drag.Position.y, world->x - drag.Position.x);
 				float delta = angle - drag.Angle;
 				while (delta > pi)
 					delta -= pi * 2.0f;
@@ -197,18 +200,17 @@ namespace Lite {
 			}
 			case GizmoAction::Scale:
 			{
-				int count = 0;
-				const Vec2* local = MeshCorners(entity.Get<MeshComponent>(), count);
-				if (drag.Corner < 0 || drag.Corner >= count)
-					break;
+				const std::span<const Vec2> local = MeshCorners(entity.Get<MeshComponent>());
+				if (drag.Corner < 0 || drag.Corner >= static_cast<int>(local.size()))
+					return false;
 
 				Transform basis;
 				basis.Position = drag.Position;
 				basis.SetRotationZ(drag.Rotation);
 				basis.Scale = { 1.0f, 1.0f, 1.0f };
-				Vec3 offset { world.x - basis.Position.x, world.y - basis.Position.y, 0.0f };
-				Vec3 localPoint = basis.Rotation.Normalized().Conjugate().Rotate(offset);
-				Vec2 corner = local[drag.Corner];
+				const Vec3 offset { world->x - basis.Position.x, world->y - basis.Position.y, 0.0f };
+				const Vec3 localPoint = basis.Rotation.Normalized().Conjugate().Rotate(offset);
+				const Vec2 corner = local[static_cast<size_t>(drag.Corner)];
 				Vec3 scale = drag.Scale;
 				if (std::abs(corner.x) > 0.001f)
 					scale.x = localPoint.x / corner.x;
@@ -223,7 +225,7 @@ namespace Lite {
 				break;
 			}
 			default:
-				break;
+				return false;
 		}
 
 		scene.RefreshPhysics(entityId);

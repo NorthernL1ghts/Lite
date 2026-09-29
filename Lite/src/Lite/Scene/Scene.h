@@ -47,7 +47,10 @@ namespace Lite {
 		void SetName(std::string name);
 
 		template<typename T>
-		bool Has();
+		bool Has() const;
+
+		template<typename T>
+		const T* Get() const;
 
 		template<typename T>
 		T* Get();
@@ -120,7 +123,14 @@ namespace Lite {
 		Mat4 ViewProjection(float aspect, const Transform& fallbackTransform, const CameraComponent& fallbackCamera) const;
 		uint32_t Pick(const Mat4& viewProjection, float mouseX, float mouseY, float windowW, float windowH);
 		uint32_t NextEntity(uint32_t id) const;
-		bool AssignTexture(uint32_t entityId, const std::string& path);
+
+		struct TextureAssign
+		{
+			bool Applied = false;
+			bool Loaded = false;
+		};
+
+		TextureAssign AssignTexture(uint32_t entityId, const std::string& path);
 
 		struct SpritePlacement
 		{
@@ -189,9 +199,17 @@ namespace Lite {
 	};
 
 	template<typename T>
-	bool Entity::Has()
+	bool Entity::Has() const
 	{
 		return Get<T>() != nullptr;
+	}
+
+	template<typename T>
+	const T* Entity::Get() const
+	{
+		if (m_Scene == nullptr)
+			return nullptr;
+		return static_cast<const T*>(static_cast<const Scene*>(m_Scene)->GetComponent(ComponentTraits<T>::Id, m_Id));
 	}
 
 	template<typename T>

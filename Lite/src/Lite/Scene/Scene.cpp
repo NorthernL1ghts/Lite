@@ -282,7 +282,7 @@ namespace Lite {
 	{
 		uint32_t next = 0;
 		uint32_t previous = 0;
-		bool passed = false;
+		bool found = false;
 		for (const Plane& plane : m_Planes)
 		{
 			for (const Record& record : m_Records)
@@ -291,32 +291,37 @@ namespace Lite {
 					continue;
 				if (record.Id == id)
 				{
-					passed = true;
+					found = true;
 					continue;
 				}
 
-				if (!passed)
+				if (!found)
 					previous = record.Id;
 				else if (next == 0)
 					next = record.Id;
 			}
 		}
 
+		if (!found)
+			return 0;
 		return next != 0 ? next : previous;
 	}
 
-	bool Scene::AssignTexture(uint32_t entityId, const std::string& path)
+	Scene::TextureAssign Scene::AssignTexture(uint32_t entityId, const std::string& path)
 	{
+		TextureAssign result;
 		Entity entity = GetEntity(entityId);
 		MaterialComponent* material = entity ? entity.Get<MaterialComponent>() : nullptr;
 		if (material == nullptr)
-			return false;
+			return result;
 
 		material->TexturePath = path;
 		material->Texture = path.empty() ? Ref<Texture>{} : AssetRegistry::Get().Load<Texture>(path);
 		if (MeshComponent* mesh = entity.Get<MeshComponent>())
 			mesh->Type = MeshType::Sprite;
-		return true;
+		result.Applied = true;
+		result.Loaded = static_cast<bool>(material->Texture);
+		return result;
 	}
 
 	Scene::SpritePlacement Scene::PlaceSprite(const std::string& texturePath, Vec2 world, Vec2 viewCenter, float viewSize, float aspect)
@@ -401,11 +406,10 @@ namespace Lite {
 		material.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 		material.UseVertexColors = false;
 		material.Tiling = { 1.0f, 1.0f };
-		AssignTexture(entity.GetId(), texturePath);
+		placed.Loaded = AssignTexture(entity.GetId(), texturePath).Loaded;
 		entity.Add<SortingComponent>().Order = placed.Background ? -10 : order;
 
 		placed.Entity = entity.GetId();
-		placed.Loaded = static_cast<bool>(material.Texture);
 		return placed;
 	}
 

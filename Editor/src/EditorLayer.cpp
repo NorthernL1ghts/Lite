@@ -444,8 +444,7 @@ void EditorLayer::DropSprite(const std::string& path, float mouseX, float mouseY
 	if (m_Scene == nullptr || path.empty())
 		return;
 
-	Lite::Vec2 world {};
-	Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY, world);
+	const Lite::Vec2 world = Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY).value_or(Lite::Vec2 {});
 	float aspect = m_ViewportH > 1.0f ? m_ViewportW / m_ViewportH : 1.0f;
 	Lite::Vec2 viewCenter { m_Camera.GetPosition().x, m_Camera.GetPosition().y };
 	Lite::Scene::SpritePlacement placed = m_Scene->PlaceSprite(path, world, viewCenter, m_ViewSize, aspect);
@@ -832,9 +831,7 @@ void EditorLayer::DrawGizmo()
 	}
 	else if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
 	{
-		Lite::Vec2 world;
-		const Lite::Vec2* point = Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouse.x, mouse.y, world) ? &world : nullptr;
-		hot = Lite::HitGizmo(layout, { mouse.x, mouse.y }, point);
+		hot = Lite::HitGizmo(layout, { mouse.x, mouse.y }, Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouse.x, mouse.y));
 	}
 
 	if (hot.Action == Lite::GizmoAction::Move)
@@ -857,10 +854,10 @@ void EditorLayer::DrawGizmo()
 
 	auto axis = [&](Lite::Vec2 world, ImU32 color)
 	{
-		Lite::Vec2 point;
-		if (!Lite::WorldToScreen(m_ViewProjection, m_WindowW, m_WindowH, world, point))
+		const std::optional<Lite::Vec2> point = Lite::WorldToScreen(m_ViewProjection, m_WindowW, m_WindowH, world);
+		if (!point)
 			return;
-		ImVec2 direction { point.x - center.x, point.y - center.y };
+		ImVec2 direction { point->x - center.x, point->y - center.y };
 		float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 		if (length <= 0.001f)
 			return;

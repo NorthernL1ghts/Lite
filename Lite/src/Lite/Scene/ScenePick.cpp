@@ -4,6 +4,8 @@
 #include <Lite/Scene/SceneCamera.h>
 
 #include <algorithm>
+#include <array>
+#include <span>
 #include <vector>
 
 namespace Lite {
@@ -12,24 +14,23 @@ namespace Lite {
 
 		bool Hits(MeshType type, const Transform& transform, Vec2 point)
 		{
-			const Vec2* local = type == MeshType::Triangle ? kTriangleCorners : kQuadCorners;
-			int count = type == MeshType::Triangle ? 3 : 4;
-			Vec2 world[4];
-			for (int index = 0; index < count; ++index)
+			const std::span<const Vec2> local = type == MeshType::Triangle ? std::span<const Vec2> { kTriangleCorners } : std::span<const Vec2> { kQuadCorners };
+			std::array<Vec2, 4> world {};
+			for (size_t index = 0; index < local.size(); ++index)
 			{
-				Vec3 transformed = transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
+				const Vec3 transformed = transform.TransformPoint({ local[index].x, local[index].y, 0.0f });
 				world[index] = { transformed.x, transformed.y };
 			}
 
-			return PointInPolygon(point, world, count);
+			return PointInPolygon(point, std::span<const Vec2> { world.data(), local.size() });
 		}
 
 	}
 
 	uint32_t Scene::Pick(const Mat4& viewProjection, float mouseX, float mouseY, float windowW, float windowH)
 	{
-		Vec2 world;
-		if (!ScreenToWorld(viewProjection, windowW, windowH, mouseX, mouseY, world))
+		const std::optional<Vec2> world = ScreenToWorld(viewProjection, windowW, windowH, mouseX, mouseY);
+		if (!world)
 			return 0;
 
 		struct Candidate
@@ -45,12 +46,12 @@ namespace Lite {
 		candidates.reserve(entities.size());
 		for (size_t index = 0; index < entities.size(); ++index)
 		{
-			Lite::Entity entity = entities[index];
+			const Entity entity = entities[index];
 			if (entity.Get<MeshComponent>() == nullptr || entity.Get<TransformComponent>() == nullptr)
 				continue;
 
 			int order = 0;
-			if (SortingComponent* sorting = entity.Get<SortingComponent>())
+			if (const SortingComponent* sorting = entity.Get<SortingComponent>())
 				order = sorting->Order;
 			const Record* record = FindRecord(entity.GetId());
 			int plane = record != nullptr ? PlaneOrder(record->Plane) : 0;
@@ -66,14 +67,15 @@ namespace Lite {
 			return left.Index > right.Index;
 		});
 
-		for (Candidate& candidate : candidates)
+		for (const Candidate& candidate : candidates)
 		{
-			MeshComponent* mesh = candidate.Entity.Get<MeshComponent>();
-			TransformComponent* transform = candidate.Entity.Get<TransformComponent>();
+			const Entity entity = candidate.Entity;
+			const MeshComponent* mesh = entity.Get<MeshComponent>();
+			const TransformComponent* transform = entity.Get<TransformComponent>();
 			if (mesh == nullptr || transform == nullptr)
 				continue;
-			if (Hits(mesh->Type, transform->Local, { world.x, world.y }))
-				return candidate.Entity.GetId();
+			if (Hits(mesh->Type, transform->Local, *world))
+				return entity.GetId();
 		}
 
 		return 0;
