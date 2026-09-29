@@ -9,7 +9,7 @@ namespace Lite {
 	class LITE_API ImGuiLayer : public Layer
 	{
 	public:
-		explicit ImGuiLayer(GLFWwindow* window);
+		explicit ImGuiLayer(void* window);
 		~ImGuiLayer() override;
 
 		void OnAttach() override;

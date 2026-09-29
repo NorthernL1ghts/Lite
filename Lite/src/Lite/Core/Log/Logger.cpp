@@ -7,6 +7,13 @@ namespace {
 	Lite::Ref<spdlog::logger> s_CoreLogger;
 	Lite::Ref<spdlog::logger> s_ClientLogger;
 
+	Lite::Ref<spdlog::logger> MakeLogger(const char* name)
+	{
+		Lite::Ref<spdlog::logger> logger = spdlog::stdout_color_mt(name);
+		logger->set_level(spdlog::level::trace);
+		return logger;
+	}
+
 }
 
 namespace Lite {
@@ -18,11 +25,8 @@ namespace Lite {
 
 		spdlog::set_pattern("%^[%T] %n: %v%$");
 
-		s_CoreLogger = spdlog::stdout_color_mt("LITE");
-		s_CoreLogger->set_level(spdlog::level::trace);
-
-		s_ClientLogger = spdlog::stdout_color_mt("APP");
-		s_ClientLogger->set_level(spdlog::level::trace);
+		s_CoreLogger = MakeLogger("LITE");
+		s_ClientLogger = MakeLogger("APP");
 	}
 
 	void Logger::Shutdown()

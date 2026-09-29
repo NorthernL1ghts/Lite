@@ -4,6 +4,26 @@
 
 #include <algorithm>
 
+namespace {
+
+	bool Detach(std::vector<Lite::Scope<Lite::Layer>>& layers, std::vector<Lite::Scope<Lite::Layer>>::iterator begin, std::vector<Lite::Scope<Lite::Layer>>::iterator end, Lite::Layer* layer, const char* kind)
+	{
+		auto it = std::find_if(begin, end, [layer](const Lite::Scope<Lite::Layer>& item)
+		{
+			return item.get() == layer;
+		});
+
+		if (it == end)
+			return false;
+
+		LITE_TRACE("Detached {} {}", kind, (*it)->GetName());
+		(*it)->OnDetach();
+		layers.erase(it);
+		return true;
+	}
+
+}
+
 namespace Lite {
 
 	LayerStack::~LayerStack()
@@ -29,18 +49,8 @@ namespace Lite {
 
 	void LayerStack::PopLayer(Layer* layer)
 	{
-		auto it = std::find_if(m_Layers.begin(), m_Layers.begin() + m_LayerInsertIndex, [layer](const auto& item)
-		{
-			return item.get() == layer;
-		});
-
-		if (it == m_Layers.begin() + m_LayerInsertIndex)
-			return;
-
-		LITE_TRACE("Detached layer {}", (*it)->GetName());
-		(*it)->OnDetach();
-		m_Layers.erase(it);
-		--m_LayerInsertIndex;
+		if (Detach(m_Layers, m_Layers.begin(), m_Layers.begin() + static_cast<std::ptrdiff_t>(m_LayerInsertIndex), layer, "layer"))
+			--m_LayerInsertIndex;
 	}
 
 	void LayerStack::Clear()
@@ -57,17 +67,7 @@ namespace Lite {
 
 	void LayerStack::PopOverlay(Layer* layer)
 	{
-		auto it = std::find_if(m_Layers.begin() + m_LayerInsertIndex, m_Layers.end(), [layer](const auto& item)
-		{
-			return item.get() == layer;
-		});
-
-		if (it == m_Layers.end())
-			return;
-
-		LITE_TRACE("Detached overlay {}", (*it)->GetName());
-		(*it)->OnDetach();
-		m_Layers.erase(it);
+		Detach(m_Layers, m_Layers.begin() + static_cast<std::ptrdiff_t>(m_LayerInsertIndex), m_Layers.end(), layer, "overlay");
 	}
 
 }

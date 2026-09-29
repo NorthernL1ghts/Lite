@@ -278,10 +278,12 @@ bool EditorLayer::SaveProjectTo(const std::filesystem::path& path)
 		std::error_code error;
 		std::filesystem::path scene = std::filesystem::weakly_canonical(m_Scene->GetPath(), error);
 		std::filesystem::path root = std::filesystem::weakly_canonical(assetRoot, error);
-		std::filesystem::path relative = std::filesystem::relative(scene, root, error);
-		bool inside = !error && (relative.empty() || relative.begin()->string() != "..");
-		if (inside)
-			project->GetConfig().StartScene = relative.generic_string();
+		if (Lite::FileSystem::Contains(root, scene))
+		{
+			std::filesystem::path relative = std::filesystem::relative(scene, root, error);
+			if (!error)
+				project->GetConfig().StartScene = relative.generic_string();
+		}
 	}
 
 	if (!Lite::Project::SaveActive(path))

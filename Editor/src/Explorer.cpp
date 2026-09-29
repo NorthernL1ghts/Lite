@@ -1,5 +1,6 @@
 #include <Explorer.h>
 
+#include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Project/Project.h>
 #include <Lite/Scene/Console.h>
 
@@ -216,9 +217,7 @@ bool Explorer::InsideProject(const std::filesystem::path& path) const
 	if (m_Project.empty() || path.empty())
 		return false;
 
-	std::error_code error;
-	std::filesystem::path relative = std::filesystem::relative(path, m_Project, error);
-	return !error && (relative.empty() || relative.begin()->string() != "..");
+	return Lite::FileSystem::Contains(m_Project, path);
 }
 
 std::filesystem::path Explorer::Destination() const
@@ -522,10 +521,7 @@ void Explorer::Draw(
 		std::string libraryLabel = "Assets";
 		for (const Library& library : libraries)
 		{
-			std::error_code relativeError;
-			std::filesystem::path relative = std::filesystem::relative(m_View, library.Path, relativeError);
-			bool inside = !relativeError && (relative.empty() || relative.begin()->string() != "..");
-			if (!inside)
+			if (!Lite::FileSystem::Contains(library.Path, m_View))
 				continue;
 			libraryRoot = library.Path;
 			libraryLabel = library.Label;

@@ -57,10 +57,7 @@ namespace Lite {
 			std::filesystem::path inside;
 			for (const std::filesystem::path& match : matches)
 			{
-				std::error_code error;
-				std::filesystem::path relative = std::filesystem::relative(match, executable, error);
-				bool contained = !error && (relative.empty() || relative.begin()->string() != "..");
-				if (!contained)
+				if (!FileSystem::Contains(executable, match))
 					return match;
 				if (inside.empty())
 					inside = match;
@@ -103,6 +100,16 @@ namespace Lite {
 	{
 		std::error_code error;
 		return std::filesystem::exists(path, error);
+	}
+
+	bool FileSystem::Contains(const std::filesystem::path& root, const std::filesystem::path& path)
+	{
+		if (root.empty() || path.empty())
+			return false;
+
+		std::error_code error;
+		std::filesystem::path relative = std::filesystem::relative(path, root, error);
+		return !error && (relative.empty() || relative.begin()->string() != "..");
 	}
 
 	std::filesystem::path FileSystem::Unused(const std::filesystem::path& parent, const std::string& stem, std::string_view extension)

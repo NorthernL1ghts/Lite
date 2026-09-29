@@ -23,6 +23,23 @@ namespace Lite {
 		void PopOverlay(Layer* layer);
 		void Clear();
 
+		template<typename Function>
+		void ForEach(Function&& function)
+		{
+			for (Scope<Layer>& layer : m_Layers)
+				function(*layer);
+		}
+
+		template<typename Function>
+		void ForEachReverse(Function&& function)
+		{
+			for (auto it = m_Layers.rbegin(); it != m_Layers.rend(); ++it)
+			{
+				if (!function(**it))
+					break;
+			}
+		}
+
 		auto begin() { return m_Layers.begin(); }
 		auto end() { return m_Layers.end(); }
 		auto rbegin() { return m_Layers.rbegin(); }

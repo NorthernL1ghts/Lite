@@ -72,9 +72,9 @@ namespace Lite {
 
 	}
 
-	ImGuiLayer::ImGuiLayer(GLFWwindow* window)
+	ImGuiLayer::ImGuiLayer(void* window)
 		: Layer("ImGui")
-		, m_Window(window)
+		, m_Window(static_cast<GLFWwindow*>(window))
 	{
 	}
 

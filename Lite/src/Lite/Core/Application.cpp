@@ -41,7 +41,7 @@ namespace Lite {
 		Input::SetWindow(m_Window->GetNativeHandle());
 		Renderer2D::Init(m_Window->GetNativeHandle());
 
-		auto imgui = CreateScope<ImGuiLayer>(static_cast<GLFWwindow*>(m_Window->GetNativeHandle()));
+		auto imgui = CreateScope<ImGuiLayer>(m_Window->GetNativeHandle());
 		m_ImGuiLayer = imgui.get();
 		PushOverlay(std::move(imgui));
 
@@ -90,14 +90,12 @@ namespace Lite {
 
 				{
 					LITE_PROFILE_SCOPE("Update");
-					for (auto& layer : m_LayerStack)
-						layer->OnUpdate(timestep);
+					m_LayerStack.ForEach([&](Layer& layer) { layer.OnUpdate(timestep); });
 				}
 
 				{
 					LITE_PROFILE_SCOPE("Render");
-					for (auto& layer : m_LayerStack)
-						layer->OnRender();
+					m_LayerStack.ForEach([&](Layer& layer) { layer.OnRender(); });
 				}
 
 				Renderer2D::Flush();
@@ -105,8 +103,7 @@ namespace Lite {
 				{
 					LITE_PROFILE_SCOPE("ImGui");
 					m_ImGuiLayer->Begin();
-					for (auto& layer : m_LayerStack)
-						layer->OnImGuiRender();
+					m_LayerStack.ForEach([](Layer& layer) { layer.OnImGuiRender(); });
 					m_ImGuiLayer->End();
 				}
 
@@ -127,13 +124,14 @@ namespace Lite {
 
 	void Application::OnEvent(Event& event)
 	{
-		for (auto it = m_LayerStack.rbegin(); it != m_LayerStack.rend(); ++it)
+		m_LayerStack.ForEachReverse([&](Layer& layer)
 		{
 			if (event.Handled)
-				break;
+				return false;
 
-			(*it)->OnEvent(event);
-		}
+			layer.OnEvent(event);
+			return true;
+		});
 
 		EventDispatcher dispatcher(event);
 		dispatcher.Dispatch<WindowCloseEvent>([this](WindowCloseEvent&)
