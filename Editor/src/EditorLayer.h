@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Explorer.h>
 #include <Inspector.h>
 #include <SceneBrowser.h>
 
@@ -57,6 +58,7 @@ private:
 	uint32_t m_Selected = 0;
 	Inspector m_Inspector;
 	SceneBrowser m_Browser;
+	Explorer m_Explorer;
 	bool m_ShowInfo = false;
 	bool m_InfoPlaced = false;
 };

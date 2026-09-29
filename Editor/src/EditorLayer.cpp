@@ -18,6 +18,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <string>
@@ -25,7 +26,7 @@
 
 namespace {
 
-	const char* kEditorWindows[] = { "Scene", "Viewport", "Inspector", "Console" };
+	const char* kEditorWindows[] = { "Scene", "Viewport", "Inspector", "Console", "Explorer" };
 
 	bool EditorDockNeedsBuild(ImGuiID dockspaceId)
 	{
@@ -33,18 +34,24 @@ namespace {
 		if (node == nullptr || !node->IsSplitNode())
 			return true;
 
+		bool live = false;
+		bool explorerDocked = false;
 		for (const char* name : kEditorWindows)
 		{
 			ImGuiWindow* window = ImGui::FindWindowByName(name);
 			if (window == nullptr || window->DockNode == nullptr)
 				continue;
 
+			live = true;
 			ImGuiDockNode* root = ImGui::DockNodeGetRootNode(window->DockNode);
-			if (root == nullptr || root->ID != dockspaceId)
+			bool dockedHere = root != nullptr && root->ID == dockspaceId;
+			if (std::strcmp(name, "Explorer") == 0)
+				explorerDocked = dockedHere;
+			else if (!dockedHere)
 				return true;
 		}
 
-		return false;
+		return live && !explorerDocked;
 	}
 
 	void BuildEditorDock(ImGuiID dockspaceId, ImVec2 size)
@@ -64,6 +71,7 @@ namespace {
 		ImGui::DockBuilderDockWindow("Viewport", center);
 		ImGui::DockBuilderDockWindow("Inspector", right);
 		ImGui::DockBuilderDockWindow("Console", bottom);
+		ImGui::DockBuilderDockWindow("Explorer", bottom);
 		ImGui::DockBuilderFinish(dockspaceId);
 	}
 
@@ -561,6 +569,9 @@ void EditorLayer::OnImGuiRender()
 	DrawViewport();
 	m_Inspector.Draw(m_Selected);
 	DrawConsole();
+	m_Explorer.Draw(
+		[this](const std::string& path) { OpenScene(path); },
+		[this](const std::string& path) { OpenProject(path); });
 	if (m_ShowInfo)
 	{
 		Lite::DrawInstrumentation(!m_InfoPlaced);
