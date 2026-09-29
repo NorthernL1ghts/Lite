@@ -97,6 +97,8 @@ namespace Lite {
 
 		Entity CreateEntity(std::string name);
 		Entity CreateEntity(std::string name, uint32_t plane);
+		Entity DuplicateEntity(uint32_t id);
+		void DestroyEntity(uint32_t id);
 		Entity Find(std::string_view name);
 		Entity GetEntity(uint32_t id);
 		Entity GetPrimaryCamera();
@@ -156,6 +158,7 @@ namespace Lite {
 		void SyncPhysics();
 		void StepPhysics(float seconds);
 		void SpawnPhysicsBody(Entity entity, bool preserveSnapshot);
+		void RemovePhysicsBody(uint32_t entityId);
 
 		struct PhysicsStorage;
 		PhysicsStorage* m_Physics = nullptr;

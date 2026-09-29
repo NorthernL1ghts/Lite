@@ -335,6 +335,56 @@ void EditorLayer::SyncName()
 	std::snprintf(m_Name, sizeof(m_Name), "%s", name);
 }
 
+void EditorLayer::DuplicateSelected()
+{
+	if (m_Scene == nullptr || m_Selected == 0)
+		return;
+
+	Lite::Entity copy = m_Scene->DuplicateEntity(m_Selected);
+	if (!copy)
+		return;
+
+	m_Selected = copy.GetId();
+	m_Inspector.Reset();
+	Lite::Console::Log(std::format("Duplicated {}", copy.GetName()));
+}
+
+void EditorLayer::DeleteSelected()
+{
+	if (m_Scene == nullptr || m_Selected == 0)
+		return;
+
+	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
+	if (!entity)
+		return;
+
+	uint32_t next = 0;
+	uint32_t previous = 0;
+	bool passed = false;
+	for (Lite::Entity item : m_Scene->GetEntities())
+	{
+		if (item.GetId() == m_Selected)
+		{
+			passed = true;
+			continue;
+		}
+
+		if (!passed)
+			previous = item.GetId();
+		else
+		{
+			next = item.GetId();
+			break;
+		}
+	}
+
+	std::string name = entity.GetName();
+	m_Scene->DestroyEntity(m_Selected);
+	m_Selected = next != 0 ? next : previous;
+	m_Inspector.Reset();
+	Lite::Console::Log(std::format("Deleted {}", name));
+}
+
 void EditorLayer::SaveScene()
 {
 	if (m_Scene == nullptr)
@@ -539,6 +589,14 @@ void EditorLayer::OnImGuiRender()
 	m_WindowW = io.DisplaySize.x;
 	m_WindowH = io.DisplaySize.y;
 
+	if (!io.WantTextInput)
+	{
+		if (ImGui::IsKeyPressed(ImGuiKey_Delete, true))
+			DeleteSelected();
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false))
+			DuplicateSelected();
+	}
+
 	DrawMenu();
 
 	ImGuiWindowFlags hostFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
@@ -619,6 +677,7 @@ void EditorLayer::DrawScene()
 	size_t componentCount = 0;
 	const Lite::ComponentEntry* catalog = Lite::ComponentCatalog(componentCount);
 	ImGuiTreeNodeFlags planeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+	bool sceneChanged = false;
 	for (const Lite::Scene::Plane& plane : m_Scene->GetPlanes())
 	{
 		std::string planeLabel = std::format("{}##plane{}", plane.Name, plane.Id);
@@ -635,6 +694,28 @@ void EditorLayer::DrawScene()
 			bool open = ImGui::TreeNodeEx(label.c_str(), entityFlags);
 			if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
 				m_Selected = entity.GetId();
+			if (ImGui::BeginPopupContextItem())
+			{
+				m_Selected = entity.GetId();
+				if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
+				{
+					DuplicateSelected();
+					sceneChanged = true;
+				}
+				if (ImGui::MenuItem("Delete", "Del"))
+				{
+					DeleteSelected();
+					sceneChanged = true;
+				}
+				ImGui::EndPopup();
+			}
+
+			if (sceneChanged)
+			{
+				if (open)
+					ImGui::TreePop();
+				break;
+			}
 
 			if (!open)
 				continue;
@@ -648,7 +729,18 @@ void EditorLayer::DrawScene()
 		}
 
 		ImGui::TreePop();
+		if (sceneChanged)
+			break;
 	}
+
+	ImGui::Separator();
+	ImGui::BeginDisabled(m_Selected == 0);
+	if (ImGui::Button("Duplicate"))
+		DuplicateSelected();
+	ImGui::SameLine();
+	if (ImGui::Button("Delete"))
+		DeleteSelected();
+	ImGui::EndDisabled();
 	ImGui::End();
 }
 

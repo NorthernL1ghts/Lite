@@ -55,7 +55,7 @@ Editor opens `Sandbox/Sandbox.lite`. That project names the start scene and the 
 
 The window is a dockspace:
 
-- **Scene** lists planes, then the entities on each plane, then the components on each entity.
+- **Scene** lists planes, then the entities on each plane, then the components on each entity. Right-click an entity, or use the Duplicate and Delete buttons. Ctrl+D copies the selection onto the same plane. Del removes it, and holding Del keeps removing the next entity in the list. A copied camera is not primary.
 - **Viewport** shows the scene. While stopped or paused, click an entity here to select it. The frontmost object wins.
 - **Inspector** edits the selected entity. Number fields slide when dragged and take a typed value when clicked. Physics checkboxes and body settings apply to the simulation immediately, including while the scene is playing.
 - **Console** shows scene, physics, and selection messages.

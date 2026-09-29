@@ -167,6 +167,91 @@ namespace Lite {
 		return Entity(this, m_Records.back().Id);
 	}
 
+	Entity Scene::DuplicateEntity(uint32_t id)
+	{
+		Record* source = FindRecord(id);
+		if (source == nullptr)
+			return {};
+
+		const std::string name = source->Name.empty() ? std::string("Entity Copy") : source->Name + " Copy";
+		const uint32_t plane = source->Plane;
+
+		struct Piece
+		{
+			const ComponentOps* Ops = nullptr;
+			YAML::Node Node;
+		};
+
+		std::vector<Piece> pieces;
+		for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
+		{
+			const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
+			const void* data = GetComponent(static_cast<ComponentId>(index), id);
+			if (ops == nullptr || ops->Write == nullptr || data == nullptr)
+				continue;
+
+			Piece piece;
+			piece.Ops = ops;
+			piece.Node = YAML::Node(YAML::NodeType::Map);
+			ops->Write(piece.Node, data);
+			pieces.push_back(std::move(piece));
+		}
+
+		Entity copy = CreateEntity(name, plane);
+		for (const Piece& piece : pieces)
+		{
+			if (piece.Ops->Read != nullptr)
+				piece.Ops->Read(*this, copy.GetId(), piece.Node);
+			if (piece.Ops->Finish == nullptr)
+				continue;
+			if (void* data = GetComponent(piece.Ops->Id, copy.GetId()))
+				piece.Ops->Finish(data);
+		}
+
+		if (CameraComponent* camera = copy.Get<CameraComponent>())
+			camera->Primary = false;
+
+		auto created = std::find_if(m_Records.begin(), m_Records.end(), [&](const Record& record)
+		{
+			return record.Id == copy.GetId();
+		});
+		auto origin = std::find_if(m_Records.begin(), m_Records.end(), [&](const Record& record)
+		{
+			return record.Id == id;
+		});
+		if (created != m_Records.end() && origin != m_Records.end() && created != origin + 1)
+		{
+			Record moved = std::move(*created);
+			m_Records.erase(created);
+			origin = std::find_if(m_Records.begin(), m_Records.end(), [&](const Record& record)
+			{
+				return record.Id == id;
+			});
+			m_Records.insert(origin + 1, std::move(moved));
+		}
+
+		RefreshPhysics(copy.GetId());
+		return copy;
+	}
+
+	void Scene::DestroyEntity(uint32_t id)
+	{
+		if (FindRecord(id) == nullptr)
+			return;
+
+		RemovePhysicsBody(id);
+		for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
+			RemoveComponent(static_cast<ComponentId>(index), id);
+
+		for (auto record = m_Records.begin(); record != m_Records.end(); ++record)
+		{
+			if (record->Id != id)
+				continue;
+			m_Records.erase(record);
+			break;
+		}
+	}
+
 	Entity Scene::Find(std::string_view name)
 	{
 		for (const Record& record : m_Records)

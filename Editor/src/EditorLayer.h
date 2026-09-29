@@ -37,6 +37,8 @@ private:
 	void NewScene();
 	void OpenScene(const std::string& path);
 	void SaveScene();
+	void DuplicateSelected();
+	void DeleteSelected();
 	void SyncName();
 	bool SceneMatches(const std::filesystem::path& path) const;
 	void PickObject(float mouseX, float mouseY);

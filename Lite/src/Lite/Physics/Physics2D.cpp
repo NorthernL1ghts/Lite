@@ -210,6 +210,23 @@ namespace Lite {
 		m_Physics->Bodies.push_back(stored);
 	}
 
+	void Scene::RemovePhysicsBody(uint32_t entityId)
+	{
+		if (m_Physics == nullptr)
+			return;
+
+		for (auto body = m_Physics->Bodies.begin(); body != m_Physics->Bodies.end(); ++body)
+		{
+			if (body->Entity != entityId)
+				continue;
+
+			if (b2Body_IsValid(body->Id))
+				b2DestroyBody(body->Id);
+			m_Physics->Bodies.erase(body);
+			return;
+		}
+	}
+
 	void Scene::RefreshPhysics(uint32_t entityId)
 	{
 		Entity entity = GetEntity(entityId);
