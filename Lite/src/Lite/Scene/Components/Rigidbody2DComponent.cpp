@@ -1,5 +1,4 @@
-#include <Lite/Scene/Components/ComponentOps.h>
-#include <Lite/Scene/Components/ComponentStorage.h>
+#include <Lite/Scene/Components/ComponentInstall.h>
 #include <Lite/Scene/Components/Rigidbody2DComponent.h>
 #include <Lite/Scene/Components/SceneYaml.h>
 
@@ -20,11 +19,6 @@ namespace Lite {
 				case BodyType::Kinematic: return "Kinematic Rigidbody";
 				default: return "Dynamic Rigidbody";
 			}
-		}
-
-		void Add(Entity entity)
-		{
-			entity.Add<Rigidbody2DComponent>();
 		}
 
 		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
@@ -76,16 +70,7 @@ namespace Lite {
 		{
 			Registration()
 			{
-				ComponentOps ops {};
-				ops.Id = ComponentId::Rigidbody2D;
-				ops.Section = "rigidbody2d";
-				ops.CatalogName = "Rigidbody 2D";
-				ops.Label = Label;
-				ops.Add = Add;
-				ops.Read = Read;
-				ops.Write = Write;
-				RegisterComponent(ops);
-				RegisterComponentPool(ComponentId::Rigidbody2D, []() -> ComponentPool* { return new TypedPool<Rigidbody2DComponent>(); });
+				InstallComponent<Rigidbody2DComponent>(ComponentId::Rigidbody2D, "rigidbody2d", "Rigidbody 2D", Label, Read, Write);
 			}
 		};
 

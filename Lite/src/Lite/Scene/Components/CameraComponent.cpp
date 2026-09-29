@@ -1,6 +1,5 @@
 #include <Lite/Scene/Components/CameraComponent.h>
-#include <Lite/Scene/Components/ComponentOps.h>
-#include <Lite/Scene/Components/ComponentStorage.h>
+#include <Lite/Scene/Components/ComponentInstall.h>
 
 #include <string>
 
@@ -14,11 +13,6 @@ namespace Lite {
 			if (camera == nullptr)
 				return nullptr;
 			return camera->Projection == CameraProjection::Perspective ? "Perspective Camera" : "Orthographic Camera";
-		}
-
-		void Add(Entity entity)
-		{
-			entity.Add<CameraComponent>();
 		}
 
 		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
@@ -59,16 +53,7 @@ namespace Lite {
 		{
 			Registration()
 			{
-				ComponentOps ops {};
-				ops.Id = ComponentId::Camera;
-				ops.Section = "camera";
-				ops.CatalogName = "Orthographic Camera";
-				ops.Label = Label;
-				ops.Add = Add;
-				ops.Read = Read;
-				ops.Write = Write;
-				RegisterComponent(ops);
-				RegisterComponentPool(ComponentId::Camera, []() -> ComponentPool* { return new TypedPool<CameraComponent>(); });
+				InstallComponent<CameraComponent>(ComponentId::Camera, "camera", "Orthographic Camera", Label, Read, Write);
 			}
 		};
 

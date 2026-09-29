@@ -5,7 +5,7 @@
 
 namespace Lite {
 
-	inline constexpr float kDefaultFieldOfView = 60.0f * (3.14159265f / 180.0f);
+	inline constexpr float kDefaultFieldOfView = Radians(60.0f);
 
 	enum class CameraProjection
 	{

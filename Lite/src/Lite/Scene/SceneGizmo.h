@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <numbers>
 #include <optional>
 #include <span>
 
@@ -186,13 +185,12 @@ namespace Lite {
 				break;
 			case GizmoAction::Rotate:
 			{
-				constexpr float pi = std::numbers::pi_v<float>;
 				const float angle = std::atan2(world->y - drag.Position.y, world->x - drag.Position.x);
 				float delta = angle - drag.Angle;
-				while (delta > pi)
-					delta -= pi * 2.0f;
-				while (delta < -pi)
-					delta += pi * 2.0f;
+				while (delta > kPi)
+					delta -= kPi * 2.0f;
+				while (delta < -kPi)
+					delta += kPi * 2.0f;
 				drag.Spin += delta;
 				drag.Angle = angle;
 				transform->Local.SetRotationZ(drag.Rotation + drag.Spin);

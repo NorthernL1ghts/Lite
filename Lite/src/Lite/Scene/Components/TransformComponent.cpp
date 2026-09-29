@@ -1,5 +1,4 @@
-#include <Lite/Scene/Components/ComponentOps.h>
-#include <Lite/Scene/Components/ComponentStorage.h>
+#include <Lite/Scene/Components/ComponentInstall.h>
 #include <Lite/Scene/Components/SceneYaml.h>
 #include <Lite/Scene/Components/TransformComponent.h>
 
@@ -10,11 +9,6 @@ namespace Lite {
 		const char* Label(Entity entity)
 		{
 			return entity.Has<TransformComponent>() ? "Transform" : nullptr;
-		}
-
-		void Add(Entity entity)
-		{
-			entity.Add<TransformComponent>();
 		}
 
 		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
@@ -45,16 +39,7 @@ namespace Lite {
 		{
 			Registration()
 			{
-				ComponentOps ops {};
-				ops.Id = ComponentId::Transform;
-				ops.Section = "transform";
-				ops.CatalogName = "Transform";
-				ops.Label = Label;
-				ops.Add = Add;
-				ops.Read = Read;
-				ops.Write = Write;
-				RegisterComponent(ops);
-				RegisterComponentPool(ComponentId::Transform, []() -> ComponentPool* { return new TypedPool<TransformComponent>(); });
+				InstallComponent<TransformComponent>(ComponentId::Transform, "transform", "Transform", Label, Read, Write);
 			}
 		};
 

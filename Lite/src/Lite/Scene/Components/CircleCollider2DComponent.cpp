@@ -1,6 +1,5 @@
 #include <Lite/Scene/Components/CircleCollider2DComponent.h>
-#include <Lite/Scene/Components/ComponentOps.h>
-#include <Lite/Scene/Components/ComponentStorage.h>
+#include <Lite/Scene/Components/ComponentInstall.h>
 #include <Lite/Scene/Components/SceneYaml.h>
 
 namespace Lite {
@@ -10,11 +9,6 @@ namespace Lite {
 		const char* Label(Entity entity)
 		{
 			return entity.Has<CircleCollider2DComponent>() ? "Circle Collider 2D" : nullptr;
-		}
-
-		void Add(Entity entity)
-		{
-			entity.Add<CircleCollider2DComponent>();
 		}
 
 		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
@@ -43,16 +37,7 @@ namespace Lite {
 		{
 			Registration()
 			{
-				ComponentOps ops {};
-				ops.Id = ComponentId::CircleCollider2D;
-				ops.Section = "circle-collider2d";
-				ops.CatalogName = "Circle Collider 2D";
-				ops.Label = Label;
-				ops.Add = Add;
-				ops.Read = Read;
-				ops.Write = Write;
-				RegisterComponent(ops);
-				RegisterComponentPool(ComponentId::CircleCollider2D, []() -> ComponentPool* { return new TypedPool<CircleCollider2DComponent>(); });
+				InstallComponent<CircleCollider2DComponent>(ComponentId::CircleCollider2D, "circle-collider2d", "Circle Collider 2D", Label, Read, Write);
 			}
 		};
 

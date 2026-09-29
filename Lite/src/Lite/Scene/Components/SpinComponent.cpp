@@ -1,5 +1,4 @@
-#include <Lite/Scene/Components/ComponentOps.h>
-#include <Lite/Scene/Components/ComponentStorage.h>
+#include <Lite/Scene/Components/ComponentInstall.h>
 #include <Lite/Scene/Components/SpinComponent.h>
 
 namespace Lite {
@@ -9,11 +8,6 @@ namespace Lite {
 		const char* Label(Entity entity)
 		{
 			return entity.Has<SpinComponent>() ? "Spin" : nullptr;
-		}
-
-		void Add(Entity entity)
-		{
-			entity.Add<SpinComponent>();
 		}
 
 		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
@@ -35,16 +29,7 @@ namespace Lite {
 		{
 			Registration()
 			{
-				ComponentOps ops {};
-				ops.Id = ComponentId::Spin;
-				ops.Section = "spin";
-				ops.CatalogName = "Spin";
-				ops.Label = Label;
-				ops.Add = Add;
-				ops.Read = Read;
-				ops.Write = Write;
-				RegisterComponent(ops);
-				RegisterComponentPool(ComponentId::Spin, []() -> ComponentPool* { return new TypedPool<SpinComponent>(); });
+				InstallComponent<SpinComponent>(ComponentId::Spin, "spin", "Spin", Label, Read, Write);
 			}
 		};
 

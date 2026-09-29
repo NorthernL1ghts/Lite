@@ -1,5 +1,4 @@
-#include <Lite/Scene/Components/ComponentOps.h>
-#include <Lite/Scene/Components/ComponentStorage.h>
+#include <Lite/Scene/Components/ComponentInstall.h>
 #include <Lite/Scene/Components/MeshComponent.h>
 
 #include <string>
@@ -41,11 +40,6 @@ namespace Lite {
 			}
 		}
 
-		void Add(Entity entity)
-		{
-			entity.Add<MeshComponent>();
-		}
-
 		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
 		{
 			auto* mesh = static_cast<MeshComponent*>(scene.AddComponent(ComponentId::Mesh, entity));
@@ -65,16 +59,7 @@ namespace Lite {
 		{
 			Registration()
 			{
-				ComponentOps ops {};
-				ops.Id = ComponentId::Mesh;
-				ops.Section = "mesh";
-				ops.CatalogName = "Quad";
-				ops.Label = Label;
-				ops.Add = Add;
-				ops.Read = Read;
-				ops.Write = Write;
-				RegisterComponent(ops);
-				RegisterComponentPool(ComponentId::Mesh, []() -> ComponentPool* { return new TypedPool<MeshComponent>(); });
+				InstallComponent<MeshComponent>(ComponentId::Mesh, "mesh", "Quad", Label, Read, Write);
 			}
 		};
 

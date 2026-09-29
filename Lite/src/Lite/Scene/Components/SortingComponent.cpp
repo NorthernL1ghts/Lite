@@ -1,5 +1,4 @@
-#include <Lite/Scene/Components/ComponentOps.h>
-#include <Lite/Scene/Components/ComponentStorage.h>
+#include <Lite/Scene/Components/ComponentInstall.h>
 #include <Lite/Scene/Components/SortingComponent.h>
 
 namespace Lite {
@@ -9,11 +8,6 @@ namespace Lite {
 		const char* Label(Entity entity)
 		{
 			return entity.Has<SortingComponent>() ? "Sorting" : nullptr;
-		}
-
-		void Add(Entity entity)
-		{
-			entity.Add<SortingComponent>();
 		}
 
 		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
@@ -35,16 +29,7 @@ namespace Lite {
 		{
 			Registration()
 			{
-				ComponentOps ops {};
-				ops.Id = ComponentId::Sorting;
-				ops.Section = "sorting";
-				ops.CatalogName = "Sorting";
-				ops.Label = Label;
-				ops.Add = Add;
-				ops.Read = Read;
-				ops.Write = Write;
-				RegisterComponent(ops);
-				RegisterComponentPool(ComponentId::Sorting, []() -> ComponentPool* { return new TypedPool<SortingComponent>(); });
+				InstallComponent<SortingComponent>(ComponentId::Sorting, "sorting", "Sorting", Label, Read, Write);
 			}
 		};
 

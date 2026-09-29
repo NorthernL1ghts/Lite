@@ -7,6 +7,7 @@
 #include <Lite/Assets/AssetRegistry.h>
 #include <Lite/Assets/Texture.h>
 #include <Lite/Core/IO/FileSystem.h>
+#include <Lite/Core/String.h>
 #include <Lite/Renderer/Renderer2D.h>
 
 #include <yaml-cpp/yaml.h>
@@ -109,15 +110,14 @@ namespace Lite {
 
 	Scene::Scene(std::string name)
 		: m_Name(std::move(name))
-		, m_Components(new ComponentStorage())
+		, m_Components(CreateScope<ComponentStorage>())
 	{
 	}
 
 	Scene::~Scene()
 	{
 		Stop();
-		delete m_Components;
-		m_Components = nullptr;
+		m_Components.reset();
 		if (s_Active == this)
 			s_Active = nullptr;
 	}
@@ -156,6 +156,18 @@ namespace Lite {
 			plane.Order = std::max(plane.Order, existing.Order + 1);
 		m_Planes.push_back(std::move(plane));
 		return m_Planes.back().Id;
+	}
+
+	uint32_t Scene::FindPlane(std::string_view name) const
+	{
+		const std::string lower = ToLower(name);
+		for (const Plane& plane : m_Planes)
+		{
+			if (ToLower(plane.Name) == lower)
+				return plane.Id;
+		}
+
+		return 0;
 	}
 
 	void Scene::SetPlaneOrder(uint32_t id, int order)
@@ -353,25 +365,15 @@ namespace Lite {
 		if (texturePath.empty())
 			return placed;
 
-		auto lower = [](std::string value)
-		{
-			for (char& character : value)
-			{
-				if (character >= 'A' && character <= 'Z')
-					character = static_cast<char>(character - 'A' + 'a');
-			}
-			return value;
-		};
-
-		uint32_t backgroundPlane = 0;
+		uint32_t backgroundPlane = FindPlane("background");
 		uint32_t worldPlane = 0;
 		for (const Plane& item : m_Planes)
 		{
-			const std::string name = lower(item.Name);
-			if (name == "background")
-				backgroundPlane = item.Id;
-			else if (worldPlane == 0)
+			if (item.Id != backgroundPlane)
+			{
 				worldPlane = item.Id;
+				break;
+			}
 		}
 		if (worldPlane == 0)
 			worldPlane = backgroundPlane != 0 ? backgroundPlane : (m_Planes.empty() ? 0 : m_Planes.front().Id);

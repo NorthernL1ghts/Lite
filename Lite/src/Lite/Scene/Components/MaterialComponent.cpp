@@ -1,5 +1,4 @@
-#include <Lite/Scene/Components/ComponentOps.h>
-#include <Lite/Scene/Components/ComponentStorage.h>
+#include <Lite/Scene/Components/ComponentInstall.h>
 #include <Lite/Scene/Components/MaterialComponent.h>
 #include <Lite/Scene/Components/SceneYaml.h>
 
@@ -16,11 +15,6 @@ namespace Lite {
 		const char* Label(Entity entity)
 		{
 			return entity.Has<MaterialComponent>() ? "Material" : nullptr;
-		}
-
-		void Add(Entity entity)
-		{
-			entity.Add<MaterialComponent>();
 		}
 
 		void Read(Scene& scene, uint32_t entity, const YAML::Node& node)
@@ -87,17 +81,7 @@ namespace Lite {
 		{
 			Registration()
 			{
-				ComponentOps ops {};
-				ops.Id = ComponentId::Material;
-				ops.Section = "material";
-				ops.CatalogName = "Material";
-				ops.Label = Label;
-				ops.Add = Add;
-				ops.Read = Read;
-				ops.Write = Write;
-				ops.Finish = Finish;
-				RegisterComponent(ops);
-				RegisterComponentPool(ComponentId::Material, []() -> ComponentPool* { return new TypedPool<MaterialComponent>(); });
+				InstallComponent<MaterialComponent>(ComponentId::Material, "material", "Material", Label, Read, Write, Finish);
 			}
 		};
 

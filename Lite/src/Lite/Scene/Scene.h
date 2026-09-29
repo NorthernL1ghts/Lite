@@ -97,6 +97,7 @@ namespace Lite {
 		};
 
 		uint32_t CreatePlane(std::string name);
+		uint32_t FindPlane(std::string_view name) const;
 		void SetPlaneOrder(uint32_t id, int order);
 		const std::vector<Plane>& GetPlanes() const { return m_Planes; }
 
@@ -186,7 +187,7 @@ namespace Lite {
 
 		struct PhysicsStorage;
 		PhysicsStorage* m_Physics = nullptr;
-		ComponentStorage* m_Components = nullptr;
+		Scope<ComponentStorage> m_Components;
 
 		std::string m_Name;
 		std::string m_Path;
