@@ -32,6 +32,9 @@ namespace Lite {
 		static Ref<Project> Load(const std::filesystem::path& path);
 		static bool SaveActive(const std::filesystem::path& path);
 		static std::filesystem::path Locate(const std::filesystem::path& relative);
+		static void EnsureContentFolders();
+
+		static constexpr const char* ContentFolders[] = { "scenes", "scripts", "prefabs", "materials", "textures" };
 
 	private:
 		ProjectConfig m_Config;

@@ -51,6 +51,7 @@ namespace Lite {
 
 		project->m_ProjectDirectory = path.parent_path();
 		s_ActiveProject = project;
+		EnsureContentFolders();
 		LITE_INFO("Project loaded: {} ({})", project->m_Config.Name, path.string());
 		return s_ActiveProject;
 	}
@@ -68,8 +69,24 @@ namespace Lite {
 			return false;
 
 		s_ActiveProject->m_ProjectDirectory = path.parent_path();
+		EnsureContentFolders();
 		LITE_INFO("Project saved: {}", path.string());
 		return true;
+	}
+
+	void Project::EnsureContentFolders()
+	{
+		if (!s_ActiveProject || s_ActiveProject->m_ProjectDirectory.empty())
+			return;
+
+		if (s_ActiveProject->m_Config.AssetDirectory.empty())
+			s_ActiveProject->m_Config.AssetDirectory = "assets";
+
+		std::filesystem::path assets = s_ActiveProject->m_ProjectDirectory / s_ActiveProject->m_Config.AssetDirectory;
+		std::error_code error;
+		std::filesystem::create_directories(assets, error);
+		for (const char* folder : ContentFolders)
+			std::filesystem::create_directories(assets / folder, error);
 	}
 
 	std::filesystem::path Project::Locate(const std::filesystem::path& relative)

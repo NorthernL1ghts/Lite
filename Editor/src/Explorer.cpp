@@ -442,17 +442,39 @@ void Explorer::Draw(
 	}
 
 	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
+	Lite::Project::EnsureContentFolders();
 	std::filesystem::path assetName = project->GetConfig().AssetDirectory.empty() ? std::filesystem::path("assets") : project->GetConfig().AssetDirectory;
 	std::filesystem::path assets = assetName.is_absolute() ? assetName : root / assetName;
-	std::filesystem::path scripts = root / "scripts";
-	std::filesystem::path prefabs = root / "prefabs";
-	std::error_code error;
-	std::filesystem::create_directories(assets, error);
-	std::filesystem::create_directories(scripts, error);
-	std::filesystem::create_directories(prefabs, error);
 
-	const std::filesystem::path libraries[] = { assets, scripts, prefabs };
-	const char* labels[] = { "Assets", "Scripts", "Prefabs" };
+	struct Library
+	{
+		std::string Label;
+		std::filesystem::path Path;
+		ImU32 Color = 0;
+	};
+
+	std::vector<Library> libraries;
+	libraries.push_back({ "Assets", assets, IM_COL32(214, 168, 72, 255) });
+	for (const char* folder : Lite::Project::ContentFolders)
+	{
+		std::string label = folder;
+		if (!label.empty() && label[0] >= 'a' && label[0] <= 'z')
+			label[0] = static_cast<char>(label[0] - 'a' + 'A');
+
+		ImU32 color = IM_COL32(150, 156, 166, 255);
+		if (label == "Scenes")
+			color = IM_COL32(86, 156, 214, 255);
+		else if (label == "Scripts")
+			color = IM_COL32(126, 146, 214, 255);
+		else if (label == "Prefabs")
+			color = IM_COL32(176, 124, 214, 255);
+		else if (label == "Materials")
+			color = IM_COL32(214, 140, 92, 255);
+		else if (label == "Textures")
+			color = IM_COL32(92, 176, 138, 255);
+
+		libraries.push_back({ label, assets / folder, color });
+	}
 	if (root != m_Project)
 	{
 		m_Project = root;
@@ -469,8 +491,8 @@ void Explorer::Draw(
 		if (!m_View.empty())
 		{
 			bool atLibrary = false;
-			for (const std::filesystem::path& library : libraries)
-				atLibrary = atLibrary || m_View == library;
+			for (const Library& library : libraries)
+				atLibrary = atLibrary || m_View == library.Path;
 
 			if (atLibrary)
 				m_View.clear();
@@ -497,20 +519,20 @@ void Explorer::Draw(
 	else
 	{
 		std::filesystem::path libraryRoot = assets;
-		const char* libraryLabel = "Assets";
-		for (int index = 0; index < 3; ++index)
+		std::string libraryLabel = "Assets";
+		for (const Library& library : libraries)
 		{
 			std::error_code relativeError;
-			std::filesystem::path relative = std::filesystem::relative(m_View, libraries[index], relativeError);
+			std::filesystem::path relative = std::filesystem::relative(m_View, library.Path, relativeError);
 			bool inside = !relativeError && (relative.empty() || relative.begin()->string() != "..");
 			if (!inside)
 				continue;
-			libraryRoot = libraries[index];
-			libraryLabel = labels[index];
+			libraryRoot = library.Path;
+			libraryLabel = library.Label;
 			break;
 		}
 
-		if (ImGui::SmallButton(libraryLabel))
+		if (ImGui::SmallButton(libraryLabel.c_str()))
 		{
 			m_View = libraryRoot;
 			m_Selected = libraryRoot;
@@ -548,18 +570,18 @@ void Explorer::Draw(
 		const float panelWidth = ImGui::GetContentRegionAvail().x;
 		const int columns = std::max(1, static_cast<int>((panelWidth + spacing) / (tileWidth + spacing)));
 		int column = 0;
-		for (int index = 0; index < 3; ++index)
+		for (const Library& library : libraries)
 		{
 			if (column > 0)
 				ImGui::SameLine(0.0f, spacing);
 
-			ImGui::PushID(labels[index]);
+			ImGui::PushID(library.Label.c_str());
 			ImVec2 origin = ImGui::GetCursorScreenPos();
 			ImGui::InvisibleButton("##library", ImVec2(tileWidth, tileHeight));
 			const bool hovered = ImGui::IsItemHovered();
-			const bool selected = m_Selected == libraries[index];
+			const bool selected = m_Selected == library.Path;
 			if (ImGui::IsItemClicked())
-				m_Selected = libraries[index];
+				m_Selected = library.Path;
 
 			ImDrawList* draw = ImGui::GetWindowDrawList();
 			ImU32 background = 0;
@@ -570,21 +592,16 @@ void Explorer::Draw(
 			if (background != 0)
 				draw->AddRectFilled(origin, ImVec2(origin.x + tileWidth, origin.y + tileHeight), background, 6.0f);
 
-			ImU32 folderColor = IM_COL32(214, 168, 72, 255);
-			if (index == 1)
-				folderColor = IM_COL32(126, 146, 214, 255);
-			else if (index == 2)
-				folderColor = IM_COL32(176, 124, 214, 255);
-			DrawFolderIcon(draw, ImVec2(origin.x + 22.0f, origin.y + 8.0f), ImVec2(origin.x + 62.0f, origin.y + 46.0f), folderColor);
+			DrawFolderIcon(draw, ImVec2(origin.x + 22.0f, origin.y + 8.0f), ImVec2(origin.x + 62.0f, origin.y + 46.0f), library.Color);
 
-			ImVec2 textSize = ImGui::CalcTextSize(labels[index]);
-			draw->AddText(ImVec2(origin.x + (tileWidth - textSize.x) * 0.5f, origin.y + 54.0f), IM_COL32(220, 224, 230, 255), labels[index]);
+			ImVec2 textSize = ImGui::CalcTextSize(library.Label.c_str());
+			draw->AddText(ImVec2(origin.x + (tileWidth - textSize.x) * 0.5f, origin.y + 54.0f), IM_COL32(220, 224, 230, 255), library.Label.c_str());
 			ImGui::PopID();
 
 			if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 			{
-				m_View = libraries[index];
-				m_Selected = libraries[index];
+				m_View = library.Path;
+				m_Selected = library.Path;
 			}
 
 			column += 1;

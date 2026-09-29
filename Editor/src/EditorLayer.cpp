@@ -293,6 +293,7 @@ void EditorLayer::NewScene()
 {
 	m_Scene = Lite::CreateScope<Lite::Scene>("Untitled");
 	m_Scene->Create();
+	Lite::Project::EnsureContentFolders();
 	Lite::Scene::SetActive(m_Scene.get());
 	m_Selected = 0;
 	m_Inspector.Reset();
@@ -309,6 +310,7 @@ void EditorLayer::OpenScene(const std::string& path)
 		Lite::Scene::SetActive(nullptr);
 
 	m_Scene = std::move(scene);
+	Lite::Project::EnsureContentFolders();
 	Lite::Scene::SetActive(m_Scene.get());
 	m_Gizmo = GizmoAction::None;
 	m_Selected = 0;
