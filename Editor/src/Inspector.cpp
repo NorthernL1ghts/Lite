@@ -65,9 +65,10 @@ void Inspector::Draw(std::uint32_t selected)
 		std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material != nullptr ? material->TexturePath.c_str() : "");
 	}
 
-	bool editing = scene->GetPlayback() != Lite::ScenePlayback::Playing;
-	if (!editing)
-		ImGui::BeginDisabled();
+	auto refreshPhysics = [&]()
+	{
+		scene->RefreshPhysics(entity.GetId());
+	};
 
 	ImGui::SetNextItemWidth(-1.0f);
 	if (ImGui::InputText("##ObjectName", m_ObjectName, sizeof(m_ObjectName)))
@@ -76,11 +77,16 @@ void Inspector::Draw(std::uint32_t selected)
 	if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
 	{
 		ImGui::SeparatorText("Transform");
-		ImGui::DragFloat3("Position", &transform->Local.Position.x, 0.01f);
+		if (ImGui::DragFloat3("Position", &transform->Local.Position.x, 0.01f))
+			refreshPhysics();
 		float rotation = transform->Local.GetRotationZ();
 		if (ImGui::DragFloat("Rotation", &rotation, 0.01f))
+		{
 			transform->Local.SetRotationZ(rotation);
-		ImGui::DragFloat3("Scale", &transform->Local.Scale.x, 0.01f);
+			refreshPhysics();
+		}
+		if (ImGui::DragFloat3("Scale", &transform->Local.Scale.x, 0.01f))
+			refreshPhysics();
 	}
 
 	if (Lite::CameraComponent* camera = entity.Get<Lite::CameraComponent>())
@@ -111,9 +117,10 @@ void Inspector::Draw(std::uint32_t selected)
 		bool primary = camera->Primary;
 		if (ImGui::Checkbox("Primary", &primary))
 		{
-			camera->Primary = primary;
 			if (primary)
 				scene->SetPrimaryCamera(entity.GetId());
+			else
+				camera->Primary = false;
 		}
 	}
 
@@ -137,11 +144,9 @@ void Inspector::Draw(std::uint32_t selected)
 			material->Shader = m_ShaderText;
 
 		Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
-		bool vertexColors = material->UseVertexColors || (mesh != nullptr && mesh->Type == Lite::MeshType::Triangle);
-		if (ImGui::Checkbox("Vertex colors", &material->UseVertexColors))
-			vertexColors = material->UseVertexColors || (mesh != nullptr && mesh->Type == Lite::MeshType::Triangle);
+		ImGui::Checkbox("Vertex colors", &material->UseVertexColors);
 
-		if (vertexColors)
+		if (material->UseVertexColors)
 		{
 			int colors = mesh != nullptr && mesh->Type == Lite::MeshType::Triangle ? 3 : 4;
 			for (int index = 0; index < colors; ++index)
@@ -172,7 +177,8 @@ void Inspector::Draw(std::uint32_t selected)
 	if (Lite::SpinComponent* spin = entity.Get<Lite::SpinComponent>())
 	{
 		ImGui::SeparatorText("Spin");
-		ImGui::DragFloat("Rate", &spin->Rate, 0.01f);
+		if (ImGui::DragFloat("Rate", &spin->Rate, 0.01f))
+			refreshPhysics();
 	}
 
 	if (Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>())
@@ -181,28 +187,42 @@ void Inspector::Draw(std::uint32_t selected)
 		const char* types[] = { "Static", "Kinematic", "Dynamic" };
 		int current = static_cast<int>(body->Type);
 		if (ImGui::Combo("Body", &current, types, 3))
+		{
 			body->Type = static_cast<Lite::BodyType>(current);
-		ImGui::DragFloat("Mass", &body->Mass, 0.01f, 0.0f, 1000.0f);
-		ImGui::DragFloat("Gravity", &body->GravityScale, 0.01f);
-		ImGui::DragFloat2("Velocity", &body->LinearVelocity.x, 0.01f);
-		ImGui::DragFloat("Angular", &body->AngularVelocity, 0.01f);
-		ImGui::Checkbox("Freeze rotation", &body->FreezeRotation);
+			refreshPhysics();
+		}
+		if (ImGui::DragFloat("Mass", &body->Mass, 0.01f, 0.0f, 1000.0f))
+			refreshPhysics();
+		if (ImGui::DragFloat("Gravity", &body->GravityScale, 0.01f))
+			refreshPhysics();
+		if (ImGui::DragFloat2("Velocity", &body->LinearVelocity.x, 0.01f))
+			refreshPhysics();
+		if (ImGui::DragFloat("Angular", &body->AngularVelocity, 0.01f))
+			refreshPhysics();
+		if (ImGui::Checkbox("Freeze rotation", &body->FreezeRotation))
+			refreshPhysics();
 	}
 
 	if (Lite::BoxCollider2DComponent* box = entity.Get<Lite::BoxCollider2DComponent>())
 	{
 		ImGui::SeparatorText("Box Collider 2D");
-		ImGui::DragFloat2("Box size", &box->Size.x, 0.01f, 0.0f, 100.0f);
-		ImGui::DragFloat2("Box offset", &box->Offset.x, 0.01f);
-		ImGui::Checkbox("Box trigger", &box->IsTrigger);
+		if (ImGui::DragFloat2("Box size", &box->Size.x, 0.01f, 0.0f, 100.0f))
+			refreshPhysics();
+		if (ImGui::DragFloat2("Box offset", &box->Offset.x, 0.01f))
+			refreshPhysics();
+		if (ImGui::Checkbox("Box trigger", &box->IsTrigger))
+			refreshPhysics();
 	}
 
 	if (Lite::CircleCollider2DComponent* circle = entity.Get<Lite::CircleCollider2DComponent>())
 	{
 		ImGui::SeparatorText("Circle Collider 2D");
-		ImGui::DragFloat("Radius", &circle->Radius, 0.01f, 0.0f, 100.0f);
-		ImGui::DragFloat2("Circle offset", &circle->Offset.x, 0.01f);
-		ImGui::Checkbox("Circle trigger", &circle->IsTrigger);
+		if (ImGui::DragFloat("Radius", &circle->Radius, 0.01f, 0.0f, 100.0f))
+			refreshPhysics();
+		if (ImGui::DragFloat2("Circle offset", &circle->Offset.x, 0.01f))
+			refreshPhysics();
+		if (ImGui::Checkbox("Circle trigger", &circle->IsTrigger))
+			refreshPhysics();
 	}
 
 	if (Lite::SortingComponent* sorting = entity.Get<Lite::SortingComponent>())
@@ -211,27 +231,21 @@ void Inspector::Draw(std::uint32_t selected)
 		ImGui::DragInt("Order", &sorting->Order);
 	}
 
-	if (editing)
+	ImGui::Separator();
+	static int addIndex = 0;
+	size_t count = 0;
+	const Lite::ComponentEntry* catalog = Lite::ComponentCatalog(count);
+	ImGui::SetNextItemWidth(-90.0f);
+	ImGui::Combo("##AddComponent", &addIndex, [](void* data, int index) -> const char*
 	{
-		ImGui::Separator();
-		static int addIndex = 0;
-		size_t count = 0;
-		const Lite::ComponentEntry* catalog = Lite::ComponentCatalog(count);
-		ImGui::SetNextItemWidth(-90.0f);
-		ImGui::Combo("##AddComponent", &addIndex, [](void* data, int index) -> const char*
-		{
-			const auto* entries = static_cast<const Lite::ComponentEntry*>(data);
-			return entries[index].Name;
-		}, const_cast<Lite::ComponentEntry*>(catalog), static_cast<int>(count));
-		ImGui::SameLine();
-		if (ImGui::Button("Add") && addIndex >= 0 && static_cast<size_t>(addIndex) < count)
-			catalog[addIndex].Add(entity);
-	}
-
-	if (!editing)
+		const auto* entries = static_cast<const Lite::ComponentEntry*>(data);
+		return entries[index].Name;
+	}, const_cast<Lite::ComponentEntry*>(catalog), static_cast<int>(count));
+	ImGui::SameLine();
+	if (ImGui::Button("Add") && addIndex >= 0 && static_cast<size_t>(addIndex) < count)
 	{
-		ImGui::EndDisabled();
-		ImGui::TextDisabled("Pause to edit");
+		catalog[addIndex].Add(entity);
+		refreshPhysics();
 	}
 
 	ImGui::End();

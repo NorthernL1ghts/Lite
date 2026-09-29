@@ -122,62 +122,100 @@ namespace Lite {
 		m_Physics->World = b2CreateWorld(&worldDef);
 
 		for (Entity entity : GetEntities())
-		{
-			TransformComponent* transformComponent = entity.Get<TransformComponent>();
-			if (transformComponent == nullptr)
-				continue;
-
-			Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>();
-			BoxCollider2DComponent* box = entity.Get<BoxCollider2DComponent>();
-			CircleCollider2DComponent* circle = entity.Get<CircleCollider2DComponent>();
-			SpinComponent* spin = entity.Get<SpinComponent>();
-			if (rigidbody == nullptr && box == nullptr && circle == nullptr)
-				continue;
-
-			const Transform& transform = transformComponent->Local;
-			PhysicsStorage::Body stored {};
-			stored.Entity = entity.GetId();
-			stored.Position = transform.Position;
-			stored.Rotation = transform.GetRotationZ();
-			stored.HasRigidbody = rigidbody != nullptr;
-			if (rigidbody != nullptr)
-			{
-				stored.LinearVelocity = rigidbody->LinearVelocity;
-				stored.AngularVelocity = rigidbody->AngularVelocity;
-			}
-
-			b2BodyDef bodyDef = b2DefaultBodyDef();
-			bodyDef.type = rigidbody != nullptr ? ToBodyType(rigidbody->Type) : b2_staticBody;
-			bodyDef.position = { transform.Position.x, transform.Position.y };
-			bodyDef.rotation = b2MakeRot(transform.GetRotationZ());
-			bodyDef.fixedRotation = rigidbody != nullptr && rigidbody->FreezeRotation;
-			bodyDef.gravityScale = rigidbody != nullptr ? rigidbody->GravityScale : 1.0f;
-			bodyDef.isBullet = bodyDef.type == b2_dynamicBody;
-			bodyDef.userData = reinterpret_cast<void*>(static_cast<uintptr_t>(entity.GetId()));
-			if (rigidbody != nullptr)
-			{
-				bodyDef.linearVelocity = { rigidbody->LinearVelocity.x, rigidbody->LinearVelocity.y };
-				bodyDef.angularVelocity = rigidbody->AngularVelocity;
-			}
-			if (spin != nullptr && !bodyDef.fixedRotation)
-				bodyDef.angularVelocity += spin->Rate;
-
-			stored.Id = b2CreateBody(m_Physics->World, &bodyDef);
-			std::string name = entity.GetName();
-			b2Body_SetName(stored.Id, name.c_str());
-
-			bool solid = false;
-			if (box != nullptr)
-				solid = AddBox(stored.Id, transform, *box) || solid;
-			if (circle != nullptr)
-				solid = AddCircle(stored.Id, transform, *circle) || solid;
-			if (rigidbody != nullptr)
-				ApplyMass(stored.Id, *rigidbody, solid);
-
-			m_Physics->Bodies.push_back(stored);
-		}
+			SpawnPhysicsBody(entity, false);
 
 		Console::Log(std::format("Box2D started: {} bodies", m_Physics->Bodies.size()));
+	}
+
+	void Scene::SpawnPhysicsBody(Entity entity, bool preserveSnapshot)
+	{
+		if (m_Physics == nullptr || !b2World_IsValid(m_Physics->World) || !entity)
+			return;
+
+		bool keepSnapshot = false;
+		Vec3 position {};
+		float rotation = 0.0f;
+		Vec2 linear {};
+		float angular = 0.0f;
+		if (preserveSnapshot)
+		{
+			for (auto body = m_Physics->Bodies.begin(); body != m_Physics->Bodies.end(); ++body)
+			{
+				if (body->Entity != entity.GetId())
+					continue;
+
+				keepSnapshot = true;
+				position = body->Position;
+				rotation = body->Rotation;
+				linear = body->LinearVelocity;
+				angular = body->AngularVelocity;
+				if (b2Body_IsValid(body->Id))
+					b2DestroyBody(body->Id);
+				m_Physics->Bodies.erase(body);
+				break;
+			}
+		}
+
+		TransformComponent* transformComponent = entity.Get<TransformComponent>();
+		if (transformComponent == nullptr)
+			return;
+
+		Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>();
+		BoxCollider2DComponent* box = entity.Get<BoxCollider2DComponent>();
+		CircleCollider2DComponent* circle = entity.Get<CircleCollider2DComponent>();
+		SpinComponent* spin = entity.Get<SpinComponent>();
+		if (rigidbody == nullptr && box == nullptr && circle == nullptr)
+			return;
+
+		const Transform& transform = transformComponent->Local;
+		PhysicsStorage::Body stored {};
+		stored.Entity = entity.GetId();
+		stored.Position = keepSnapshot ? position : transform.Position;
+		stored.Rotation = keepSnapshot ? rotation : transform.GetRotationZ();
+		stored.HasRigidbody = rigidbody != nullptr;
+		if (rigidbody != nullptr)
+		{
+			stored.LinearVelocity = keepSnapshot ? linear : rigidbody->LinearVelocity;
+			stored.AngularVelocity = keepSnapshot ? angular : rigidbody->AngularVelocity;
+		}
+
+		b2BodyDef bodyDef = b2DefaultBodyDef();
+		bodyDef.type = rigidbody != nullptr ? ToBodyType(rigidbody->Type) : b2_staticBody;
+		bodyDef.position = { transform.Position.x, transform.Position.y };
+		bodyDef.rotation = b2MakeRot(transform.GetRotationZ());
+		bodyDef.fixedRotation = rigidbody != nullptr && rigidbody->FreezeRotation;
+		bodyDef.gravityScale = rigidbody != nullptr ? rigidbody->GravityScale : 1.0f;
+		bodyDef.isBullet = bodyDef.type == b2_dynamicBody;
+		bodyDef.userData = reinterpret_cast<void*>(static_cast<uintptr_t>(entity.GetId()));
+		if (rigidbody != nullptr)
+		{
+			bodyDef.linearVelocity = { rigidbody->LinearVelocity.x, rigidbody->LinearVelocity.y };
+			bodyDef.angularVelocity = rigidbody->AngularVelocity;
+		}
+		if (spin != nullptr && !bodyDef.fixedRotation)
+			bodyDef.angularVelocity += spin->Rate;
+
+		stored.Id = b2CreateBody(m_Physics->World, &bodyDef);
+		std::string name = entity.GetName();
+		b2Body_SetName(stored.Id, name.c_str());
+
+		bool solid = false;
+		if (box != nullptr)
+			solid = AddBox(stored.Id, transform, *box) || solid;
+		if (circle != nullptr)
+			solid = AddCircle(stored.Id, transform, *circle) || solid;
+		if (rigidbody != nullptr)
+			ApplyMass(stored.Id, *rigidbody, solid);
+
+		m_Physics->Bodies.push_back(stored);
+	}
+
+	void Scene::RefreshPhysics(uint32_t entityId)
+	{
+		Entity entity = GetEntity(entityId);
+		if (!entity)
+			return;
+		SpawnPhysicsBody(entity, true);
 	}
 
 	void Scene::StopPhysics()

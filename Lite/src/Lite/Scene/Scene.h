@@ -110,6 +110,7 @@ namespace Lite {
 		void Pause();
 		void Stop();
 		void Restart();
+		void RefreshPhysics(uint32_t entityId);
 		void Update(float seconds);
 		void Render() const;
 		Mat4 ViewProjection(float aspect, const Transform& fallbackTransform, const CameraComponent& fallbackCamera) const;
@@ -154,6 +155,7 @@ namespace Lite {
 		void StopPhysics();
 		void SyncPhysics();
 		void StepPhysics(float seconds);
+		void SpawnPhysicsBody(Entity entity, bool preserveSnapshot);
 
 		struct PhysicsStorage;
 		PhysicsStorage* m_Physics = nullptr;

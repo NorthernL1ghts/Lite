@@ -185,19 +185,14 @@ namespace Lite {
 
 	const Scene::Record* Scene::FindPrimaryCameraRecord() const
 	{
-		const Record* fallback = nullptr;
 		for (const Record& record : m_Records)
 		{
 			const auto* camera = static_cast<const CameraComponent*>(GetComponent(ComponentId::Camera, record.Id));
-			if (camera == nullptr)
-				continue;
-			if (camera->Primary)
+			if (camera != nullptr && camera->Primary)
 				return &record;
-			if (fallback == nullptr)
-				fallback = &record;
 		}
 
-		return fallback;
+		return nullptr;
 	}
 
 	Entity Scene::GetPrimaryCamera()
@@ -405,10 +400,27 @@ namespace Lite {
 					}
 					break;
 				case MeshType::Triangle:
-					Renderer2D::DrawTriangle(transform->Local, material->Colors[0], material->Colors[1], material->Colors[2]);
+					if (material->UseVertexColors)
+						Renderer2D::DrawTriangle(transform->Local, material->Colors[0], material->Colors[1], material->Colors[2]);
+					else
+						Renderer2D::DrawTriangle(transform->Local, material->Color, material->Color, material->Color);
 					break;
 				case MeshType::Quad:
-					Renderer2D::DrawQuad(transform->Local, material->Color);
+					if (material->UseVertexColors)
+					{
+						Renderer2D::DrawQuad(
+							transform->Local,
+							material->Texture,
+							material->Tiling,
+							material->Colors[0],
+							material->Colors[1],
+							material->Colors[2],
+							material->Colors[3]);
+					}
+					else
+					{
+						Renderer2D::DrawQuad(transform->Local, material->Color);
+					}
 					break;
 			}
 		}

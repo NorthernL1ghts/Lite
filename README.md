@@ -57,7 +57,7 @@ The window is a dockspace:
 
 - **Scene** lists planes, then the entities on each plane, then the components on each entity.
 - **Viewport** shows the scene. While stopped or paused, click an entity here to select it. The frontmost object wins.
-- **Inspector** edits the selected entity. Number fields slide when dragged and take a typed value when clicked. While the scene is playing, fields stay locked until you pause.
+- **Inspector** edits the selected entity. Number fields slide when dragged and take a typed value when clicked. Physics checkboxes and body settings apply to the simulation immediately, including while the scene is playing.
 - **Console** shows scene, physics, and selection messages.
 - **Explorer** is the tab next to the console. Assets, Scripts, and Prefabs are shown as folder icons. Double-click a folder to open it, and double-click a scene to load it. New Folder creates a folder in the current view. Import copies content files into that folder.
 
