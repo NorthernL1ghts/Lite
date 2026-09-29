@@ -222,14 +222,55 @@ void EditorLayer::OnRender()
 	m_Scene->Render();
 }
 
+namespace {
+
+	std::filesystem::path UnusedDirectory(const std::filesystem::path& parent, const std::string& stem)
+	{
+		std::filesystem::path folder = parent / stem;
+		std::error_code error;
+		for (int index = 2; std::filesystem::exists(folder, error); ++index)
+			folder = parent / (stem + " " + std::to_string(index));
+		return folder;
+	}
+
+	std::filesystem::path UnusedScene(const std::filesystem::path& directory, const std::string& stem)
+	{
+		std::filesystem::path file = directory / (stem + ".scene");
+		std::error_code error;
+		for (int index = 2; std::filesystem::exists(file, error); ++index)
+			file = directory / (stem + " " + std::to_string(index) + ".scene");
+		return file;
+	}
+
+}
+
 void EditorLayer::NewProject()
 {
+	std::filesystem::path parent = std::filesystem::current_path();
+	if (Lite::Ref<Lite::Project> current = Lite::Project::GetActive())
+	{
+		if (!current->GetProjectDirectory().empty())
+			parent = current->GetProjectDirectory().parent_path();
+	}
+
+	std::filesystem::path folder = UnusedDirectory(parent, "Untitled");
+	std::error_code error;
+	std::filesystem::create_directories(folder, error);
+
 	Lite::Ref<Lite::Project> project = Lite::Project::New();
-	project->GetConfig().Name = "Untitled";
+	project->GetConfig().Name = folder.filename().string();
 	project->GetConfig().AssetDirectory = "assets";
-	m_ProjectPath.clear();
+	project->GetConfig().StartScene = "scenes/Untitled.scene";
+	std::filesystem::path projectFile = folder / (project->GetConfig().Name + ".lite");
+	if (!Lite::Project::SaveActive(projectFile))
+	{
+		Lite::Console::Log("Failed to create project");
+		return;
+	}
+
+	m_ProjectPath = projectFile;
 	NewScene();
-	Lite::Console::Log("Project created: Untitled");
+	Lite::Console::Log(std::format("Project created: {}", projectFile.string()));
 }
 
 void EditorLayer::OpenProject(const std::filesystem::path& path)
@@ -297,6 +338,27 @@ void EditorLayer::NewScene()
 	Lite::Scene::SetActive(m_Scene.get());
 	m_Selected = 0;
 	m_Inspector.Reset();
+
+	if (Lite::Ref<Lite::Project> project = Lite::Project::GetActive())
+	{
+		if (!project->GetProjectDirectory().empty())
+		{
+			std::filesystem::path file = UnusedScene(Lite::Project::GetAssetDirectory() / "scenes", "Untitled");
+			m_Scene->SetName(file.stem().string());
+			if (m_Scene->SaveAs(file.string()) && project->GetConfig().StartScene.empty())
+			{
+				std::error_code error;
+				std::filesystem::path relative = std::filesystem::relative(file, Lite::Project::GetAssetDirectory(), error);
+				if (!error)
+				{
+					project->GetConfig().StartScene = relative.generic_string();
+					if (!m_ProjectPath.empty())
+						Lite::Project::SaveActive(m_ProjectPath);
+				}
+			}
+		}
+	}
+
 	SyncName();
 }
 
