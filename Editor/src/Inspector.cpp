@@ -71,7 +71,8 @@ void Inspector::ApplyTexture(std::uint32_t selected, const std::string& path)
 		return;
 	}
 
-	std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", path.c_str());
+	if (assigned.Applied)
+		std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", assigned.Path.c_str());
 	if (!path.empty() && !assigned.Loaded)
 		Lite::Console::Log(std::format("Failed to load texture {}", path));
 	else
@@ -273,6 +274,8 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			ImGui::SetNextItemWidth(-1.0f);
 			if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
 				scene->AssignTexture(entity.GetId(), m_TextureText);
+			if (ImGui::IsItemDeactivatedAfterEdit())
+				std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material->TexturePath.c_str());
 			finish();
 		}
 		}

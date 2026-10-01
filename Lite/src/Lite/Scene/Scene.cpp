@@ -619,8 +619,9 @@ namespace Lite {
 		if (material == nullptr)
 			return result;
 
-		material->TexturePath = path;
-		material->Texture = path.empty() ? Ref<Texture>{} : AssetRegistry::Get().Load<Texture>(path);
+		material->TexturePath = AssetRegistry::Get().Store(path);
+		material->Texture = material->TexturePath.empty() ? Ref<Texture>{} : AssetRegistry::Get().Load<Texture>(material->TexturePath);
+		result.Path = material->TexturePath;
 		if (MeshComponent* mesh = entity.Get<MeshComponent>())
 			mesh->Type = MeshType::Sprite;
 		result.Applied = true;

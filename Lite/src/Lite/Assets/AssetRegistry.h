@@ -31,6 +31,9 @@ namespace Lite {
 
 		const std::filesystem::path& GetRoot() const { return m_Root; }
 
+		std::filesystem::path Resolve(std::string_view path) const;
+		std::string Store(std::string_view path) const;
+
 		~AssetRegistry();
 
 	private:
@@ -44,7 +47,6 @@ namespace Lite {
 		Ref<Asset> LoadAsset(AssetType type, std::string_view path);
 		Ref<Asset> Find(std::string_view path) const;
 		std::string Key(std::string_view path) const;
-		std::filesystem::path Resolve(std::string_view path) const;
 
 		std::filesystem::path m_Root;
 		std::unordered_map<AssetType, Scope<AssetHandler>> m_Handlers;

@@ -19,16 +19,9 @@ Work left on the engine, the editor, and the player. Items already finished are 
 - **Planes in the editor.** Add Plane creates a plane in front of the highest draw order. The name is edited on the row, and two planes cannot share a name regardless of capitalization. Deleting an empty plane removes it. Deleting a plane that still has entities moves those entities to World and says so in the panel. World stays while it has entities, and the scene keeps at least one plane. The list stays in document order. The number on the row is still the draw order.
 - **Selection while playing.** A viewport click selects the frontmost entity during play and pause, using the same pick as edit mode. Del, Ctrl+D, and removing a component stay available and still update physics.
 - **Undo.** The open scene has one undo stack. Ctrl+Z undoes and Ctrl+Y redoes an inspector edit, a gizmo drag, a delete, or an added component. A drag or a field edit becomes one step when it ends. Opening another scene clears the stack. Play and stop are not steps.
+- **Asset paths.** The asset registry turns a texture path into the form that is saved. A file inside the project asset folder is stored relative to that folder. An absolute path outside the project is kept. Loading accepts either form, including an older `assets/...` path. The material field shows the stored path. The same file is loaded once.
 
 ## Next
-
-### 6. Asset paths
-
-A texture dropped from the explorer is stored as a full path. A texture already in the example scene is stored relative to the executable, such as `assets/Checkerboard.png`.
-
-- If the file is inside the project's asset directory, save the path relative to that directory.
-- Load either form. Absolute paths keep working for a file outside the project.
-- The material texture field should show the path that will be saved.
 
 ### 7. Materials as files
 

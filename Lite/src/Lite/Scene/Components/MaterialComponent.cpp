@@ -72,6 +72,7 @@ namespace Lite {
 			if (material.TexturePath.empty())
 				return;
 
+			material.TexturePath = AssetRegistry::Get().Store(material.TexturePath);
 			material.Texture = AssetRegistry::Get().Load<Texture>(material.TexturePath);
 			if (!material.Texture)
 				Console::Log(std::format("Failed to load texture {}", material.TexturePath));

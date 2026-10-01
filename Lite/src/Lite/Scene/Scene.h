@@ -148,6 +148,7 @@ namespace Lite {
 		{
 			bool Applied = false;
 			bool Loaded = false;
+			std::string Path;
 		};
 
 		TextureAssign AssignTexture(uint32_t entityId, const std::string& path);
