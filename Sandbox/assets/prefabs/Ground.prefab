@@ -1,0 +1,25 @@
+name: Ground
+plane: World
+transform:
+  position: [0, -0.9, 0]
+  rotation: 0
+  scale: [3.4, 0.16, 1]
+mesh:
+  type: quad
+material:
+  shader: Batch
+  color: [0.22, 0.24, 0.28, 1]
+  tiling: [1, 1]
+rigidbody2d:
+  type: static
+  mass: 1
+  gravity: 1
+  velocity: [0, 0]
+  angular: 0
+  freeze: true
+box-collider2d:
+  size: [1, 1]
+  offset: [0, 0]
+  trigger: false
+sorting:
+  order: 2

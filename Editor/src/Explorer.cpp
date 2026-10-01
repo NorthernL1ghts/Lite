@@ -158,6 +158,8 @@ namespace {
 			type = "LITE_TEXTURE";
 		else if (kind == IconKind::Scene)
 			type = "LITE_SCENE";
+		else if (kind == IconKind::Prefab)
+			type = "LITE_PREFAB";
 		if (type == nullptr || !ImGui::BeginDragDropSource())
 			return;
 
@@ -246,7 +248,8 @@ std::filesystem::path Explorer::Destination() const
 void Explorer::DrawGrid(
 	const std::filesystem::path& directory,
 	const std::function<void(const std::string&)>& openScene,
-	const std::function<void(const std::string&)>& openProject)
+	const std::function<void(const std::string&)>& openProject,
+	const std::function<void(const std::string&)>& openPrefab)
 {
 	std::error_code error;
 	std::vector<std::filesystem::directory_entry> entries;
@@ -331,6 +334,8 @@ void Explorer::DrawGrid(
 				openScene(child.string());
 			else if (ExtensionOf(child) == ".lite")
 				openProject(child.string());
+			else if (ExtensionOf(child) == ".prefab")
+				openPrefab(child.string());
 		}
 
 		column += 1;
@@ -428,7 +433,8 @@ void Explorer::ImportFiles()
 
 void Explorer::Draw(
 	const std::function<void(const std::string&)>& openScene,
-	const std::function<void(const std::string&)>& openProject)
+	const std::function<void(const std::string&)>& openProject,
+	const std::function<void(const std::string&)>& openPrefab)
 {
 	ImGui::Begin("Explorer");
 
@@ -607,7 +613,7 @@ void Explorer::Draw(
 	}
 	else
 	{
-		DrawGrid(m_View, openScene, openProject);
+		DrawGrid(m_View, openScene, openProject, openPrefab);
 	}
 	ImGui::EndChild();
 

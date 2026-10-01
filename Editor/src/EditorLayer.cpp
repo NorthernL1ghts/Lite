@@ -465,6 +465,52 @@ void EditorLayer::DropSprite(const std::string& path, float mouseX, float mouseY
 		Lite::Console::Log(std::format("Placed {}", name));
 }
 
+void EditorLayer::SaveSelectedPrefab()
+{
+	if (m_Scene == nullptr || m_Selected == 0)
+		return;
+	if (Lite::Project::GetActive() == nullptr)
+	{
+		Lite::Console::Log("Failed to save prefab: open a project first");
+		return;
+	}
+
+	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
+	if (!entity)
+		return;
+
+	std::string name = entity.GetName();
+	if (name.empty())
+		name = "Prefab";
+	for (char& character : name)
+	{
+		if (std::string("\\/:*?\"<>|").find(character) != std::string::npos)
+			character = '_';
+	}
+
+	Lite::Project::EnsureContentFolders();
+	std::filesystem::path file = Lite::Project::GetAssetDirectory() / "prefabs" / (name + ".prefab");
+	m_Scene->SavePrefab(entity.GetId(), file);
+}
+
+void EditorLayer::PlacePrefab(const std::string& path, float mouseX, float mouseY, bool atMouse)
+{
+	if (m_Scene == nullptr || path.empty())
+		return;
+
+	std::optional<Lite::Vec2> position;
+	if (atMouse)
+		position = Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY);
+
+	Lite::Entity entity = m_Scene->PlacePrefab(path, position);
+	if (!entity)
+		return;
+
+	m_Gizmo = {};
+	m_Selected = entity.GetId();
+	m_Inspector.Reset();
+}
+
 void EditorLayer::PickObject(float mouseX, float mouseY)
 {
 	if (m_Scene == nullptr || m_Scene->IsPlaying())
@@ -597,6 +643,8 @@ void EditorLayer::DrawMenu()
 			SaveScene();
 		if (ImGui::MenuItem("Save Scene As...", nullptr, false, m_Scene != nullptr))
 			m_Browser.ShowSave();
+		if (ImGui::MenuItem("Save Prefab", nullptr, false, m_Scene != nullptr && m_Selected != 0))
+			SaveSelectedPrefab();
 		ImGui::EndMenu();
 	}
 
@@ -680,7 +728,8 @@ void EditorLayer::OnImGuiRender()
 	DrawConsole();
 	m_Explorer.Draw(
 		[this](const std::string& path) { OpenScene(path); },
-		[this](const std::string& path) { OpenProject(path); });
+		[this](const std::string& path) { OpenProject(path); },
+		[this](const std::string& path) { PlacePrefab(path, 0.0f, 0.0f, false); });
 	if (m_ShowInfo)
 	{
 		Lite::DrawInstrumentation(!m_InfoPlaced);
@@ -762,6 +811,8 @@ void EditorLayer::DrawScene()
 					DuplicateSelected();
 					sceneChanged = true;
 				}
+				if (ImGui::MenuItem("Save Prefab"))
+					SaveSelectedPrefab();
 				if (ImGui::MenuItem("Delete", "Del"))
 				{
 					DeleteSelected();
@@ -905,6 +956,11 @@ void EditorLayer::DrawViewport()
 		{
 			ImVec2 mouse = ImGui::GetIO().MousePos;
 			DropSprite(static_cast<const char*>(payload->Data), mouse.x, mouse.y);
+		}
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LITE_PREFAB"))
+		{
+			ImVec2 mouse = ImGui::GetIO().MousePos;
+			PlacePrefab(static_cast<const char*>(payload->Data), mouse.x, mouse.y, true);
 		}
 		ImGui::EndDragDropTarget();
 	}

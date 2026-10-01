@@ -113,6 +113,10 @@ void Inspector::Draw(std::uint32_t selected)
 	if (ImGui::InputText("##ObjectName", m_ObjectName, sizeof(m_ObjectName)))
 		entity.SetName(m_ObjectName);
 
+	const std::string prefab = scene->GetPrefab(entity.GetId());
+	if (!prefab.empty())
+		ImGui::TextDisabled("Prefab: %s", prefab.c_str());
+
 	if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
 	{
 		if (ComponentHeader("Transform", "Transform"))

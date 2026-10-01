@@ -6,7 +6,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <iosfwd>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -105,6 +107,10 @@ namespace Lite {
 		Entity CreateEntity(std::string name, uint32_t plane);
 		Entity DuplicateEntity(uint32_t id);
 		void DestroyEntity(uint32_t id);
+		std::string GetPrefab(uint32_t id) const;
+		void SetPrefab(uint32_t id, std::string path);
+		bool SavePrefab(uint32_t id, const std::filesystem::path& path) const;
+		Entity PlacePrefab(const std::filesystem::path& path, std::optional<Vec2> position);
 		Entity Find(std::string_view name);
 		Entity GetEntity(uint32_t id);
 		Entity GetPrimaryCamera();
@@ -163,13 +169,17 @@ namespace Lite {
 
 	private:
 		friend class Entity;
+		friend struct SceneFile;
 
 		struct Record
 		{
 			uint32_t Id = 0;
 			uint32_t Plane = 0;
 			std::string Name;
+			std::string Prefab;
 		};
+
+		std::string UniqueEntityName(std::string name);
 
 		Record* FindRecord(uint32_t id);
 		const Record* FindRecord(uint32_t id) const;

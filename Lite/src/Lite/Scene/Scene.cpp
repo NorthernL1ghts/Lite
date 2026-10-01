@@ -8,6 +8,7 @@
 #include <Lite/Assets/Texture.h>
 #include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Core/String.h>
+#include <Lite/Project/Project.h>
 #include <Lite/Renderer/Renderer2D.h>
 
 #include <yaml-cpp/yaml.h>
@@ -18,6 +19,64 @@
 #include <fstream>
 
 namespace Lite {
+
+	struct SceneFile
+	{
+		static YAML::Node WriteEntityNode(const Scene& scene, uint32_t id, bool includePrefab)
+		{
+			YAML::Node entity(YAML::NodeType::Map);
+			const Scene::Record* record = scene.FindRecord(id);
+			if (record == nullptr)
+				return entity;
+
+			entity["name"] = record->Name;
+			if (includePrefab && !record->Prefab.empty())
+				entity["prefab"] = record->Prefab;
+
+			for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
+			{
+				const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
+				const void* data = scene.GetComponent(static_cast<ComponentId>(index), id);
+				if (ops == nullptr || ops->Write == nullptr || ops->Section == nullptr || data == nullptr)
+					continue;
+
+				YAML::Node component(YAML::NodeType::Map);
+				ops->Write(component, data);
+				entity[ops->Section] = component;
+			}
+
+			return entity;
+		}
+
+		static void ReadEntityNode(Scene& scene, uint32_t id, const YAML::Node& node)
+		{
+			if (!node || !node.IsMap())
+				return;
+
+			for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)
+			{
+				const std::string key = it->first.as<std::string>();
+				if (key == "name" || key == "plane")
+					continue;
+				if (key == "prefab")
+				{
+					if (it->second && it->second.IsScalar())
+						scene.SetPrefab(id, it->second.as<std::string>());
+					continue;
+				}
+
+				const ComponentOps* ops = FindComponentSection(key);
+				if (ops == nullptr || ops->Read == nullptr)
+					continue;
+
+				ops->Read(scene, id, it->second);
+				if (ops->Finish == nullptr)
+					continue;
+				if (void* data = scene.GetComponent(ops->Id, id))
+					ops->Finish(data);
+			}
+		}
+	};
 
 	namespace {
 
@@ -228,6 +287,23 @@ namespace Lite {
 		return Entity(this, m_Records.back().Id);
 	}
 
+	std::string Scene::UniqueEntityName(std::string name)
+	{
+		if (name.empty())
+			name = "Entity";
+		if (!Find(name))
+			return name;
+
+		for (int index = 2; index < 1000; ++index)
+		{
+			std::string candidate = std::format("{} {}", name, index);
+			if (!Find(candidate))
+				return candidate;
+		}
+
+		return name;
+	}
+
 	Entity Scene::DuplicateEntity(uint32_t id)
 	{
 		Record* source = FindRecord(id);
@@ -236,38 +312,10 @@ namespace Lite {
 
 		const std::string name = source->Name.empty() ? std::string("Entity Copy") : source->Name + " Copy";
 		const uint32_t plane = source->Plane;
-
-		struct Piece
-		{
-			const ComponentOps* Ops = nullptr;
-			YAML::Node Node;
-		};
-
-		std::vector<Piece> pieces;
-		for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
-		{
-			const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
-			const void* data = GetComponent(static_cast<ComponentId>(index), id);
-			if (ops == nullptr || ops->Write == nullptr || data == nullptr)
-				continue;
-
-			Piece piece;
-			piece.Ops = ops;
-			piece.Node = YAML::Node(YAML::NodeType::Map);
-			ops->Write(piece.Node, data);
-			pieces.push_back(std::move(piece));
-		}
+		YAML::Node node = SceneFile::WriteEntityNode(*this, id, true);
 
 		Entity copy = CreateEntity(name, plane);
-		for (const Piece& piece : pieces)
-		{
-			if (piece.Ops->Read != nullptr)
-				piece.Ops->Read(*this, copy.GetId(), piece.Node);
-			if (piece.Ops->Finish == nullptr)
-				continue;
-			if (void* data = GetComponent(piece.Ops->Id, copy.GetId()))
-				piece.Ops->Finish(data);
-		}
+		SceneFile::ReadEntityNode(*this, copy.GetId(), node);
 
 		if (CameraComponent* camera = copy.Get<CameraComponent>())
 			camera->Primary = false;
@@ -293,6 +341,137 @@ namespace Lite {
 
 		RefreshPhysics(copy.GetId());
 		return copy;
+	}
+
+	std::string Scene::GetPrefab(uint32_t id) const
+	{
+		const Record* record = FindRecord(id);
+		return record != nullptr ? record->Prefab : std::string();
+	}
+
+	void Scene::SetPrefab(uint32_t id, std::string path)
+	{
+		if (Record* record = FindRecord(id))
+			record->Prefab = std::move(path);
+	}
+
+	bool Scene::SavePrefab(uint32_t id, const std::filesystem::path& path) const
+	{
+		if (FindRecord(id) == nullptr || path.empty())
+		{
+			Console::Log("Failed to save prefab: nothing selected");
+			return false;
+		}
+
+		std::filesystem::path full = path;
+		if (!full.is_absolute())
+			full = FileSystem::ExecutableDirectory() / full;
+		if (full.extension().empty())
+			full.replace_extension(".prefab");
+		full = full.lexically_normal();
+
+		std::error_code error;
+		if (!full.parent_path().empty())
+			std::filesystem::create_directories(full.parent_path(), error);
+
+		YAML::Node root = SceneFile::WriteEntityNode(*this, id, false);
+		const Record* record = FindRecord(id);
+		for (const Plane& plane : m_Planes)
+		{
+			if (record != nullptr && plane.Id == record->Plane)
+			{
+				root["plane"] = plane.Name;
+				break;
+			}
+		}
+
+		std::ofstream file(full, std::ios::trunc);
+		if (!file)
+		{
+			Console::Log(std::format("Failed to save prefab: {}", full.string()));
+			return false;
+		}
+
+		file << root;
+		if (!file)
+		{
+			Console::Log(std::format("Failed to save prefab: {}", full.string()));
+			return false;
+		}
+
+		Console::Log(std::format("Prefab saved: {}", full.string()));
+		return true;
+	}
+
+	Entity Scene::PlacePrefab(const std::filesystem::path& path, std::optional<Vec2> position)
+	{
+		if (path.empty())
+			return {};
+
+		std::filesystem::path full = path;
+		if (!full.is_absolute())
+			full = Project::GetAssetFileSystemPath(full);
+
+		std::ifstream file(full);
+		if (!file)
+		{
+			Console::Log(std::format("Failed to place prefab: {}", full.string()));
+			return {};
+		}
+
+		YAML::Node root = YAML::Load(file);
+		if (!root || !root.IsMap())
+		{
+			Console::Log(std::format("Failed to place prefab: {}", full.string()));
+			return {};
+		}
+
+		std::string name = full.stem().string();
+		if (root["name"])
+			name = root["name"].as<std::string>();
+		name = UniqueEntityName(name);
+
+		uint32_t plane = 0;
+		if (root["plane"])
+			plane = FindPlane(root["plane"].as<std::string>());
+		if (plane == 0)
+			plane = FindPlane("World");
+		if (plane == 0 && !m_Planes.empty())
+			plane = m_Planes.front().Id;
+
+		Entity entity = plane != 0 ? CreateEntity(name, plane) : CreateEntity(name);
+		SceneFile::ReadEntityNode(*this, entity.GetId(), root);
+		if (CameraComponent* camera = entity.Get<CameraComponent>())
+			camera->Primary = false;
+
+		std::error_code canonicalError;
+		std::filesystem::path canonical = std::filesystem::weakly_canonical(full, canonicalError);
+		if (canonicalError)
+			canonical = full.lexically_normal();
+
+		std::string link = canonical.generic_string();
+		const std::filesystem::path assets = Project::GetAssetDirectory();
+		if (!assets.empty() && FileSystem::Contains(assets, canonical))
+		{
+			std::error_code relativeError;
+			std::filesystem::path relative = std::filesystem::relative(canonical, assets, relativeError);
+			if (!relativeError)
+				link = relative.generic_string();
+		}
+		SetPrefab(entity.GetId(), link);
+
+		if (position)
+		{
+			if (TransformComponent* transform = entity.Get<TransformComponent>())
+			{
+				transform->Local.Position.x = position->x;
+				transform->Local.Position.y = position->y;
+			}
+		}
+
+		RefreshPhysics(entity.GetId());
+		Console::Log(std::format("Placed prefab {}", name));
+		return entity;
 	}
 
 	void Scene::DestroyEntity(uint32_t id)
@@ -694,18 +873,7 @@ namespace Lite {
 				name = "Entity";
 
 			Entity entity = CreateEntity(name, plane);
-			for (YAML::const_iterator it = entityNode.begin(); it != entityNode.end(); ++it)
-			{
-				const std::string key = it->first.as<std::string>();
-				if (key == "name")
-					continue;
-
-				const ComponentOps* ops = FindComponentSection(key);
-				if (ops == nullptr || ops->Read == nullptr)
-					continue;
-
-				ops->Read(*this, entity.GetId(), it->second);
-			}
+			SceneFile::ReadEntityNode(*this, entity.GetId(), entityNode);
 		};
 
 		auto readEntities = [&readEntity](uint32_t plane, const YAML::Node& entities)
@@ -769,20 +937,7 @@ namespace Lite {
 				if (record.Plane != plane.Id)
 					continue;
 
-				YAML::Node entity;
-				entity["name"] = record.Name;
-				for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
-				{
-					const ComponentOps* ops = FindComponent(static_cast<ComponentId>(index));
-					const void* data = GetComponent(static_cast<ComponentId>(index), record.Id);
-					if (ops == nullptr || ops->Write == nullptr || ops->Section == nullptr || data == nullptr)
-						continue;
-
-					YAML::Node component(YAML::NodeType::Map);
-					ops->Write(component, data);
-					entity[ops->Section] = component;
-				}
-				entities.push_back(entity);
+				entities.push_back(SceneFile::WriteEntityNode(*this, record.Id, true));
 			}
 
 			planeNode["entities"] = entities;

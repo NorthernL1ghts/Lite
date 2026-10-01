@@ -9,7 +9,8 @@ class Explorer
 public:
 	void Draw(
 		const std::function<void(const std::string&)>& openScene,
-		const std::function<void(const std::string&)>& openProject);
+		const std::function<void(const std::string&)>& openProject,
+		const std::function<void(const std::string&)>& openPrefab);
 
 private:
 	std::filesystem::path ProjectRoot() const;
@@ -18,7 +19,8 @@ private:
 	void DrawGrid(
 		const std::filesystem::path& directory,
 		const std::function<void(const std::string&)>& openScene,
-		const std::function<void(const std::string&)>& openProject);
+		const std::function<void(const std::string&)>& openProject,
+		const std::function<void(const std::string&)>& openPrefab);
 	void CreateFolder();
 	void ImportFiles();
 

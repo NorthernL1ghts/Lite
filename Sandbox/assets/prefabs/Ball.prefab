@@ -1,0 +1,26 @@
+name: Ball
+plane: World
+transform:
+  position: [-0.6, 0.8, 0]
+  rotation: 0
+  scale: [0.45, 0.45, 1]
+mesh:
+  type: quad
+material:
+  shader: Batch
+  color: [0.2, 0.45, 0.95, 1]
+  tiling: [1, 1]
+  vertex-colors: false
+rigidbody2d:
+  type: dynamic
+  mass: 1
+  gravity: 1
+  velocity: [0, 0]
+  angular: 0
+  freeze: false
+circle-collider2d:
+  radius: 0.5
+  offset: [0, 0]
+  trigger: false
+sorting:
+  order: 1
