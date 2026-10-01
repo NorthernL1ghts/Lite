@@ -493,6 +493,95 @@ namespace Lite {
 		return true;
 	}
 
+	bool Scene::SaveMaterial(uint32_t id, const std::filesystem::path& path) const
+	{
+		const ComponentOps* ops = FindComponent(ComponentId::Material);
+		const void* data = GetComponent(ComponentId::Material, id);
+		if (ops == nullptr || ops->Write == nullptr || data == nullptr || path.empty())
+		{
+			Console::Log("Failed to save material: the entity has no material");
+			return false;
+		}
+
+		std::filesystem::path full = path;
+		if (!full.is_absolute())
+			full = FileSystem::ExecutableDirectory() / full;
+		if (full.extension().empty())
+			full.replace_extension(".material");
+		full = full.lexically_normal();
+
+		std::error_code error;
+		if (!full.parent_path().empty())
+			std::filesystem::create_directories(full.parent_path(), error);
+
+		YAML::Node root(YAML::NodeType::Map);
+		ops->Write(root, data);
+
+		std::ofstream file(full, std::ios::trunc);
+		if (!file)
+		{
+			Console::Log(std::format("Failed to save material: {}", full.string()));
+			return false;
+		}
+
+		file << root;
+		if (!file)
+		{
+			Console::Log(std::format("Failed to save material: {}", full.string()));
+			return false;
+		}
+
+		Console::Log(std::format("Material saved: {}", full.string()));
+		return true;
+	}
+
+	bool Scene::ApplyMaterial(uint32_t id, const std::filesystem::path& path)
+	{
+		if (FindRecord(id) == nullptr || path.empty())
+			return false;
+
+		std::filesystem::path full = path;
+		if (!full.is_absolute())
+			full = Project::GetAssetFileSystemPath(full);
+
+		std::ifstream file(full);
+		if (!file)
+		{
+			Console::Log(std::format("Failed to apply material: {}", full.string()));
+			return false;
+		}
+
+		YAML::Node root;
+		try
+		{
+			root = YAML::Load(file);
+		}
+		catch (const YAML::Exception&)
+		{
+			Console::Log(std::format("Failed to apply material: {}", full.string()));
+			return false;
+		}
+		if (!root || !root.IsMap())
+		{
+			Console::Log(std::format("Failed to apply material: {}", full.string()));
+			return false;
+		}
+
+		const ComponentOps* ops = FindComponent(ComponentId::Material);
+		if (ops == nullptr || ops->Read == nullptr)
+			return false;
+
+		ops->Read(*this, id, root);
+		if (ops->Finish != nullptr)
+		{
+			if (void* data = GetComponent(ComponentId::Material, id))
+				ops->Finish(data);
+		}
+
+		Console::Log(std::format("Applied material {}", full.stem().string()));
+		return true;
+	}
+
 	Entity Scene::PlacePrefab(const std::filesystem::path& path, std::optional<Vec2> position)
 	{
 		if (path.empty())

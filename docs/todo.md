@@ -20,16 +20,9 @@ Work left on the engine, the editor, and the player. Items already finished are 
 - **Selection while playing.** A viewport click selects the frontmost entity during play and pause, using the same pick as edit mode. Del, Ctrl+D, and removing a component stay available and still update physics.
 - **Undo.** The open scene has one undo stack. Ctrl+Z undoes and Ctrl+Y redoes an inspector edit, a gizmo drag, a delete, or an added component. A drag or a field edit becomes one step when it ends. Opening another scene clears the stack. Play and stop are not steps.
 - **Asset paths.** The asset registry turns a texture path into the form that is saved. A file inside the project asset folder is stored relative to that folder. An absolute path outside the project is kept. Loading accepts either form, including an older `assets/...` path. The material field shows the stored path. The same file is loaded once.
+- **Materials as files.** File > Save Material, or the scene panel context menu, writes the selected `MaterialComponent` to `assets/materials` as `*.material` YAML. The file stores the shader, color, vertex colors, tiling, opacity, and texture path. Dragging that file onto an entity's material copies those fields onto the same component. Sandbox includes `Red.material`.
 
 ## Next
-
-### 7. Materials as files
-
-The Materials folder exists. A material is only data on an entity.
-
-- Save a material component as `*.material` YAML: shader, color, vertex colors, tiling, opacity, and texture path.
-- Drag that file onto an entity's material to copy those fields onto it.
-- Do not invent a second material system beside `MaterialComponent`.
 
 ### 8. Physics callbacks
 

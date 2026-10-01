@@ -124,6 +124,8 @@ namespace Lite {
 		void SetPrefab(uint32_t id, std::string path);
 		bool SavePrefab(uint32_t id, const std::filesystem::path& path) const;
 		Entity PlacePrefab(const std::filesystem::path& path, std::optional<Vec2> position);
+		bool SaveMaterial(uint32_t id, const std::filesystem::path& path) const;
+		bool ApplyMaterial(uint32_t id, const std::filesystem::path& path);
 		Entity Find(std::string_view name);
 		Entity GetEntity(uint32_t id);
 		Entity GetPrimaryCamera();

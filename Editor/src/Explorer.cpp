@@ -59,6 +59,7 @@ namespace {
 		Image,
 		Script,
 		Prefab,
+		Material,
 		File
 	};
 
@@ -76,6 +77,8 @@ namespace {
 			return IconKind::Script;
 		if (extension == ".prefab")
 			return IconKind::Prefab;
+		if (extension == ".material")
+			return IconKind::Material;
 		return IconKind::File;
 	}
 
@@ -136,6 +139,9 @@ namespace {
 			case IconKind::Prefab:
 				DrawFileIcon(draw, min, max, IM_COL32(176, 124, 214, 255));
 				break;
+			case IconKind::Material:
+				DrawFileIcon(draw, min, max, IM_COL32(214, 132, 92, 255));
+				break;
 			default:
 				DrawFileIcon(draw, min, max, IM_COL32(150, 156, 166, 255));
 				break;
@@ -160,6 +166,8 @@ namespace {
 			type = "LITE_SCENE";
 		else if (kind == IconKind::Prefab)
 			type = "LITE_PREFAB";
+		else if (kind == IconKind::Material)
+			type = "LITE_MATERIAL";
 		if (type == nullptr || !ImGui::BeginDragDropSource())
 			return;
 

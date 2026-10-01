@@ -50,6 +50,7 @@ private:
 	void PickObject(float mouseX, float mouseY);
 	void DropSprite(const std::string& path, float mouseX, float mouseY);
 	void SaveSelectedPrefab();
+	void SaveSelectedMaterial();
 	void PlacePrefab(const std::string& path, float mouseX, float mouseY, bool atMouse);
 	void ApplyPlayCamera();
 	void DrawGizmo();

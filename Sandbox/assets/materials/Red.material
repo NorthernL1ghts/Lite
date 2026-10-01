@@ -1,0 +1,4 @@
+shader: Batch
+color: [0.86, 0.16, 0.18, 1]
+tiling: [1, 1]
+vertex-colors: false

@@ -287,6 +287,15 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 				ApplyTexture(entity.GetId(), static_cast<const char*>(payload->Data));
 				history.Commit(*scene, entity.GetId());
 			}
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LITE_MATERIAL"))
+			{
+				if (scene->ApplyMaterial(entity.GetId(), static_cast<const char*>(payload->Data)))
+				{
+					std::snprintf(m_ShaderText, sizeof(m_ShaderText), "%s", material->Shader.c_str());
+					std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material->TexturePath.c_str());
+					history.Commit(*scene, entity.GetId());
+				}
+			}
 			ImGui::EndDragDropTarget();
 		}
 	}

@@ -641,6 +641,37 @@ void EditorLayer::SaveSelectedPrefab()
 	m_Scene->SavePrefab(entity.GetId(), file);
 }
 
+void EditorLayer::SaveSelectedMaterial()
+{
+	if (m_Scene == nullptr || m_Selected == 0)
+		return;
+	if (Lite::Project::GetActive() == nullptr)
+	{
+		Lite::Console::Log("Failed to save material: open a project first");
+		return;
+	}
+
+	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
+	if (!entity || !entity.Has<Lite::MaterialComponent>())
+	{
+		Lite::Console::Log("Failed to save material: the entity has no material");
+		return;
+	}
+
+	std::string name = entity.GetName();
+	if (name.empty())
+		name = "Material";
+	for (char& character : name)
+	{
+		if (std::string("\\/:*?\"<>|").find(character) != std::string::npos)
+			character = '_';
+	}
+
+	Lite::Project::EnsureContentFolders();
+	std::filesystem::path file = Lite::Project::GetAssetDirectory() / "materials" / (name + ".material");
+	m_Scene->SaveMaterial(entity.GetId(), file);
+}
+
 void EditorLayer::PlacePrefab(const std::string& path, float mouseX, float mouseY, bool atMouse)
 {
 	if (m_Scene == nullptr || path.empty())
@@ -793,6 +824,8 @@ void EditorLayer::DrawMenu()
 			m_Browser.ShowSave();
 		if (ImGui::MenuItem("Save Prefab", nullptr, false, m_Scene != nullptr && m_Selected != 0))
 			SaveSelectedPrefab();
+		if (ImGui::MenuItem("Save Material", nullptr, false, m_Scene != nullptr && m_Selected != 0))
+			SaveSelectedMaterial();
 		ImGui::EndMenu();
 	}
 
@@ -1080,6 +1113,8 @@ void EditorLayer::DrawScene()
 				}
 				if (ImGui::MenuItem("Save Prefab"))
 					SaveSelectedPrefab();
+				if (ImGui::MenuItem("Save Material"))
+					SaveSelectedMaterial();
 				if (ImGui::MenuItem("Delete", "Del"))
 				{
 					DeleteSelected();
