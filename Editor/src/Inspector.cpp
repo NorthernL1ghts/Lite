@@ -95,6 +95,8 @@ void Inspector::Draw(std::uint32_t selected)
 		Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>();
 		std::snprintf(m_ShaderText, sizeof(m_ShaderText), "%s", material != nullptr ? material->Shader.c_str() : "");
 		std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material != nullptr ? material->TexturePath.c_str() : "");
+		Lite::ScriptComponent* script = entity.Get<Lite::ScriptComponent>();
+		std::snprintf(m_ScriptText, sizeof(m_ScriptText), "%s", script != nullptr ? script->Class.c_str() : "");
 	}
 
 	auto refreshPhysics = [&]()
@@ -340,6 +342,22 @@ void Inspector::Draw(std::uint32_t selected)
 		}
 		else
 			ImGui::DragInt("Order", &sorting->Order);
+	}
+
+	if (Lite::ScriptComponent* script = entity.Get<Lite::ScriptComponent>())
+	{
+		if (ComponentHeader("Script", "Script"))
+		{
+			entity.Remove<Lite::ScriptComponent>();
+			removed("Script");
+		}
+		else
+		{
+			ImGui::SetNextItemWidth(-1.0f);
+			if (ImGui::InputText("##ScriptClass", m_ScriptText, sizeof(m_ScriptText)))
+				script->Class = m_ScriptText;
+			ImGui::TextDisabled("Class name in the project script module");
+		}
 	}
 
 	ImGui::Separator();

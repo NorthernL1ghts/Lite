@@ -15,6 +15,7 @@ namespace Lite {
 		BoxCollider2D,
 		CircleCollider2D,
 		Sorting,
+		Script,
 		Count
 	};
 

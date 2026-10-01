@@ -10,6 +10,7 @@
 #include <Lite/Core/String.h>
 #include <Lite/Project/Project.h>
 #include <Lite/Renderer/Renderer2D.h>
+#include <Lite/Script/ScriptModule.h>
 
 #include <yaml-cpp/yaml.h>
 
@@ -774,6 +775,7 @@ namespace Lite {
 		if (m_Playback != ScenePlayback::Playing)
 			return;
 
+		ScriptRuntime::Update(*this, seconds);
 		StepPhysics(seconds);
 	}
 

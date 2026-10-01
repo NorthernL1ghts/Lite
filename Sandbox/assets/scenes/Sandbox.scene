@@ -104,6 +104,8 @@ planes:
           size: [1, 1]
           offset: [0, 0]
           trigger: false
+        script:
+          class: Bounce
         sorting:
           order: 1
       - name: Ground

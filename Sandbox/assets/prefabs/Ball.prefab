@@ -22,5 +22,7 @@ circle-collider2d:
   radius: 0.5
   offset: [0, 0]
   trigger: false
+script:
+  class: Bounce
 sorting:
   order: 1

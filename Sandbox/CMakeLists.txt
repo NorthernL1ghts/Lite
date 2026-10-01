@@ -49,3 +49,18 @@ lite_compile_shaders(Sandbox "${SANDBOX_ASSET_DIR}/shaders" ${SANDBOX_SHADER_SOU
 set_target_properties(Sandbox PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin/sandbox"
 )
+
+add_library(SandboxScripts SHARED src/SandboxScripts.cpp)
+target_link_libraries(SandboxScripts PRIVATE Lite)
+lite_compile_flags(SandboxScripts)
+
+set(SANDBOX_SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/scripts")
+set_target_properties(SandboxScripts PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${SANDBOX_SCRIPT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${SANDBOX_SCRIPT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${SANDBOX_SCRIPT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${SANDBOX_SCRIPT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${SANDBOX_SCRIPT_DIR}"
+)
+
+add_dependencies(Sandbox SandboxScripts)

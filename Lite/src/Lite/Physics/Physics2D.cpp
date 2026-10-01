@@ -1,6 +1,7 @@
 #include <Lite/Scene/Scene.h>
 
 #include <Lite/Scene/Console.h>
+#include <Lite/Script/ScriptModule.h>
 
 #include <box2d/box2d.h>
 
@@ -125,6 +126,7 @@ namespace Lite {
 			SpawnPhysicsBody(entity, false);
 
 		Console::Log(std::format("Box2D started: {} bodies", m_Physics->Bodies.size()));
+		ScriptRuntime::Load(*this);
 	}
 
 	void Scene::SpawnPhysicsBody(Entity entity, bool preserveSnapshot)
@@ -237,6 +239,7 @@ namespace Lite {
 
 	void Scene::StopPhysics()
 	{
+		ScriptRuntime::Unload();
 		if (m_Physics == nullptr)
 			return;
 
@@ -309,17 +312,23 @@ namespace Lite {
 		{
 			b2BodyId first = b2Shape_GetBody(contacts.beginEvents[index].shapeIdA);
 			b2BodyId second = b2Shape_GetBody(contacts.beginEvents[index].shapeIdB);
-			auto nameOf = [this](b2BodyId body)
+			auto idOf = [](b2BodyId body) -> uint32_t
 			{
 				if (!b2Body_IsValid(body))
-					return std::string("unknown");
-				auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(b2Body_GetUserData(body)));
+					return 0;
+				return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(b2Body_GetUserData(body)));
+			};
+			auto nameOf = [this](uint32_t id)
+			{
 				Entity entity = GetEntity(id);
 				if (!entity || entity.GetName().empty())
-					return std::string("entity");
+					return std::string(id == 0 ? "unknown" : "entity");
 				return entity.GetName();
 			};
-			Console::Log(std::format("Collision: {} and {}", nameOf(first), nameOf(second)));
+			uint32_t firstId = idOf(first);
+			uint32_t secondId = idOf(second);
+			Console::Log(std::format("Collision: {} and {}", nameOf(firstId), nameOf(secondId)));
+			ScriptRuntime::OnCollision(*this, firstId, secondId);
 		}
 
 		for (const PhysicsStorage::Body& body : m_Physics->Bodies)

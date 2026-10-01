@@ -75,7 +75,9 @@ The window is a dockspace:
 | Save Scene | Ctrl+S |
 | Save Scene As... | — |
 
-Project files are YAML documents named `*.lite`. A project stores its name, start scene, asset directory, and script module path. The start scene and asset directory are relative to the project file. Open and Save use the same file browser, filtered to `*.lite`.
+Project files are YAML documents named `*.lite`. A project stores its name, start scene, asset directory, and script module path. The start scene and asset directory are relative to the project file. The script module path is relative to the project file too. The scene panel shows that path, and Browse picks a DLL. Open and Save use the same file browser, filtered to `*.lite`.
+
+A script module is a DLL that exports `LiteRegisterScripts`. Play loads it and stop unloads it. Each entity script is a component with a class name. On play, Lite calls that class's start function when it has one, then calls update with the timestep each frame. A class that provides a collision function is called when a contact begins, with the other entity's id. The editor and Sandbox load the same file. Sandbox's module is `scripts/SandboxScripts.dll`, and the scene quad uses the `Bounce` class.
 
 Open and Save As use a file browser. Save Scene writes the scene that is already open. A new scene with no path opens Save As. Scene files are YAML documents named `*.scene`. The document has a `name` and a `planes` list. Each plane has a `name`, an `order`, and an `entities` list. A higher plane order is drawn in front of a lower one. Sorting still orders the entities inside one plane. Each entity has a `name` and one map per component, such as `transform`, `camera`, `mesh`, and `rigidbody2d`.
 

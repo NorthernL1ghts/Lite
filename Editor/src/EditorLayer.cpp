@@ -19,6 +19,8 @@
 
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -303,6 +305,126 @@ void EditorLayer::SaveProject()
 	}
 
 	SaveProjectTo(m_ProjectPath);
+}
+
+void EditorLayer::AssignScriptModule(const std::filesystem::path& picked)
+{
+	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
+	if (!project)
+		return;
+
+	std::filesystem::path path = picked;
+	if (path.is_absolute() && !project->GetProjectDirectory().empty())
+	{
+		std::error_code error;
+		std::filesystem::path relative = std::filesystem::relative(path, project->GetProjectDirectory(), error);
+		if (!error)
+			path = relative;
+	}
+
+	project->GetConfig().ScriptModulePath = path.generic_string();
+	m_ScriptSynced.clear();
+	if (!m_ProjectPath.empty())
+		SaveProject();
+}
+
+void EditorLayer::DrawScriptModule()
+{
+	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
+	if (!project)
+		return;
+
+	const std::string current = project->GetConfig().ScriptModulePath.generic_string();
+	if (m_ScriptSynced != current)
+	{
+		m_ScriptSynced = current;
+		std::snprintf(m_ScriptModule, sizeof(m_ScriptModule), "%s", current.c_str());
+	}
+
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted("Script module");
+	ImGui::SetNextItemWidth(-80.0f);
+	ImGui::InputText("##ScriptModule", m_ScriptModule, sizeof(m_ScriptModule));
+	if (ImGui::IsItemDeactivatedAfterEdit())
+		AssignScriptModule(m_ScriptModule);
+	ImGui::SameLine();
+	if (ImGui::Button("Browse"))
+	{
+		m_PickScript = true;
+		std::filesystem::path start = project->GetProjectDirectory();
+		if (!current.empty())
+		{
+			std::filesystem::path file = std::filesystem::path(current);
+			if (!file.is_absolute())
+				file = start / file;
+			if (!file.parent_path().empty())
+				start = file.parent_path();
+		}
+		m_ScriptBrowserDir = start.empty() ? Lite::FileSystem::ExecutableDirectory().string() : start.string();
+	}
+
+	if (m_PickScript)
+	{
+		ImGui::OpenPopup("Script Module");
+		m_PickScript = false;
+	}
+
+	ImGui::SetNextWindowSize(ImVec2(520.0f, 360.0f), ImGuiCond_Appearing);
+	if (!ImGui::BeginPopupModal("Script Module", nullptr, ImGuiWindowFlags_NoResize))
+		return;
+
+	if (ImGui::Button("Up"))
+	{
+		std::filesystem::path parent = std::filesystem::path(m_ScriptBrowserDir).parent_path();
+		if (!parent.empty())
+			m_ScriptBrowserDir = parent.string();
+	}
+	ImGui::SameLine();
+	ImGui::TextUnformatted(m_ScriptBrowserDir.c_str());
+	ImGui::BeginChild("##ScriptFiles", ImVec2(0.0f, -40.0f));
+
+	std::error_code error;
+	std::vector<std::filesystem::directory_entry> entries;
+	for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(m_ScriptBrowserDir, error))
+		entries.push_back(entry);
+	std::sort(entries.begin(), entries.end(), [](const std::filesystem::directory_entry& left, const std::filesystem::directory_entry& right)
+	{
+		std::error_code leftError;
+		std::error_code rightError;
+		bool leftDirectory = left.is_directory(leftError);
+		bool rightDirectory = right.is_directory(rightError);
+		if (leftDirectory != rightDirectory)
+			return leftDirectory;
+		return left.path().filename() < right.path().filename();
+	});
+
+	for (const std::filesystem::directory_entry& entry : entries)
+	{
+		std::error_code kindError;
+		const bool directory = entry.is_directory(kindError);
+		std::string extension = entry.path().extension().string();
+		for (char& character : extension)
+			character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+		if (!directory && extension != ".dll")
+			continue;
+
+		const std::string label = entry.path().filename().string();
+		if (!ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick))
+			continue;
+
+		if (directory)
+			m_ScriptBrowserDir = entry.path().string();
+		else if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			AssignScriptModule(entry.path());
+			ImGui::CloseCurrentPopup();
+		}
+	}
+
+	ImGui::EndChild();
+	if (ImGui::Button("Cancel"))
+		ImGui::CloseCurrentPopup();
+	ImGui::EndPopup();
 }
 
 void EditorLayer::NewScene()
@@ -751,6 +873,7 @@ void EditorLayer::DrawScene()
 		ImGui::TextDisabled("%s", project->GetConfig().Name.c_str());
 		if (!m_ProjectPath.empty())
 			ImGui::TextWrapped("%s", m_ProjectPath.string().c_str());
+		DrawScriptModule();
 	}
 
 	if (m_Scene)

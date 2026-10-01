@@ -14,5 +14,6 @@ private:
 	char m_ObjectName[128] {};
 	char m_ShaderText[128] {};
 	char m_TextureText[1024] {};
+	char m_ScriptText[128] {};
 	std::uint32_t m_SyncedId = 0;
 };

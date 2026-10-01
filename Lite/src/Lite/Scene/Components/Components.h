@@ -9,3 +9,4 @@
 #include <Lite/Scene/Components/BoxCollider2DComponent.h>
 #include <Lite/Scene/Components/CircleCollider2DComponent.h>
 #include <Lite/Scene/Components/SortingComponent.h>
+#include <Lite/Scene/Components/ScriptComponent.h>

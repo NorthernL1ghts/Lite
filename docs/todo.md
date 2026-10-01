@@ -15,18 +15,9 @@ Work left on the engine, the editor, and the player. Items already finished are 
 - **Draw path.** A sprite rotates its two axes once per shape, then places every corner from those axes. The scene looks up each drawable entity once, then submits it.
 - **Core.** `FileSystem::Contains` is the path-inside-folder check. The layer stack walks forward and backward through one pair of helpers. The two loggers share one setup. The application passes the native window as an untyped handle.
 - **Prefabs.** File > Save Prefab, or the scene panel context menu, writes the selection to `assets/prefabs` as the same component YAML a scene entity uses. The plane name is only a hint. Double-click a prefab, or drag it into the viewport, to place a normal copy with a fresh name, its own physics body, and no second primary camera. The inspector shows the prefab path. Later edits to the file do not rewrite copies already in the scene.
+- **Scripts.** The scene panel sets the project script module. The path stays relative to the project file. Play loads that DLL and stop unloads it. A missing file or a failed load is a console error, and the scene still plays. A Script component stores a class name. On play, a class start function runs when it exists. Each frame, an update function receives the timestep. A collision begin calls a class that provided one, with the other entity's id. Sandbox and the editor load the same module. Sandbox ships `scripts/SandboxScripts.dll` with a `Bounce` class on the scene quad.
 
 ## Next
-
-### 2. Scripts
-
-`ScriptModulePath` is stored on the project and written into the `*.lite` file. No module is loaded, and no script runs.
-
-- Pick the module from the project settings, not only by editing YAML. The path stays relative to the project file.
-- Load that module when play starts and unload it when play stops. A missing file or a failed load is a console error, and the scene still plays.
-- An entity script is a component with a class name. On play, call a start function if the class has one. Each frame, call an update function with the timestep.
-- Collision begin events already name the two entities in the console. Those events should also call a function on a script that asked for them, with the other entity's id.
-- Sandbox must run the same module the editor runs. The editor must not be required for scripts to execute.
 
 ### 3. Planes in the editor
 
@@ -72,9 +63,9 @@ The Materials folder exists. A material is only data on an entity.
 
 Box2D steps, writes transforms back, and logs the start of a contact. End of contact and sensors are not reported as their own events.
 
-- Log contact end the same way contact begin is logged.
+- Log contact end the same way contact begin is logged. Contact begin already calls a script that asked for collisions.
 - Keep trigger overlaps out of the blocking collision, which they already are, and still report them.
-- When scripts exist, both events go to the script hook from item 2. Until then, the console is enough.
+- Contact end and sensor overlaps should call that same script hook.
 
 ### 9. Entity parenting
 

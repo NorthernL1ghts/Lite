@@ -19,6 +19,7 @@ set_source_files_properties(${EDITOR_SHADER_SOURCES} PROPERTIES
 
 target_include_directories(Editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(Editor PRIVATE Lite)
+add_dependencies(Editor SandboxScripts)
 
 target_compile_definitions(Editor
     PRIVATE
