@@ -635,7 +635,7 @@ void EditorLayer::PlacePrefab(const std::string& path, float mouseX, float mouse
 
 void EditorLayer::PickObject(float mouseX, float mouseY)
 {
-	if (m_Scene == nullptr || m_Scene->IsPlaying())
+	if (m_Scene == nullptr)
 		return;
 
 	uint32_t id = m_Scene->Pick(m_ViewProjection, mouseX, mouseY, m_WindowW, m_WindowH);

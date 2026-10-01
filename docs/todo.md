@@ -17,15 +17,9 @@ Work left on the engine, the editor, and the player. Items already finished are 
 - **Prefabs.** File > Save Prefab, or the scene panel context menu, writes the selection to `assets/prefabs` as the same component YAML a scene entity uses. The plane name is only a hint. Double-click a prefab, or drag it into the viewport, to place a normal copy with a fresh name, its own physics body, and no second primary camera. The inspector shows the prefab path. Later edits to the file do not rewrite copies already in the scene.
 - **Scripts.** The scene panel sets the project script module. The path stays relative to the project file. Play loads that DLL and stop unloads it. A missing file or a failed load is a console error, and the scene still plays. A Script component stores a class name. On play, a class start function runs when it exists. Each frame, an update function receives the timestep. A collision begin calls a class that provided one, with the other entity's id. Sandbox and the editor load the same module. Sandbox ships `scripts/SandboxScripts.dll` with a `Bounce` class on the scene quad.
 - **Planes in the editor.** Add Plane creates a plane in front of the highest draw order. The name is edited on the row, and two planes cannot share a name regardless of capitalization. Deleting an empty plane removes it. Deleting a plane that still has entities moves those entities to World and says so in the panel. World stays while it has entities, and the scene keeps at least one plane. The list stays in document order. The number on the row is still the draw order.
+- **Selection while playing.** A viewport click selects the frontmost entity during play and pause, using the same pick as edit mode. Del, Ctrl+D, and removing a component stay available and still update physics.
 
 ## Next
-
-### 4. Selection while playing
-
-Clicking the viewport does not select an entity while the scene is playing. A gizmo drag still works if something was selected before play.
-
-- Allow a click during play and pause to select the frontmost entity, using the same pick as edit mode.
-- Keep Del, Ctrl+D, and component removal available during play. They already update physics.
 
 ### 5. Undo
 
