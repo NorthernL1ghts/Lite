@@ -3,11 +3,13 @@
 #include <cstdint>
 #include <string>
 
+class SceneHistory;
+
 class Inspector
 {
 public:
 	void Reset();
-	void Draw(std::uint32_t selected);
+	void Draw(std::uint32_t selected, SceneHistory& history);
 	void ApplyTexture(std::uint32_t selected, const std::string& path);
 
 private:

@@ -431,6 +431,7 @@ void EditorLayer::NewScene()
 {
 	m_Scene = Lite::CreateScope<Lite::Scene>("Untitled");
 	m_Scene->Create();
+	m_History.Clear();
 	Lite::Project::EnsureContentFolders();
 	Lite::Scene::SetActive(m_Scene.get());
 	m_Selected = 0;
@@ -469,6 +470,7 @@ void EditorLayer::OpenScene(const std::string& path)
 		Lite::Scene::SetActive(nullptr);
 
 	m_Scene = std::move(scene);
+	m_History.Clear();
 	Lite::Project::EnsureContentFolders();
 	Lite::Scene::SetActive(m_Scene.get());
 	m_Gizmo = {};
@@ -514,6 +516,7 @@ void EditorLayer::DuplicateSelected()
 
 	m_Selected = copy.GetId();
 	m_Inspector.Reset();
+	m_History.Commit(*m_Scene, m_Selected);
 	Lite::Console::Log(std::format("Duplicated {}", copy.GetName()));
 }
 
@@ -531,7 +534,30 @@ void EditorLayer::DeleteSelected()
 	m_Scene->DestroyEntity(m_Selected);
 	m_Selected = next;
 	m_Inspector.Reset();
+	m_History.Commit(*m_Scene, m_Selected);
 	Lite::Console::Log(std::format("Deleted {}", name));
+}
+
+void EditorLayer::UndoSelected()
+{
+	if (m_Scene == nullptr || !m_History.Undo(*m_Scene, m_Selected))
+		return;
+
+	m_Gizmo = {};
+	m_Inspector.Reset();
+	SyncName();
+	Lite::Console::Log("Undone");
+}
+
+void EditorLayer::RedoSelected()
+{
+	if (m_Scene == nullptr || !m_History.Redo(*m_Scene, m_Selected))
+		return;
+
+	m_Gizmo = {};
+	m_Inspector.Reset();
+	SyncName();
+	Lite::Console::Log("Redone");
 }
 
 void EditorLayer::SaveScene()
@@ -770,6 +796,15 @@ void EditorLayer::DrawMenu()
 		ImGui::EndMenu();
 	}
 
+	if (ImGui::BeginMenu("Edit"))
+	{
+		if (ImGui::MenuItem("Undo", "Ctrl+Z", false, m_Scene != nullptr))
+			UndoSelected();
+		if (ImGui::MenuItem("Redo", "Ctrl+Y", false, m_Scene != nullptr))
+			RedoSelected();
+		ImGui::EndMenu();
+	}
+
 	ImGui::SameLine(0.0f, 8.0f);
 	ImGui::TextDisabled("|");
 	ImGui::SameLine(0.0f, 8.0f);
@@ -810,8 +845,15 @@ void EditorLayer::OnImGuiRender()
 	m_WindowW = io.DisplaySize.x;
 	m_WindowH = io.DisplaySize.y;
 
+	if (m_Scene != nullptr)
+		m_History.Observe(*m_Scene, m_Selected, ImGui::GetActiveID() == 0);
+
 	if (!io.WantTextInput)
 	{
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false))
+			UndoSelected();
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false))
+			RedoSelected();
 		if (ImGui::IsKeyPressed(ImGuiKey_Delete, true))
 			DeleteSelected();
 		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false))
@@ -846,7 +888,7 @@ void EditorLayer::OnImGuiRender()
 
 	DrawScene();
 	DrawViewport();
-	m_Inspector.Draw(m_Selected);
+	m_Inspector.Draw(m_Selected, m_History);
 	DrawConsole();
 	m_Explorer.Draw(
 		[this](const std::string& path) { OpenScene(path); },
@@ -883,6 +925,8 @@ void EditorLayer::DrawScene()
 		ImGui::SetNextItemWidth(-1.0f);
 		if (ImGui::InputText("##SceneName", m_Name, sizeof(m_Name)))
 			m_Scene->SetName(m_Name);
+		if (ImGui::IsItemDeactivatedAfterEdit())
+			m_History.Commit(*m_Scene, m_Selected);
 	}
 
 	if (m_Scene == nullptr)
@@ -1201,7 +1245,11 @@ void EditorLayer::DrawViewport()
 		if (m_Scene != nullptr && ImGui::IsMouseDown(ImGuiMouseButton_Left))
 			Lite::ApplyGizmo(*m_Scene, m_ViewProjection, m_WindowW, m_WindowH, m_Selected, mouse.x, mouse.y, m_Gizmo);
 		else
+		{
 			m_Gizmo = {};
+			if (m_Scene != nullptr)
+				m_History.Commit(*m_Scene, m_Selected);
+		}
 	}
 	else if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && m_Scene != nullptr)
 	{

@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <sstream>
 
 namespace Lite {
 
@@ -1036,6 +1037,40 @@ namespace Lite {
 
 		root["planes"] = planes;
 		output << root;
+	}
+
+	std::string Scene::Snapshot() const
+	{
+		std::ostringstream output;
+		Write(output);
+		return output.str();
+	}
+
+	bool Scene::Restore(std::string_view document)
+	{
+		const std::string path = m_Path;
+		const ScenePlayback playback = m_Playback;
+		StopPhysics();
+		m_Planes.clear();
+		m_Records.clear();
+		m_NextPlane = 1;
+		m_NextId = 1;
+		m_Components = CreateScope<ComponentStorage>();
+
+		std::istringstream input { std::string(document) };
+		if (!Read(input))
+			return false;
+
+		m_Path = path;
+		m_Loaded = true;
+		ResolveTextures();
+		m_Playback = ScenePlayback::Stopped;
+		if (playback != ScenePlayback::Stopped)
+		{
+			StartPhysics();
+			m_Playback = playback;
+		}
+		return true;
 	}
 
 	void Scene::ResolveTextures()

@@ -163,6 +163,9 @@ namespace Lite {
 
 		static void Close(Scope<Scene>& scene);
 
+		std::string Snapshot() const;
+		bool Restore(std::string_view document);
+
 		bool Save();
 		bool SaveAs(std::string_view path);
 		static std::string Locate(std::string_view relativeToProject);

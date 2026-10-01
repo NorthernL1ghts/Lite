@@ -1,5 +1,7 @@
 #include <Inspector.h>
 
+#include <SceneHistory.h>
+
 #include <Lite/Scene/Console.h>
 #include <Lite/Scene/Scene.h>
 
@@ -76,7 +78,7 @@ void Inspector::ApplyTexture(std::uint32_t selected, const std::string& path)
 		Lite::Console::Log(std::format("Texture set: {}", path));
 }
 
-void Inspector::Draw(std::uint32_t selected)
+void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 {
 	ImGui::Begin("Inspector");
 	Lite::Scene* scene = Lite::Scene::GetActive();
@@ -108,12 +110,20 @@ void Inspector::Draw(std::uint32_t selected)
 	{
 		refreshPhysics();
 		m_SyncedId = 0;
+		history.Commit(*scene, entity.GetId());
 		Lite::Console::Log(std::format("Removed {}", label));
+	};
+
+	auto finish = [&]()
+	{
+		if (ImGui::IsItemDeactivatedAfterEdit())
+			history.Commit(*scene, entity.GetId());
 	};
 
 	ImGui::SetNextItemWidth(-1.0f);
 	if (ImGui::InputText("##ObjectName", m_ObjectName, sizeof(m_ObjectName)))
 		entity.SetName(m_ObjectName);
+	finish();
 
 	const std::string prefab = scene->GetPrefab(entity.GetId());
 	if (!prefab.empty())
@@ -130,14 +140,17 @@ void Inspector::Draw(std::uint32_t selected)
 		{
 			if (ImGui::DragFloat3("Position", &transform->Local.Position.x, 0.01f))
 				refreshPhysics();
+			finish();
 			float rotation = transform->Local.GetRotationZ();
 			if (ImGui::DragFloat("Rotation", &rotation, 0.01f))
 			{
 				transform->Local.SetRotationZ(rotation);
 				refreshPhysics();
 			}
+			finish();
 			if (ImGui::DragFloat3("Scale", &transform->Local.Scale.x, 0.01f))
 				refreshPhysics();
+			finish();
 		}
 	}
 
@@ -163,6 +176,7 @@ void Inspector::Draw(std::uint32_t selected)
 					camera->Far = 100.0f;
 			}
 		}
+		finish();
 		if (camera->Projection == Lite::CameraProjection::Orthographic)
 			ImGui::DragFloat("Size", &camera->Size, 0.01f, 0.25f, 12.0f);
 		else
@@ -170,9 +184,13 @@ void Inspector::Draw(std::uint32_t selected)
 			float degrees = camera->FieldOfView * (180.0f / 3.14159265f);
 			if (ImGui::DragFloat("Field of view", &degrees, 0.1f, 1.0f, 179.0f))
 				camera->FieldOfView = degrees * (3.14159265f / 180.0f);
+			finish();
 		}
+		finish();
 		ImGui::DragFloat("Near", &camera->Near, 0.01f);
+		finish();
 		ImGui::DragFloat("Far", &camera->Far, 0.01f);
+		finish();
 		bool primary = camera->Primary;
 		if (ImGui::Checkbox("Primary", &primary))
 		{
@@ -181,6 +199,7 @@ void Inspector::Draw(std::uint32_t selected)
 			else
 				camera->Primary = false;
 		}
+		finish();
 		}
 	}
 
@@ -198,6 +217,7 @@ void Inspector::Draw(std::uint32_t selected)
 			int current = static_cast<int>(mesh->Type);
 			if (ImGui::Combo("Type", &current, types, 3))
 				mesh->Type = static_cast<Lite::MeshType>(current);
+			finish();
 		}
 	}
 
@@ -217,41 +237,53 @@ void Inspector::Draw(std::uint32_t selected)
 		ImGui::SetNextItemWidth(-1.0f);
 		if (ImGui::InputText("##Shader", m_ShaderText, sizeof(m_ShaderText)))
 			material->Shader = m_ShaderText;
+		finish();
 
 		Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
 		ImGui::Checkbox("Vertex colors", &material->UseVertexColors);
+		finish();
 
 		if (material->UseVertexColors)
 		{
 			int colors = mesh != nullptr && mesh->Type == Lite::MeshType::Triangle ? 3 : 4;
 			for (int index = 0; index < colors; ++index)
+			{
 				ColorField(std::format("Color {}", index + 1).c_str(), material->Colors[index]);
+				finish();
+			}
 		}
 		else
 		{
 			ColorField("Color", material->Color);
+			finish();
 		}
 
 		float opacity = material->Color.w;
 		if (ImGui::SliderFloat("Opacity", &opacity, 0.0f, 1.0f))
 			material->Color.w = opacity;
+		finish();
 
 		if (mesh != nullptr && mesh->Type == Lite::MeshType::Sprite)
 		{
 			ImGui::DragFloat2("Tiling", &material->Tiling.x, 0.01f);
+			finish();
 			ImGui::AlignTextToFramePadding();
 			ImGui::TextUnformatted("Texture");
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(-1.0f);
 			if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
 				scene->AssignTexture(entity.GetId(), m_TextureText);
+			finish();
 		}
 		}
 		ImGui::EndGroup();
 		if (ImGui::BeginDragDropTarget())
 		{
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LITE_TEXTURE"))
+			{
 				ApplyTexture(entity.GetId(), static_cast<const char*>(payload->Data));
+				history.Commit(*scene, entity.GetId());
+			}
 			ImGui::EndDragDropTarget();
 		}
 	}
@@ -265,6 +297,7 @@ void Inspector::Draw(std::uint32_t selected)
 		}
 		else if (ImGui::DragFloat("Rate", &spin->Rate, 0.01f))
 			refreshPhysics();
+		finish();
 	}
 
 	if (Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>())
@@ -284,16 +317,22 @@ void Inspector::Draw(std::uint32_t selected)
 			body->Type = static_cast<Lite::BodyType>(current);
 			refreshPhysics();
 		}
+		finish();
 		if (ImGui::DragFloat("Mass", &body->Mass, 0.01f, 0.0f, 1000.0f))
 			refreshPhysics();
+		finish();
 		if (ImGui::DragFloat("Gravity", &body->GravityScale, 0.01f))
 			refreshPhysics();
+		finish();
 		if (ImGui::DragFloat2("Velocity", &body->LinearVelocity.x, 0.01f))
 			refreshPhysics();
+		finish();
 		if (ImGui::DragFloat("Angular", &body->AngularVelocity, 0.01f))
 			refreshPhysics();
+		finish();
 		if (ImGui::Checkbox("Freeze rotation", &body->FreezeRotation))
 			refreshPhysics();
+		finish();
 		}
 	}
 
@@ -308,10 +347,13 @@ void Inspector::Draw(std::uint32_t selected)
 		{
 			if (ImGui::DragFloat2("Box size", &box->Size.x, 0.01f, 0.0f, 100.0f))
 				refreshPhysics();
+			finish();
 			if (ImGui::DragFloat2("Box offset", &box->Offset.x, 0.01f))
 				refreshPhysics();
+			finish();
 			if (ImGui::Checkbox("Box trigger", &box->IsTrigger))
 				refreshPhysics();
+			finish();
 		}
 	}
 
@@ -326,10 +368,13 @@ void Inspector::Draw(std::uint32_t selected)
 		{
 			if (ImGui::DragFloat("Radius", &circle->Radius, 0.01f, 0.0f, 100.0f))
 				refreshPhysics();
+			finish();
 			if (ImGui::DragFloat2("Circle offset", &circle->Offset.x, 0.01f))
 				refreshPhysics();
+			finish();
 			if (ImGui::Checkbox("Circle trigger", &circle->IsTrigger))
 				refreshPhysics();
+			finish();
 		}
 	}
 
@@ -342,6 +387,7 @@ void Inspector::Draw(std::uint32_t selected)
 		}
 		else
 			ImGui::DragInt("Order", &sorting->Order);
+		finish();
 	}
 
 	if (Lite::ScriptComponent* script = entity.Get<Lite::ScriptComponent>())
@@ -356,6 +402,7 @@ void Inspector::Draw(std::uint32_t selected)
 			ImGui::SetNextItemWidth(-1.0f);
 			if (ImGui::InputText("##ScriptClass", m_ScriptText, sizeof(m_ScriptText)))
 				script->Class = m_ScriptText;
+			finish();
 			ImGui::TextDisabled("Class name in the project script module");
 		}
 	}
@@ -375,6 +422,7 @@ void Inspector::Draw(std::uint32_t selected)
 	{
 		catalog[addIndex].Add(entity);
 		refreshPhysics();
+		history.Commit(*scene, entity.GetId());
 	}
 
 	ImGui::End();

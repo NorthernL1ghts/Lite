@@ -18,16 +18,9 @@ Work left on the engine, the editor, and the player. Items already finished are 
 - **Scripts.** The scene panel sets the project script module. The path stays relative to the project file. Play loads that DLL and stop unloads it. A missing file or a failed load is a console error, and the scene still plays. A Script component stores a class name. On play, a class start function runs when it exists. Each frame, an update function receives the timestep. A collision begin calls a class that provided one, with the other entity's id. Sandbox and the editor load the same module. Sandbox ships `scripts/SandboxScripts.dll` with a `Bounce` class on the scene quad.
 - **Planes in the editor.** Add Plane creates a plane in front of the highest draw order. The name is edited on the row, and two planes cannot share a name regardless of capitalization. Deleting an empty plane removes it. Deleting a plane that still has entities moves those entities to World and says so in the panel. World stays while it has entities, and the scene keeps at least one plane. The list stays in document order. The number on the row is still the draw order.
 - **Selection while playing.** A viewport click selects the frontmost entity during play and pause, using the same pick as edit mode. Del, Ctrl+D, and removing a component stay available and still update physics.
+- **Undo.** The open scene has one undo stack. Ctrl+Z undoes and Ctrl+Y redoes an inspector edit, a gizmo drag, a delete, or an added component. A drag or a field edit becomes one step when it ends. Opening another scene clears the stack. Play and stop are not steps.
 
 ## Next
-
-### 5. Undo
-
-Inspector edits, gizmo drags, deletes, and component adds have no undo.
-
-- One undo stack per open scene. Ctrl+Z undoes, Ctrl+Y redoes.
-- Record a step when a drag or a field edit ends, not on every mouse move.
-- Clear the stack when another scene is opened. Play and stop do not need to undo the simulation.
 
 ### 6. Asset paths
 

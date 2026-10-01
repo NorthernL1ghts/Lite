@@ -3,6 +3,7 @@
 #include <Explorer.h>
 #include <Inspector.h>
 #include <SceneBrowser.h>
+#include <SceneHistory.h>
 
 #include <Lite/Core/Layer.h>
 #include <Lite/Renderer/OrthographicCamera.h>
@@ -42,6 +43,8 @@ private:
 	void SaveScene();
 	void DuplicateSelected();
 	void DeleteSelected();
+	void UndoSelected();
+	void RedoSelected();
 	void SyncName();
 	bool SceneMatches(const std::filesystem::path& path) const;
 	void PickObject(float mouseX, float mouseY);
@@ -72,6 +75,7 @@ private:
 	uint32_t m_Selected = 0;
 	Lite::GizmoDrag m_Gizmo;
 	Inspector m_Inspector;
+	SceneHistory m_History;
 	SceneBrowser m_Browser;
 	Explorer m_Explorer;
 	bool m_ShowInfo = false;
