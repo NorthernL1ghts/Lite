@@ -218,6 +218,94 @@ namespace Lite {
 		return m_Planes.back().Id;
 	}
 
+	std::string Scene::UniquePlaneName(std::string name) const
+	{
+		if (name.empty())
+			name = "Plane";
+		if (FindPlane(name) == 0)
+			return name;
+
+		for (int index = 2; index < 1000; ++index)
+		{
+			std::string candidate = std::format("{} {}", name, index);
+			if (FindPlane(candidate) == 0)
+				return candidate;
+		}
+
+		return name;
+	}
+
+	uint32_t Scene::AddPlane()
+	{
+		return CreatePlane(UniquePlaneName("Plane"));
+	}
+
+	bool Scene::SetPlaneName(uint32_t id, std::string name)
+	{
+		if (name.empty())
+			return false;
+
+		const uint32_t existing = FindPlane(name);
+		if (existing != 0 && existing != id)
+			return false;
+
+		for (Plane& plane : m_Planes)
+		{
+			if (plane.Id != id)
+				continue;
+
+			plane.Name = std::move(name);
+			return true;
+		}
+
+		return false;
+	}
+
+	Scene::PlaneRemove Scene::RemovePlane(uint32_t id)
+	{
+		auto found = std::find_if(m_Planes.begin(), m_Planes.end(), [&](const Plane& plane)
+		{
+			return plane.Id == id;
+		});
+		if (found == m_Planes.end())
+			return PlaneRemove::Missing;
+		if (m_Planes.size() <= 1)
+			return PlaneRemove::LastPlane;
+
+		int count = 0;
+		for (const Record& record : m_Records)
+		{
+			if (record.Plane == id)
+				++count;
+		}
+
+		const bool world = ToLower(found->Name) == "world";
+		if (count > 0 && world)
+			return PlaneRemove::HasEntities;
+
+		if (count > 0)
+		{
+			uint32_t destination = FindPlane("World");
+			if (destination == 0 || destination == id)
+				destination = CreatePlane("World");
+
+			for (Record& record : m_Records)
+			{
+				if (record.Plane == id)
+					record.Plane = destination;
+			}
+		}
+
+		found = std::find_if(m_Planes.begin(), m_Planes.end(), [&](const Plane& plane)
+		{
+			return plane.Id == id;
+		});
+		if (found != m_Planes.end())
+			m_Planes.erase(found);
+
+		return count > 0 ? PlaneRemove::MovedToWorld : PlaneRemove::Removed;
+	}
+
 	uint32_t Scene::FindPlane(std::string_view name) const
 	{
 		const std::string lower = ToLower(name);

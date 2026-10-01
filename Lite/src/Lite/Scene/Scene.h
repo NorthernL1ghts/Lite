@@ -99,8 +99,21 @@ namespace Lite {
 		};
 
 		uint32_t CreatePlane(std::string name);
+		uint32_t AddPlane();
 		uint32_t FindPlane(std::string_view name) const;
+		bool SetPlaneName(uint32_t id, std::string name);
 		void SetPlaneOrder(uint32_t id, int order);
+
+		enum class PlaneRemove
+		{
+			Removed,
+			MovedToWorld,
+			HasEntities,
+			LastPlane,
+			Missing
+		};
+
+		PlaneRemove RemovePlane(uint32_t id);
 		const std::vector<Plane>& GetPlanes() const { return m_Planes; }
 
 		Entity CreateEntity(std::string name);
@@ -180,6 +193,7 @@ namespace Lite {
 		};
 
 		std::string UniqueEntityName(std::string name);
+		std::string UniquePlaneName(std::string name) const;
 
 		Record* FindRecord(uint32_t id);
 		const Record* FindRecord(uint32_t id) const;

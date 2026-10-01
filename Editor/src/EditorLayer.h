@@ -62,6 +62,7 @@ private:
 	float m_WindowH = 0.0f;
 	Lite::Scope<Lite::Scene> m_Scene;
 	std::filesystem::path m_ProjectPath;
+	std::string m_PlaneNotice;
 	std::string m_ScriptSynced;
 	std::string m_ScriptBrowserDir;
 	char m_ScriptModule[512] {};

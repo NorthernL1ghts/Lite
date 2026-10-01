@@ -16,17 +16,9 @@ Work left on the engine, the editor, and the player. Items already finished are 
 - **Core.** `FileSystem::Contains` is the path-inside-folder check. The layer stack walks forward and backward through one pair of helpers. The two loggers share one setup. The application passes the native window as an untyped handle.
 - **Prefabs.** File > Save Prefab, or the scene panel context menu, writes the selection to `assets/prefabs` as the same component YAML a scene entity uses. The plane name is only a hint. Double-click a prefab, or drag it into the viewport, to place a normal copy with a fresh name, its own physics body, and no second primary camera. The inspector shows the prefab path. Later edits to the file do not rewrite copies already in the scene.
 - **Scripts.** The scene panel sets the project script module. The path stays relative to the project file. Play loads that DLL and stop unloads it. A missing file or a failed load is a console error, and the scene still plays. A Script component stores a class name. On play, a class start function runs when it exists. Each frame, an update function receives the timestep. A collision begin calls a class that provided one, with the other entity's id. Sandbox and the editor load the same module. Sandbox ships `scripts/SandboxScripts.dll` with a `Bounce` class on the scene quad.
+- **Planes in the editor.** Add Plane creates a plane in front of the highest draw order. The name is edited on the row, and two planes cannot share a name regardless of capitalization. Deleting an empty plane removes it. Deleting a plane that still has entities moves those entities to World and says so in the panel. World stays while it has entities, and the scene keeps at least one plane. The list stays in document order. The number on the row is still the draw order.
 
 ## Next
-
-### 3. Planes in the editor
-
-A scene can create planes in code, and the panel can change a plane's draw order. The panel cannot add, rename, or remove a plane.
-
-- Add a plane from the scene panel. It is created in front of the current highest order.
-- Rename a plane in place. `FindPlane` already compares names without case, so two planes should not end up with the same name.
-- Delete a plane only when it has no entities, or move those entities to World first and say so in the panel.
-- Keep the sidebar in document order. Draw order stays the number on the row.
 
 ### 4. Selection while playing
 
