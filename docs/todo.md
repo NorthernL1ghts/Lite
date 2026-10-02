@@ -21,16 +21,9 @@ Work left on the engine, the editor, and the player. Items already finished are 
 - **Undo.** The open scene has one undo stack. Ctrl+Z undoes and Ctrl+Y redoes an inspector edit, a gizmo drag, a delete, or an added component. A drag or a field edit becomes one step when it ends. Opening another scene clears the stack. Play and stop are not steps.
 - **Asset paths.** The asset registry turns a texture path into the form that is saved. A file inside the project asset folder is stored relative to that folder. An absolute path outside the project is kept. Loading accepts either form, including an older `assets/...` path. The material field shows the stored path. The same file is loaded once.
 - **Materials as files.** File > Save Material, or the scene panel context menu, writes the selected `MaterialComponent` to `assets/materials` as `*.material` YAML. The file stores the shader, color, vertex colors, tiling, opacity, and texture path. Dragging that file onto an entity's material copies those fields onto the same component. Sandbox includes `Red.material`.
+- **Physics callbacks.** Contact end is logged the same way contact begin is, and it calls the collision script. A trigger stays out of the blocking collision and still reports the overlap, including when that overlap ends. Those reports use the same script hook.
 
 ## Next
-
-### 8. Physics callbacks
-
-Box2D steps, writes transforms back, and logs the start of a contact. End of contact and sensors are not reported as their own events.
-
-- Log contact end the same way contact begin is logged. Contact begin already calls a script that asked for collisions.
-- Keep trigger overlaps out of the blocking collision, which they already are, and still report them.
-- Contact end and sensor overlaps should call that same script hook.
 
 ### 9. Entity parenting
 

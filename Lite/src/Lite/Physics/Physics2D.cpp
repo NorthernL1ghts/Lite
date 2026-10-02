@@ -47,9 +47,42 @@ namespace Lite {
 			shape.density = trigger ? 0.0f : 1.0f;
 			shape.isSensor = trigger;
 			shape.enableContactEvents = !trigger;
+			// A sensor only reports a visitor that also has sensor events enabled.
+			shape.enableSensorEvents = true;
 			shape.material.friction = 0.5f;
 			shape.material.restitution = 0.15f;
 			return shape;
+		}
+
+		uint32_t EntityId(b2ShapeId shape)
+		{
+			if (!b2Shape_IsValid(shape))
+				return 0;
+
+			b2BodyId body = b2Shape_GetBody(shape);
+			if (!b2Body_IsValid(body))
+				return 0;
+
+			return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(b2Body_GetUserData(body)));
+		}
+
+		std::string EntityName(Scene& scene, uint32_t id)
+		{
+			Entity entity = scene.GetEntity(id);
+			if (!entity || entity.GetName().empty())
+				return id == 0 ? "unknown" : "entity";
+			return entity.GetName();
+		}
+
+		void ReportOverlap(Scene& scene, b2ShapeId first, b2ShapeId second, const char* label)
+		{
+			if (!b2Shape_IsValid(first) || !b2Shape_IsValid(second))
+				return;
+
+			uint32_t firstId = EntityId(first);
+			uint32_t secondId = EntityId(second);
+			Console::Log(std::format("{}: {} and {}", label, EntityName(scene, firstId), EntityName(scene, secondId)));
+			ScriptRuntime::OnCollision(scene, firstId, secondId);
 		}
 
 		bool AddBox(b2BodyId body, const Transform& transform, const BoxCollider2DComponent& box)
@@ -309,27 +342,15 @@ namespace Lite {
 
 		b2ContactEvents contacts = b2World_GetContactEvents(m_Physics->World);
 		for (int index = 0; index < contacts.beginCount; ++index)
-		{
-			b2BodyId first = b2Shape_GetBody(contacts.beginEvents[index].shapeIdA);
-			b2BodyId second = b2Shape_GetBody(contacts.beginEvents[index].shapeIdB);
-			auto idOf = [](b2BodyId body) -> uint32_t
-			{
-				if (!b2Body_IsValid(body))
-					return 0;
-				return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(b2Body_GetUserData(body)));
-			};
-			auto nameOf = [this](uint32_t id)
-			{
-				Entity entity = GetEntity(id);
-				if (!entity || entity.GetName().empty())
-					return std::string(id == 0 ? "unknown" : "entity");
-				return entity.GetName();
-			};
-			uint32_t firstId = idOf(first);
-			uint32_t secondId = idOf(second);
-			Console::Log(std::format("Collision: {} and {}", nameOf(firstId), nameOf(secondId)));
-			ScriptRuntime::OnCollision(*this, firstId, secondId);
-		}
+			ReportOverlap(*this, contacts.beginEvents[index].shapeIdA, contacts.beginEvents[index].shapeIdB, "Collision");
+		for (int index = 0; index < contacts.endCount; ++index)
+			ReportOverlap(*this, contacts.endEvents[index].shapeIdA, contacts.endEvents[index].shapeIdB, "Collision end");
+
+		b2SensorEvents sensors = b2World_GetSensorEvents(m_Physics->World);
+		for (int index = 0; index < sensors.beginCount; ++index)
+			ReportOverlap(*this, sensors.beginEvents[index].sensorShapeId, sensors.beginEvents[index].visitorShapeId, "Trigger");
+		for (int index = 0; index < sensors.endCount; ++index)
+			ReportOverlap(*this, sensors.endEvents[index].sensorShapeId, sensors.endEvents[index].visitorShapeId, "Trigger end");
 
 		for (const PhysicsStorage::Body& body : m_Physics->Bodies)
 		{
