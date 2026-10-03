@@ -11,6 +11,8 @@ material:
   color: [0.86, 0.16, 0.18, 1]
   tiling: [1, 1]
   vertex-colors: false
+  roughness: 0.3
+  metallic: 0.75
 rigidbody2d:
   type: dynamic
   mass: 1

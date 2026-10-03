@@ -2,13 +2,16 @@
 
 #include <SceneHistory.h>
 
+#include <Lite/Project/Project.h>
 #include <Lite/Scene/Console.h>
 #include <Lite/Scene/Scene.h>
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <format>
 #include <string>
 
@@ -37,6 +40,42 @@ namespace {
 		const bool pressed = ImGui::SmallButton("Remove");
 		ImGui::PopID();
 		return pressed;
+	}
+
+	void SaveMaterial(Lite::Scene& scene, Lite::Entity entity)
+	{
+		if (Lite::Project::GetActive() == nullptr)
+		{
+			Lite::Console::Log("Failed to save material: open a project first");
+			return;
+		}
+		if (!entity || !entity.Has<Lite::MaterialComponent>())
+		{
+			Lite::Console::Log("Failed to save material: the entity has no material");
+			return;
+		}
+
+		std::string name = entity.GetName();
+		if (name.empty())
+			name = "Material";
+		for (char& character : name)
+		{
+			if (std::string("\\/:*?\"<>|").find(character) != std::string::npos)
+				character = '_';
+		}
+
+		Lite::Project::EnsureContentFolders();
+		std::filesystem::path file = Lite::Project::GetAssetDirectory() / "materials" / (name + ".material");
+		scene.SaveMaterial(entity.GetId(), file);
+	}
+
+	bool SurfaceSlider(const char* label, float& value, float min, float max)
+	{
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted(label);
+		ImGui::SameLine(110.0f);
+		ImGui::SetNextItemWidth(-1.0f);
+		return ImGui::SliderFloat(std::format("##{}", label).c_str(), &value, min, max, "%.2f");
 	}
 
 	const char* EntryLabel(Lite::Entity entity, const char* name, const char* fallback)
@@ -234,6 +273,63 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 		}
 		else
 		{
+		Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
+		const bool triangle = mesh != nullptr && mesh->Type == Lite::MeshType::Triangle;
+		if (!material->UseVertexColors)
+		{
+			ColorField("Color", material->Color);
+			finish();
+		}
+
+		float opacity = material->Color.w;
+		if (SurfaceSlider("Opacity", opacity, 0.0f, 1.0f))
+			material->Color.w = opacity;
+		finish();
+		if (SurfaceSlider("Roughness", material->Roughness, 0.0f, 1.0f))
+			material->Roughness = std::clamp(material->Roughness, 0.0f, 1.0f);
+		finish();
+		if (SurfaceSlider("Metallic", material->Metallic, 0.0f, 1.0f))
+			material->Metallic = std::clamp(material->Metallic, 0.0f, 1.0f);
+		finish();
+		if (SurfaceSlider("Emission", material->Emission, 0.0f, 4.0f))
+			material->Emission = std::max(material->Emission, 0.0f);
+		finish();
+		ImGui::TextDisabled("0 roughness is smooth. 1 is matte. Emission adds glow.");
+
+		ImGui::Checkbox("Vertex colors", &material->UseVertexColors);
+		finish();
+		if (material->UseVertexColors)
+		{
+			const char* quadNames[] = { "Bottom left", "Bottom right", "Top right", "Top left" };
+			const char* triangleNames[] = { "Bottom", "Upper left", "Upper right" };
+			int colors = triangle ? 3 : 4;
+			for (int index = 0; index < colors; ++index)
+			{
+				const char* name = triangle ? triangleNames[index] : quadNames[index];
+				ColorField(name, material->Colors[index]);
+				finish();
+			}
+		}
+
+		ImGui::DragFloat2("Tiling", &material->Tiling.x, 0.01f, 0.0f, 64.0f);
+		finish();
+		ImGui::DragFloat2("Offset", &material->Offset.x, 0.01f);
+		finish();
+
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted("Texture");
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(-1.0f);
+		if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
+			scene->AssignTexture(entity.GetId(), m_TextureText);
+		if (ImGui::IsItemDeactivatedAfterEdit())
+			std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material->TexturePath.c_str());
+		finish();
+		ImGui::TextDisabled("Drop a texture or a .material file on this section.");
+
+		if (ImGui::Button("Save Material"))
+			SaveMaterial(*scene, entity);
+		ImGui::SameLine();
 		ImGui::AlignTextToFramePadding();
 		ImGui::TextUnformatted("Shader");
 		ImGui::SameLine();
@@ -241,45 +337,6 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 		if (ImGui::InputText("##Shader", m_ShaderText, sizeof(m_ShaderText)))
 			material->Shader = m_ShaderText;
 		finish();
-
-		Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
-		ImGui::Checkbox("Vertex colors", &material->UseVertexColors);
-		finish();
-
-		if (material->UseVertexColors)
-		{
-			int colors = mesh != nullptr && mesh->Type == Lite::MeshType::Triangle ? 3 : 4;
-			for (int index = 0; index < colors; ++index)
-			{
-				ColorField(std::format("Color {}", index + 1).c_str(), material->Colors[index]);
-				finish();
-			}
-		}
-		else
-		{
-			ColorField("Color", material->Color);
-			finish();
-		}
-
-		float opacity = material->Color.w;
-		if (ImGui::SliderFloat("Opacity", &opacity, 0.0f, 1.0f))
-			material->Color.w = opacity;
-		finish();
-
-		if (mesh != nullptr && mesh->Type == Lite::MeshType::Sprite)
-		{
-			ImGui::DragFloat2("Tiling", &material->Tiling.x, 0.01f);
-			finish();
-			ImGui::AlignTextToFramePadding();
-			ImGui::TextUnformatted("Texture");
-			ImGui::SameLine();
-			ImGui::SetNextItemWidth(-1.0f);
-			if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
-				scene->AssignTexture(entity.GetId(), m_TextureText);
-			if (ImGui::IsItemDeactivatedAfterEdit())
-				std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material->TexturePath.c_str());
-			finish();
-		}
 		}
 		ImGui::EndGroup();
 		if (ImGui::BeginDragDropTarget())

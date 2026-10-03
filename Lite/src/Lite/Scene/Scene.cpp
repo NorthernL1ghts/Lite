@@ -97,27 +97,53 @@ namespace Lite {
 			return FileSystem::ExecutableDirectory() / file;
 		}
 
+		Vec4 WithOpacity(Vec4 color, float opacity)
+		{
+			color.w *= opacity;
+			return color;
+		}
+
+		DrawSurface SurfaceOf(const MaterialComponent& material)
+		{
+			DrawSurface surface;
+			surface.Roughness = material.Roughness;
+			surface.Metallic = material.Metallic;
+			surface.Emission = material.Emission;
+			surface.Offset = material.Offset;
+			return surface;
+		}
+
 		void SubmitMesh(const Transform& transform, const MaterialComponent& material, MeshType type)
 		{
+			const DrawSurface surface = SurfaceOf(material);
+			const float opacity = material.Color.w;
 			if (type == MeshType::Triangle)
 			{
-				if (material.UseVertexColors)
-					Renderer2D::DrawTriangle(transform, material.Colors[0], material.Colors[1], material.Colors[2]);
+				const Vec4 first = material.UseVertexColors ? WithOpacity(material.Colors[0], opacity) : material.Color;
+				const Vec4 second = material.UseVertexColors ? WithOpacity(material.Colors[1], opacity) : material.Color;
+				const Vec4 third = material.UseVertexColors ? WithOpacity(material.Colors[2], opacity) : material.Color;
+				if (material.Texture)
+					Renderer2D::DrawTriangle(transform, material.Texture, material.Tiling, first, second, third, surface);
 				else
-					Renderer2D::DrawTriangle(transform, material.Color, material.Color, material.Color);
+					Renderer2D::DrawTriangle(transform, first, second, third, surface);
 				return;
 			}
 
 			if (material.UseVertexColors)
 			{
-				Renderer2D::DrawQuad(transform, material.Texture, material.Tiling, material.Colors[0], material.Colors[1], material.Colors[2], material.Colors[3]);
+				Renderer2D::DrawQuad(transform, material.Texture, material.Tiling,
+					WithOpacity(material.Colors[0], opacity),
+					WithOpacity(material.Colors[1], opacity),
+					WithOpacity(material.Colors[2], opacity),
+					WithOpacity(material.Colors[3], opacity),
+					surface);
 				return;
 			}
 
-			if (type == MeshType::Sprite)
-				Renderer2D::DrawQuad(transform, material.Texture, material.Tiling, material.Color);
+			if (material.Texture || type == MeshType::Sprite)
+				Renderer2D::DrawQuad(transform, material.Texture, material.Tiling, material.Color, surface);
 			else
-				Renderer2D::DrawQuad(transform, material.Color);
+				Renderer2D::DrawQuad(transform, material.Color, surface);
 		}
 
 	}

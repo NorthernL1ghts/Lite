@@ -29,6 +29,14 @@ namespace Lite {
 				material->Color = ReadVec4(node["color"], material->Color);
 			if (node["tiling"])
 				material->Tiling = ReadVec2(node["tiling"], material->Tiling);
+			if (node["offset"])
+				material->Offset = ReadVec2(node["offset"], material->Offset);
+			if (node["roughness"])
+				material->Roughness = node["roughness"].as<float>();
+			if (node["metallic"])
+				material->Metallic = node["metallic"].as<float>();
+			if (node["emission"])
+				material->Emission = node["emission"].as<float>();
 			if (node["texture"])
 				material->TexturePath = node["texture"].as<std::string>();
 			if (node["vertex-colors"])
@@ -52,6 +60,10 @@ namespace Lite {
 			node["shader"] = material.Shader.empty() ? kDefaultShader : material.Shader;
 			node["color"] = WriteVec4(material.Color);
 			node["tiling"] = WriteVec2(material.Tiling);
+			node["offset"] = WriteVec2(material.Offset);
+			node["roughness"] = material.Roughness;
+			node["metallic"] = material.Metallic;
+			node["emission"] = material.Emission;
 			if (!material.TexturePath.empty())
 				node["texture"] = material.TexturePath;
 			node["vertex-colors"] = material.UseVertexColors;

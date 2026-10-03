@@ -17,6 +17,10 @@ namespace Lite {
 		Vec4 Colors[4] {};
 		bool UseVertexColors = false;
 		Vec2 Tiling { 1.0f, 1.0f };
+		Vec2 Offset {};
+		float Roughness = 1.0f;
+		float Metallic = 0.0f;
+		float Emission = 0.0f;
 		std::string TexturePath;
 		Ref<Texture> Texture;
 	};

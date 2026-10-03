@@ -33,7 +33,14 @@ namespace Lite {
 			float a = 1.0f;
 			float u = 0.0f;
 			float v = 0.0f;
+			float meshU = 0.0f;
+			float meshV = 0.0f;
 			float textureIndex = 0.0f;
+			float pad = 0.0f;
+			float roughness = 1.0f;
+			float metallic = 0.0f;
+			float emission = 0.0f;
+			float padSurface = 0.0f;
 		};
 
 		ShaderLibrary s_ShaderLibrary;
@@ -54,11 +61,13 @@ namespace Lite {
 		{
 			VertexLayout layout;
 			layout.Stride = sizeof(BatchVertex);
-			layout.Count = 4;
+			layout.Count = 6;
 			layout.Attributes[0] = { 0, VertexFormat::Float2, 0 };
 			layout.Attributes[1] = { 1, VertexFormat::Float4, sizeof(float) * 2 };
 			layout.Attributes[2] = { 2, VertexFormat::Float2, sizeof(float) * 6 };
-			layout.Attributes[3] = { 3, VertexFormat::Float, sizeof(float) * 8 };
+			layout.Attributes[3] = { 3, VertexFormat::Float2, sizeof(float) * 8 };
+			layout.Attributes[4] = { 4, VertexFormat::Float, sizeof(float) * 10 };
+			layout.Attributes[5] = { 5, VertexFormat::Float4, sizeof(float) * 12 };
 			return layout;
 		}
 
@@ -207,20 +216,23 @@ namespace Lite {
 			};
 		}
 
-		void Push(const Transform& transform, std::span<const Vec2> corners, std::span<const Vec4> colors, std::span<const Vec2> uvs, float textureIndex)
+		void Push(const Transform& transform, std::span<const Vec2> corners, std::span<const Vec4> colors, std::span<const Vec2> uvs, float textureIndex, const DrawSurface& surface)
 		{
 			const SpriteBasis basis = Basis(transform);
 			const uint16_t base = static_cast<uint16_t>(s_Vertices.size());
 			for (size_t corner = 0; corner < corners.size(); ++corner)
 			{
-				const Vec2 world = Place(basis, corners[corner]);
+				const Vec2 local = corners[corner];
+				const Vec2 world = Place(basis, local);
 				const Vec4& color = colors[corner];
-				const Vec2 uv = corner < uvs.size() ? uvs[corner] : Vec2 {};
+				const Vec2 uv = (corner < uvs.size() ? uvs[corner] : Vec2 {}) + surface.Offset;
 				s_Vertices.push_back({
 					world.x, world.y,
 					color.x, color.y, color.z, color.w,
 					uv.x, uv.y,
-					textureIndex
+					local.x + 0.5f, local.y + 0.5f,
+					textureIndex, 0.0f,
+					surface.Roughness, surface.Metallic, surface.Emission, 0.0f
 				});
 			}
 
@@ -322,7 +334,7 @@ namespace Lite {
 		ResetSlots();
 	}
 
-	void Renderer2D::DrawQuad(const Transform& transform, const Vec4& color)
+	void Renderer2D::DrawQuad(const Transform& transform, const Vec4& color, const DrawSurface& surface)
 	{
 		if (!s_Ready || !Renderer::IsFrameActive())
 			return;
@@ -331,16 +343,16 @@ namespace Lite {
 			Flush();
 
 		const Vec4 colors[4] = { color, color, color, color };
-		Push(transform, kQuadCorners, colors, {}, TextureSlot({}));
+		Push(transform, kQuadCorners, colors, {}, TextureSlot({}), surface);
 	}
 
-	void Renderer2D::DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& tint)
+	void Renderer2D::DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& tint, const DrawSurface& surface)
 	{
 		const Vec4 colors[4] = { tint, tint, tint, tint };
-		DrawQuad(transform, texture, tiling, colors[0], colors[1], colors[2], colors[3]);
+		DrawQuad(transform, texture, tiling, colors[0], colors[1], colors[2], colors[3], surface);
 	}
 
-	void Renderer2D::DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& bottomLeft, const Vec4& bottomRight, const Vec4& topRight, const Vec4& topLeft)
+	void Renderer2D::DrawQuad(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& bottomLeft, const Vec4& bottomRight, const Vec4& topRight, const Vec4& topLeft, const DrawSurface& surface)
 	{
 		if (!s_Ready || !Renderer::IsFrameActive())
 			return;
@@ -355,10 +367,15 @@ namespace Lite {
 			{ tiling.x, tiling.y },
 			{ 0.0f, tiling.y }
 		};
-		Push(transform, kQuadCorners, colors, uvs, TextureSlot(texture));
+		Push(transform, kQuadCorners, colors, uvs, TextureSlot(texture), surface);
 	}
 
-	void Renderer2D::DrawTriangle(const Transform& transform, const Vec4& first, const Vec4& second, const Vec4& third)
+	void Renderer2D::DrawTriangle(const Transform& transform, const Vec4& first, const Vec4& second, const Vec4& third, const DrawSurface& surface)
+	{
+		DrawTriangle(transform, {}, {}, first, second, third, surface);
+	}
+
+	void Renderer2D::DrawTriangle(const Transform& transform, const Ref<Texture>& texture, const Vec2& tiling, const Vec4& first, const Vec4& second, const Vec4& third, const DrawSurface& surface)
 	{
 		if (!s_Ready || !Renderer::IsFrameActive())
 			return;
@@ -367,7 +384,12 @@ namespace Lite {
 			Flush();
 
 		const Vec4 colors[3] = { first, second, third };
-		Push(transform, kTriangleCorners, colors, {}, TextureSlot({}));
+		const Vec2 uvs[3] = {
+			{ 0.5f * tiling.x, 0.0f },
+			{ 0.0f, tiling.y },
+			{ tiling.x, tiling.y }
+		};
+		Push(transform, kTriangleCorners, colors, uvs, TextureSlot(texture), surface);
 	}
 
 	void Renderer2D::Flush()

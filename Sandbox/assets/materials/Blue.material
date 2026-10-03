@@ -2,3 +2,6 @@ shader: Batch
 color: [0.2, 0.45, 0.95, 1]
 tiling: [1, 1]
 vertex-colors: false
+roughness: 0.15
+metallic: 0.4
+emission: 0

@@ -114,7 +114,7 @@ quad.Add<BoxCollider2DComponent>();
 | Transform | Position, rotation, and scale |
 | Camera | Orthographic or perspective, and whether it is the primary camera |
 | Mesh | Quad, triangle, or sprite |
-| Material | Shader name, color, vertex colors, tiling, and an optional texture |
+| Material | Color, opacity, roughness, metallic, emission, vertex colors, tiling, offset, and an optional texture |
 | Spin | A constant spin, in radians per second, applied when play starts |
 | Rigidbody 2D | Static, kinematic, or dynamic, plus mass, gravity, velocity, and freeze rotation |
 | Box Collider 2D | Size, offset, and trigger |
