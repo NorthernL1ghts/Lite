@@ -30,23 +30,13 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Inspector layout.** Transform, Mesh, and Material start open. The other sections start closed. Color and opacity stay on the material. Surface holds roughness, metallic, and emission. More holds vertex colors, tiling, offset, the texture, and Save Material. A rigidbody shows the body type and freeze rotation first. Mass, gravity, and velocity are under Motion. Camera near and far are under Clipping. The color control is a swatch. Clicking it opens the picker.
 - **Editor chrome.** The scene list is entity names. Children sit under their parent. The project path and the script module are under Project. Play, pause, and reset stay off the File, Edit, and View menus. The viewport status sits on a dark badge. Explorer actions and the folder path wrap instead of drawing on top of each other.
 - **Sandbox scene.** `assets/scenes/Sandbox.scene` shows one use of each current feature: three planes, a sprite, a quad, and a triangle, an orthographic camera and a perspective camera that is not primary, a static ground, a dynamic crate and ball, a kinematic spinner, a trigger, `Bounce`, `Patrol`, and `Sensor`, a parent with two children, and prefab links on the ground, crate, and ball. The crate and the ball start above the ground.
+- **Scene check.** `SceneCheck` loads `Sandbox/assets/scenes/Sandbox.scene` with no window. Background is behind World, and World is behind Foreground. Before play, the bottom of the crate and the bottom of the ball are above the top of the ground. `scripts\build.bat --check` builds, runs that program, and does not open the editor. A failure prints one line and exits non-zero.
 
 ## Next
 
-### 1. Scene check
+Do these in order.
 
-There is no automated check for scene load, draw order, or physics. `Application::Run` always creates a window, ImGui, and the Vulkan device, so the check cannot be that loop.
-
-- A small console program loads `Sandbox/assets/scenes/Sandbox.scene` with no window.
-- Background is behind World, and World is behind Foreground.
-- Before play, the crate and the ball are above the ground.
-- `scripts/build.bat` grows a flag that runs the check and does not open the editor. A failure is a non-zero exit and a short message.
-
-## Soon
-
-These are the next engine and editor sessions after the scene check. Do them in this order.
-
-### 2. Viewport target
+### 1. Viewport target
 
 The scene is drawn into the swapchain. The panels only cover that image. The camera uses the window size, not the Viewport panel.
 
@@ -56,7 +46,7 @@ The scene is drawn into the swapchain. The panels only cover that image. The cam
 - Resizing the panel resizes the target. A zero-size panel draws nothing and does not crash.
 - Sandbox keeps drawing into its window. It has no viewport panel.
 
-### 3. Batch flush
+### 2. Batch flush
 
 Every flush uploads the whole vertex buffer and rewrites all 16 texture slots, including slots that did not change.
 
@@ -65,7 +55,7 @@ Every flush uploads the whole vertex buffer and rewrites all 16 texture slots, i
 - A scene that uses more than 16 textures still flushes and continues. The 17th texture is not dropped.
 - The Sandbox picture stays the same.
 
-### 4. Matte shader path
+### 3. Matte shader path
 
 The fragment shader always builds the highlight. A material with roughness 1, metallic 0, and emission 0 is the common case, and that highlight is zero. Vertex UVs already include tiling, and the flush sets the material tiling uniform to 1.
 
@@ -73,7 +63,7 @@ The fragment shader always builds the highlight. A material with roughness 1, me
 - Roughness below 1, metallic above 0, and emission above 0 keep the current highlight, metal tint, and glow.
 - The unused tiling multiply is removed, or the uniform stops pretending to tile. Existing scenes do not shift their UVs.
 
-### 5. Scripted motion
+### 4. Scripted motion
 
 A script runs before the physics step. The step then copies velocity from Box2D back onto the component. Writing `LinearVelocity` during update does not move a kinematic body. `Patrol` works by moving a parent that has no body, and a static child collider is teleported after the step.
 
@@ -93,7 +83,7 @@ The loop polls events, begins a frame, updates layers, renders layers, flushes, 
 - **Fixed step.** A long frame is clamped to 0.05 seconds inside the physics step. There is no accumulator. Play should step physics at a fixed rate and pass the leftover time as interpolation. Rendering still uses the real frame.
 - **Script input.** A script cannot read the keyboard or the mouse. Add a small query for key, mouse button, and cursor position in world units of the active camera. Sandbox can use it. The editor camera keeps Q, E, and the wheel.
 - **One log in the console.** Engine logs and `Console::Log` are separate. Play errors should appear in the editor console without a second setup.
-- **Headless update.** After the scene check exists, the same program should be able to step a scene for a fixed number of frames and report where the crate ended. Still no window.
+- **Headless update.** `SceneCheck` loads the scene and stops. The same program should also step a scene for a fixed number of frames and report where the crate ended. Still no window.
 
 ### Rendering
 
@@ -124,7 +114,7 @@ Box2D starts on play. Bodies are static, kinematic, or dynamic. Shapes are boxes
 
 One DLL per project exports `LiteRegisterScripts`. A class is a name plus start, update, and collision function pointers. The editor and Sandbox load that file on play and free it on stop. Materials and prefabs placed in a scene are copies. Editing the file later does not change copies already in the scene. The asset registry loads a texture once.
 
-- **Collision phase.** Covered by item 5. Do not add a second callback.
+- **Collision phase.** Covered by scripted motion. Do not add a second callback.
 - **Reload while stopped.** Replacing the DLL on disk and pressing play loads the new file. If the file is locked, the console says so and the old behavior is not half-applied.
 - **Watched textures.** Changing a texture file on disk while the editor is open reloads that texture. The scene does not need a restart. A failed reload keeps the previous image and logs the path.
 

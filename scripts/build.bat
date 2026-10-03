@@ -7,12 +7,19 @@ if not defined LITE_CONFIG set "LITE_CONFIG=Debug"
 if not defined LITE_ARCH set "LITE_ARCH=x64"
 if not defined LITE_BUILD_DIR set "LITE_BUILD_DIR=build"
 if not defined LITE_RUN set "LITE_RUN=1"
+if not defined LITE_CHECK set "LITE_CHECK=0"
 
 :parse_args
 if "%~1"=="" goto args_done
 if /I "%~1"=="--help" goto help
 if /I "%~1"=="-h" goto help
 if /I "%~1"=="--no-run" (
+    set "LITE_RUN=0"
+    shift
+    goto parse_args
+)
+if /I "%~1"=="--check" (
+    set "LITE_CHECK=1"
     set "LITE_RUN=0"
     shift
     goto parse_args
@@ -57,6 +64,8 @@ shift
 goto parse_args
 
 :args_done
+if "%LITE_CHECK%"=="1" set "LITE_RUN=0"
+
 if /I not "%LITE_CONFIG%"=="Debug" if /I not "%LITE_CONFIG%"=="Release" if /I not "%LITE_CONFIG%"=="RelWithDebInfo" if /I not "%LITE_CONFIG%"=="MinSizeRel" (
     echo Config must be Debug, Release, RelWithDebInfo, or MinSizeRel.
     exit /b 1
@@ -82,6 +91,12 @@ if errorlevel 1 exit /b 1
 echo Building %LITE_CONFIG% ...
 cmake --build "%LITE_BUILD_DIR%" --config %LITE_CONFIG% --parallel
 if errorlevel 1 exit /b 1
+
+if "%LITE_CHECK%"=="1" (
+    echo Running scene check...
+    "%LITE_BUILD_DIR%\bin\check\SceneCheck.exe"
+    if errorlevel 1 exit /b 1
+)
 
 if "%LITE_RUN%"=="0" exit /b 0
 
@@ -131,4 +146,5 @@ echo   --build-dir ^<dir^>       Build directory. Default: build, or LITE_BUILD_
 echo   --generator ^<name^>      CMake generator. Default: detected Visual Studio, or LITE_GENERATOR.
 echo   --sdk ^<version^>         Windows SDK version. Default: newest installed, or LITE_WINDOWS_SDK.
 echo   --no-run                Build without opening Editor. LITE_RUN=0 does the same.
+echo   --check                 Build, run the scene check, and do not open Editor. LITE_CHECK=1 does the same.
 exit /b 1

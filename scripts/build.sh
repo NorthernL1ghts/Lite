@@ -9,6 +9,7 @@ lite_build_dir="${LITE_BUILD_DIR:-build}"
 lite_generator="${LITE_GENERATOR:-}"
 lite_sdk="${LITE_WINDOWS_SDK:-}"
 lite_run="${LITE_RUN:-1}"
+lite_check="${LITE_CHECK:-0}"
 
 usage() {
     cat <<'EOF'
@@ -19,6 +20,7 @@ Usage: ./scripts/build.sh [Debug|Release|RelWithDebInfo|MinSizeRel] [options]
   --generator <name>      CMake generator. Default: detected Visual Studio, or LITE_GENERATOR.
   --sdk <version>         Windows SDK version. Default: newest installed, or LITE_WINDOWS_SDK.
   --no-run                Build without opening Editor. LITE_RUN=0 does the same.
+  --check                 Build, run the scene check, and do not open Editor. LITE_CHECK=1 does the same.
 EOF
 }
 
@@ -29,6 +31,11 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         --no-run)
+            lite_run=0
+            shift
+            ;;
+        --check)
+            lite_check=1
             lite_run=0
             shift
             ;;
@@ -63,6 +70,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$lite_check" == "1" ]]; then
+    lite_run=0
+fi
 
 case "$lite_config" in
     Debug|Release|RelWithDebInfo|MinSizeRel) ;;
@@ -114,6 +125,11 @@ cmake "${cmake_args[@]}"
 
 echo "Building ${lite_config} ..."
 cmake --build "$lite_build_dir" --config "$lite_config" --parallel
+
+if [[ "$lite_check" == "1" ]]; then
+    echo "Running scene check..."
+    "${lite_build_dir}/bin/check/SceneCheck.exe"
+fi
 
 if [[ "$lite_run" == "0" ]]; then
     exit 0

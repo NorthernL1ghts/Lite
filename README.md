@@ -40,6 +40,7 @@ That configures, builds, and opens Editor. `Debug` and `x64` are the defaults.
 | --- | --- | --- |
 | `Release` or `--config Release` | `LITE_CONFIG` | `Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel` |
 | `--no-run` | `LITE_RUN=0` | Build without opening Editor |
+| `--check` | `LITE_CHECK=1` | Build, run the scene check, and do not open Editor |
 | `--arch` | `LITE_ARCH` | Architecture, default `x64` |
 | `--build-dir` | `LITE_BUILD_DIR` | Build directory, default `build` |
 | `--generator` | `LITE_GENERATOR` | Visual Studio generator |

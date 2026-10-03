@@ -22,5 +22,6 @@ lite_apply_global_flags()
 add_subdirectory(Lite)
 add_subdirectory(Sandbox)
 add_subdirectory(Editor)
+add_subdirectory(Tests)
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Editor)
