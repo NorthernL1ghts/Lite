@@ -33,20 +33,11 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Scene check.** `SceneCheck` loads `Sandbox/assets/scenes/Sandbox.scene` with no window. Background is behind World, and World is behind Foreground. Before play, the bottom of the crate and the bottom of the ball are above the top of the ground. `scripts\build.bat --check` builds, runs that program, and does not open the editor. A failure prints one line and exits non-zero.
 - **Viewport target.** The editor draws the scene into a color target the size of the Viewport panel and shows that image in the panel. Picking and gizmos use that rectangle and the same view projection. Resizing the panel resizes the target. A zero-size panel draws nothing. Play uses the same image. Sandbox still draws into its window.
 - **Batch flush.** Vertex and index memory stay mapped. A flush copies only the vertices and indices written since the last flush. A texture slot is written when that slot changes, and an unchanged frame does not call `vkUpdateDescriptorSets`. More than 16 textures flush and continue on another descriptor set, so the next texture is drawn.
+- **Matte shader.** Roughness 1 with metallic 0 and emission 0 samples the texture, tints it, and writes premultiplied alpha. Other materials keep the highlight, metal tint, and glow. The batch shader samples the vertex UVs directly.
 
 ## Next
 
-Do these in order.
-
-### 1. Matte shader path
-
-The fragment shader always builds the highlight. A material with roughness 1, metallic 0, and emission 0 is the common case, and that highlight is zero. Vertex UVs already include tiling, and the flush sets the material tiling uniform to 1.
-
-- That matte case samples the texture, tints it, and writes premultiplied alpha. It does not normalize a light vector.
-- Roughness below 1, metallic above 0, and emission above 0 keep the current highlight, metal tint, and glow.
-- The unused tiling multiply is removed, or the uniform stops pretending to tile. Existing scenes do not shift their UVs.
-
-### 2. Scripted motion
+### 1. Scripted motion
 
 A script runs before the physics step. The step then copies velocity from Box2D back onto the component. Writing `LinearVelocity` during update does not move a kinematic body. `Patrol` works by moving a parent that has no body, and a static child collider is teleported after the step.
 

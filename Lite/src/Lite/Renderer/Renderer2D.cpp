@@ -489,7 +489,6 @@ namespace Lite {
 		WriteChangedSlots(*batch);
 		Renderer::SetModel(Mat4::Identity());
 		s_Material->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-		s_Material->SetTiling({ 1.0f, 1.0f });
 		s_Material->Bind();
 		vkCmdBindDescriptorSets(Renderer::GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_Material->GetLayout(), 2, 1, &batch->Set, 0, nullptr);
 		RendererAPI::DrawIndexed(s_Meshes[frame]);

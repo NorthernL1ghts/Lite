@@ -11,24 +11,28 @@ layout(location = 0) out vec4 outColor;
 layout(set = 1, binding = 0) uniform MaterialBlock
 {
 	vec4 color;
-	vec2 tiling;
 } material;
 
 layout(set = 2, binding = 0) uniform sampler2D textures[16];
 
 void main()
 {
-	vec2 sampleUv = uv * max(material.tiling, vec2(1.0));
 	vec4 tint = color * material.color;
-	vec4 texel = texture(textures[nonuniformEXT(textureIndex)], sampleUv);
+	vec4 texel = texture(textures[nonuniformEXT(textureIndex)], uv);
 	float shade = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
 	vec3 graded = mix(tint.rgb * 0.28, tint.rgb, shade);
+	float alpha = texel.a * tint.a;
 
 	float roughness = clamp(surface.x, 0.0, 1.0);
 	float metallic = clamp(surface.y, 0.0, 1.0);
 	float emission = max(surface.z, 0.0);
-	float smoothWeight = 1.0 - roughness;
+	if (roughness == 1.0 && metallic == 0.0 && emission == 0.0)
+	{
+		outColor = vec4(graded * alpha, alpha);
+		return;
+	}
 
+	float smoothWeight = 1.0 - roughness;
 	graded = mix(graded, tint.rgb * mix(0.72, 1.0, shade), smoothWeight * 0.65);
 	vec3 metal = tint.rgb * mix(0.4, 1.25, shade);
 	graded = mix(graded, metal, metallic);
@@ -39,6 +43,5 @@ void main()
 	graded += mix(vec3(1.0), tint.rgb, metallic) * spec * 0.8;
 	graded += tint.rgb * emission;
 
-	float alpha = texel.a * tint.a;
 	outColor = vec4(graded * alpha, alpha);
 }
