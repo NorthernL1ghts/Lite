@@ -1,9 +1,9 @@
 name: Ball
 plane: World
 transform:
-  position: [-0.6, 0.8, 0]
+  position: [0.45, 1.85, 0]
   rotation: 0
-  scale: [0.45, 0.45, 1]
+  scale: [0.4, 0.4, 1]
 mesh:
   type: quad
 material:
@@ -13,8 +13,8 @@ material:
   vertex-colors: false
 rigidbody2d:
   type: dynamic
-  mass: 1
-  gravity: 1
+  mass: 0.45
+  gravity: 0.45
   velocity: [0, 0]
   angular: 0
   freeze: false
@@ -22,7 +22,5 @@ circle-collider2d:
   radius: 0.5
   offset: [0, 0]
   trigger: false
-script:
-  class: Bounce
 sorting:
-  order: 1
+  order: 5

@@ -39,6 +39,7 @@ namespace Lite {
 		float Angle = 0.0f;
 		float Spin = 0.0f;
 		Vec2 Grab {};
+		Vec2 Center {};
 		Vec3 Position {};
 		float Rotation = 0.0f;
 		Vec3 Scale { 1.0f, 1.0f, 1.0f };
@@ -68,9 +69,10 @@ namespace Lite {
 		if (transform == nullptr)
 			return false;
 
+		const Transform world = entity.WorldTransform();
 		const std::span<const Vec2> local = MeshCorners(entity.Get<MeshComponent>());
 		layout = {};
-		layout.CenterWorld = { transform->Local.Position.x, transform->Local.Position.y };
+		layout.CenterWorld = { world.Position.x, world.Position.y };
 		const std::optional<Vec2> center = WorldToScreen(viewProjection, windowW, windowH, layout.CenterWorld);
 		if (!center)
 			return false;
@@ -80,7 +82,7 @@ namespace Lite {
 		float reach = 0.0f;
 		for (int index = 0; index < layout.Count; ++index)
 		{
-			const Vec3 transformed = transform->Local.TransformPoint({ local[static_cast<size_t>(index)].x, local[static_cast<size_t>(index)].y, 0.0f });
+			const Vec3 transformed = world.TransformPoint({ local[static_cast<size_t>(index)].x, local[static_cast<size_t>(index)].y, 0.0f });
 			layout.World[static_cast<size_t>(index)] = { transformed.x, transformed.y };
 			const std::optional<Vec2> screen = WorldToScreen(viewProjection, windowW, windowH, layout.World[static_cast<size_t>(index)]);
 			if (!screen)
@@ -156,13 +158,15 @@ namespace Lite {
 		if (hot.Action == GizmoAction::None)
 			return false;
 
+		const Transform worldTransform = entity.WorldTransform();
 		drag.Action = hot.Action;
 		drag.Corner = hot.Corner;
 		drag.Grab = *world;
+		drag.Center = { worldTransform.Position.x, worldTransform.Position.y };
 		drag.Position = transform->Local.Position;
 		drag.Rotation = transform->Local.GetRotationZ();
 		drag.Scale = transform->Local.Scale;
-		drag.Angle = std::atan2(world->y - drag.Position.y, world->x - drag.Position.x);
+		drag.Angle = std::atan2(world->y - drag.Center.y, world->x - drag.Center.x);
 		return true;
 	}
 
@@ -177,15 +181,22 @@ namespace Lite {
 			return false;
 		}
 
+		const uint32_t parent = scene.GetParent(entityId);
+		const Transform parentWorld = parent != 0 ? scene.WorldTransform(parent) : Transform{};
+
 		switch (drag.Action)
 		{
 			case GizmoAction::Move:
-				transform->Local.Position.x = drag.Position.x + (world->x - drag.Grab.x);
-				transform->Local.Position.y = drag.Position.y + (world->y - drag.Grab.y);
+			{
+				const Vec3 grab = parentWorld.InverseTransformPoint({ drag.Grab.x, drag.Grab.y, 0.0f });
+				const Vec3 now = parentWorld.InverseTransformPoint({ world->x, world->y, 0.0f });
+				transform->Local.Position.x = drag.Position.x + (now.x - grab.x);
+				transform->Local.Position.y = drag.Position.y + (now.y - grab.y);
 				break;
+			}
 			case GizmoAction::Rotate:
 			{
-				const float angle = std::atan2(world->y - drag.Position.y, world->x - drag.Position.x);
+				const float angle = std::atan2(world->y - drag.Center.y, world->x - drag.Center.x);
 				float delta = angle - drag.Angle;
 				while (delta > kPi)
 					delta -= kPi * 2.0f;
@@ -202,12 +213,9 @@ namespace Lite {
 				if (drag.Corner < 0 || drag.Corner >= static_cast<int>(local.size()))
 					return false;
 
-				Transform basis;
-				basis.Position = drag.Position;
-				basis.SetRotationZ(drag.Rotation);
-				basis.Scale = { 1.0f, 1.0f, 1.0f };
-				const Vec3 offset { world->x - basis.Position.x, world->y - basis.Position.y, 0.0f };
-				const Vec3 localPoint = basis.Rotation.Normalized().Conjugate().Rotate(offset);
+				const Vec3 parentPoint = parentWorld.InverseTransformPoint({ world->x, world->y, 0.0f });
+				const Vec3 offset = parentPoint - drag.Position;
+				const Vec3 localPoint = Quat::FromAxisAngle({ 0.0f, 0.0f, 1.0f }, drag.Rotation).Conjugate().Rotate(offset);
 				const Vec2 corner = local[static_cast<size_t>(drag.Corner)];
 				Vec3 scale = drag.Scale;
 				if (std::abs(corner.x) > 0.001f)

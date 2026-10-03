@@ -1,9 +1,9 @@
 name: Crate
 plane: World
 transform:
-  position: [0, 0.6, 0]
+  position: [-1.55, 1.4, 0]
   rotation: 0
-  scale: [0.5, 0.5, 1]
+  scale: [0.52, 0.52, 1]
 mesh:
   type: quad
 material:
@@ -22,5 +22,7 @@ box-collider2d:
   size: [1, 1]
   offset: [0, 0]
   trigger: false
+script:
+  class: Bounce
 sorting:
-  order: 1
+  order: 4

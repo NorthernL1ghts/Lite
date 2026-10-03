@@ -205,6 +205,147 @@ namespace Lite {
 		return nullptr;
 	}
 
+	uint32_t Scene::GetParent(uint32_t id) const
+	{
+		const Record* record = FindRecord(id);
+		if (record == nullptr || record->Parent == 0 || FindRecord(record->Parent) == nullptr)
+			return 0;
+		return record->Parent;
+	}
+
+	int Scene::Depth(uint32_t id) const
+	{
+		int depth = 0;
+		for (uint32_t parent = GetParent(id); parent != 0 && depth < 64; parent = GetParent(parent))
+			++depth;
+		return depth;
+	}
+
+	Transform Scene::WorldTransform(uint32_t id) const
+	{
+		const Transform* chain[64] {};
+		int count = 0;
+		for (uint32_t cursor = id; cursor != 0 && count < 64; cursor = GetParent(cursor))
+		{
+			const auto* transform = static_cast<const TransformComponent*>(GetComponent(ComponentId::Transform, cursor));
+			chain[count++] = transform != nullptr ? &transform->Local : nullptr;
+		}
+
+		Transform world;
+		for (int index = count - 1; index >= 0; --index)
+		{
+			if (chain[index] == nullptr)
+				continue;
+			world = CombineTransforms(world, *chain[index]);
+		}
+		return world;
+	}
+
+	void Scene::FitLocalToWorld(uint32_t id, const Transform& world)
+	{
+		auto* transform = static_cast<TransformComponent*>(GetComponent(ComponentId::Transform, id));
+		if (transform == nullptr)
+			return;
+
+		const uint32_t parent = GetParent(id);
+		if (parent == 0)
+		{
+			transform->Local = world;
+			return;
+		}
+
+		const Transform parentWorld = WorldTransform(parent);
+		transform->Local.Position = parentWorld.InverseTransformPoint(world.Position);
+		transform->Local.Rotation = parentWorld.Rotation.Normalized().Conjugate() * world.Rotation.Normalized();
+		auto axis = [](float value, float basis)
+		{
+			return basis > 0.0001f || basis < -0.0001f ? value / basis : value;
+		};
+		transform->Local.Scale.x = axis(world.Scale.x, parentWorld.Scale.x);
+		transform->Local.Scale.y = axis(world.Scale.y, parentWorld.Scale.y);
+		transform->Local.Scale.z = axis(world.Scale.z, parentWorld.Scale.z);
+	}
+
+	void Scene::SetLocalPose(uint32_t id, float x, float y, float rotation)
+	{
+		auto* transform = static_cast<TransformComponent*>(GetComponent(ComponentId::Transform, id));
+		if (transform == nullptr)
+			return;
+
+		const uint32_t parent = GetParent(id);
+		if (parent == 0)
+		{
+			transform->Local.Position.x = x;
+			transform->Local.Position.y = y;
+			transform->Local.SetRotationZ(rotation);
+			return;
+		}
+
+		const Transform parentWorld = WorldTransform(parent);
+		const Vec3 local = parentWorld.InverseTransformPoint({ x, y, 0.0f });
+		transform->Local.Position.x = local.x;
+		transform->Local.Position.y = local.y;
+		const Quat worldRotation = Quat::FromAxisAngle({ 0.0f, 0.0f, 1.0f }, rotation);
+		transform->Local.Rotation = parentWorld.Rotation.Normalized().Conjugate() * worldRotation;
+	}
+
+	bool Scene::SetParent(uint32_t id, uint32_t parent, bool keepWorld)
+	{
+		Record* record = FindRecord(id);
+		if (record == nullptr)
+			return false;
+		if (parent == id)
+			return false;
+		if (parent != 0 && FindRecord(parent) == nullptr)
+			return false;
+
+		for (uint32_t cursor = parent; cursor != 0; cursor = GetParent(cursor))
+		{
+			if (cursor == id)
+				return false;
+		}
+
+		if (record->Parent == parent)
+			return false;
+
+		Transform world;
+		if (keepWorld)
+			world = WorldTransform(id);
+
+		record->Parent = parent;
+		if (keepWorld)
+			FitLocalToWorld(id, world);
+		return true;
+	}
+
+	std::vector<Entity> Scene::GetChildren(uint32_t id)
+	{
+		std::vector<Entity> children;
+		for (const Record& record : m_Records)
+		{
+			if (record.Parent == id)
+				children.emplace_back(this, record.Id);
+		}
+		return children;
+	}
+
+	int Scene::CountDescendants(uint32_t id) const
+	{
+		int count = 0;
+		std::vector<uint32_t> pending { id };
+		for (size_t index = 0; index < pending.size(); ++index)
+		{
+			for (const Record& record : m_Records)
+			{
+				if (record.Parent != pending[index])
+					continue;
+				pending.push_back(record.Id);
+				++count;
+			}
+		}
+		return count;
+	}
+
 	uint32_t Scene::CreatePlane(std::string name)
 	{
 		if (name.empty())
@@ -402,6 +543,7 @@ namespace Lite {
 
 		const std::string name = source->Name.empty() ? std::string("Entity Copy") : source->Name + " Copy";
 		const uint32_t plane = source->Plane;
+		const uint32_t parent = source->Parent;
 		YAML::Node node = SceneFile::WriteEntityNode(*this, id, true);
 
 		Entity copy = CreateEntity(name, plane);
@@ -409,6 +551,8 @@ namespace Lite {
 
 		if (CameraComponent* camera = copy.Get<CameraComponent>())
 			camera->Primary = false;
+		if (Record* copyRecord = FindRecord(copy.GetId()))
+			copyRecord->Parent = parent;
 
 		auto created = std::find_if(m_Records.begin(), m_Records.end(), [&](const Record& record)
 		{
@@ -653,7 +797,7 @@ namespace Lite {
 		return entity;
 	}
 
-	void Scene::DestroyEntity(uint32_t id)
+	void Scene::DestroyRecord(uint32_t id)
 	{
 		if (FindRecord(id) == nullptr)
 			return;
@@ -669,6 +813,50 @@ namespace Lite {
 			m_Records.erase(record);
 			break;
 		}
+	}
+
+	Scene::EntityDestroy Scene::DestroyEntity(uint32_t id, bool detachChildren)
+	{
+		if (FindRecord(id) == nullptr)
+			return EntityDestroy::Missing;
+
+		std::vector<uint32_t> descendants;
+		std::vector<uint32_t> pending { id };
+		for (size_t index = 0; index < pending.size(); ++index)
+		{
+			for (const Record& record : m_Records)
+			{
+				if (record.Parent != pending[index])
+					continue;
+				descendants.push_back(record.Id);
+				pending.push_back(record.Id);
+			}
+		}
+
+		if (!descendants.empty() && detachChildren)
+		{
+			std::vector<uint32_t> children;
+			for (const Record& record : m_Records)
+			{
+				if (record.Parent == id)
+					children.push_back(record.Id);
+			}
+			for (uint32_t child : children)
+				SetParent(child, 0, true);
+			DestroyRecord(id);
+			return EntityDestroy::DetachedChildren;
+		}
+
+		if (!descendants.empty())
+		{
+			for (size_t index = descendants.size(); index-- > 0; )
+				DestroyRecord(descendants[index]);
+			DestroyRecord(id);
+			return EntityDestroy::RemovedChildren;
+		}
+
+		DestroyRecord(id);
+		return EntityDestroy::Removed;
 	}
 
 	uint32_t Scene::NextEntity(uint32_t id) const
@@ -966,7 +1154,7 @@ namespace Lite {
 		if (transform == nullptr || camera == nullptr)
 			return CameraProjectionMatrix(fallbackCamera, aspect) * fallbackTransform.GetViewMatrix();
 
-		return CameraProjectionMatrix(*camera, aspect) * transform->Local.GetViewMatrix();
+		return CameraProjectionMatrix(*camera, aspect) * WorldTransform(record->Id).GetViewMatrix();
 	}
 
 	void Scene::Close(Scope<Scene>& scene)
@@ -984,7 +1172,7 @@ namespace Lite {
 	{
 		struct DrawItem
 		{
-			const TransformComponent* Transform = nullptr;
+			Transform Transform;
 			const MaterialComponent* Material = nullptr;
 			const MeshComponent* Mesh = nullptr;
 			int Plane = 0;
@@ -1010,7 +1198,7 @@ namespace Lite {
 
 			const auto* sorting = static_cast<const SortingComponent*>(GetComponent(ComponentId::Sorting, record.Id));
 			const int plane = record.Plane < planeOrders.size() ? planeOrders[record.Plane] : 0;
-			draw.push_back({ transform, material, mesh, plane, sorting != nullptr ? sorting->Order : 0 });
+			draw.push_back({ WorldTransform(record.Id), material, mesh, plane, sorting != nullptr ? sorting->Order : 0 });
 		}
 
 		std::stable_sort(draw.begin(), draw.end(), [](const DrawItem& left, const DrawItem& right)
@@ -1021,7 +1209,7 @@ namespace Lite {
 		});
 
 		for (const DrawItem& item : draw)
-			SubmitMesh(item.Transform->Local, *item.Material, item.Mesh->Type);
+			SubmitMesh(item.Transform, *item.Material, item.Mesh->Type);
 	}
 
 	bool Scene::Read(std::istream& input)
@@ -1042,7 +1230,16 @@ namespace Lite {
 		if (root["name"])
 			m_Name = root["name"].as<std::string>();
 
-		auto readEntity = [this](uint32_t plane, const YAML::Node& entityNode)
+		struct ParentLink
+		{
+			uint32_t Entity = 0;
+			int Parent = -1;
+		};
+
+		std::vector<uint32_t> created;
+		std::vector<ParentLink> parents;
+
+		auto readEntity = [this, &created, &parents](uint32_t plane, const YAML::Node& entityNode)
 		{
 			if (!entityNode || !entityNode.IsMap())
 				return;
@@ -1054,6 +1251,9 @@ namespace Lite {
 				name = "Entity";
 
 			Entity entity = CreateEntity(name, plane);
+			created.push_back(entity.GetId());
+			if (entityNode["parent"] && entityNode["parent"].IsScalar())
+				parents.push_back({ entity.GetId(), entityNode["parent"].as<int>() });
 			SceneFile::ReadEntityNode(*this, entity.GetId(), entityNode);
 		};
 
@@ -1094,6 +1294,13 @@ namespace Lite {
 		if (m_Planes.empty())
 			CreatePlane("World");
 
+		for (const ParentLink& link : parents)
+		{
+			if (link.Parent < 0 || static_cast<size_t>(link.Parent) >= created.size())
+				continue;
+			SetParent(link.Entity, created[static_cast<size_t>(link.Parent)], false);
+		}
+
 		if (m_Name.empty())
 			m_Name = "Untitled";
 
@@ -1104,6 +1311,26 @@ namespace Lite {
 	{
 		YAML::Node root;
 		root["name"] = m_Name;
+
+		std::vector<uint32_t> order;
+		for (const Plane& plane : m_Planes)
+		{
+			for (const Record& record : m_Records)
+			{
+				if (record.Plane == plane.Id)
+					order.push_back(record.Id);
+			}
+		}
+
+		auto indexOf = [&order](uint32_t id) -> int
+		{
+			for (size_t index = 0; index < order.size(); ++index)
+			{
+				if (order[index] == id)
+					return static_cast<int>(index);
+			}
+			return -1;
+		};
 
 		YAML::Node planes(YAML::NodeType::Sequence);
 		for (const Plane& plane : m_Planes)
@@ -1118,7 +1345,11 @@ namespace Lite {
 				if (record.Plane != plane.Id)
 					continue;
 
-				entities.push_back(SceneFile::WriteEntityNode(*this, record.Id, true));
+				YAML::Node entity = SceneFile::WriteEntityNode(*this, record.Id, true);
+				const int parent = indexOf(record.Parent);
+				if (record.Parent != 0 && parent >= 0)
+					entity["parent"] = parent;
+				entities.push_back(std::move(entity));
 			}
 
 			planeNode["entities"] = entities;

@@ -63,6 +63,8 @@ namespace Lite {
 		template<typename T>
 		void Remove();
 
+		Transform WorldTransform() const;
+
 	private:
 		Scene* m_Scene = nullptr;
 		uint32_t m_Id = 0;
@@ -119,7 +121,21 @@ namespace Lite {
 		Entity CreateEntity(std::string name);
 		Entity CreateEntity(std::string name, uint32_t plane);
 		Entity DuplicateEntity(uint32_t id);
-		void DestroyEntity(uint32_t id);
+
+		enum class EntityDestroy
+		{
+			Missing,
+			Removed,
+			RemovedChildren,
+			DetachedChildren
+		};
+
+		EntityDestroy DestroyEntity(uint32_t id, bool detachChildren);
+		uint32_t GetParent(uint32_t id) const;
+		bool SetParent(uint32_t id, uint32_t parent, bool keepWorld);
+		std::vector<Entity> GetChildren(uint32_t id);
+		int CountDescendants(uint32_t id) const;
+		Transform WorldTransform(uint32_t id) const;
 		std::string GetPrefab(uint32_t id) const;
 		void SetPrefab(uint32_t id, std::string path);
 		bool SavePrefab(uint32_t id, const std::filesystem::path& path) const;
@@ -194,12 +210,17 @@ namespace Lite {
 		{
 			uint32_t Id = 0;
 			uint32_t Plane = 0;
+			uint32_t Parent = 0;
 			std::string Name;
 			std::string Prefab;
 		};
 
 		std::string UniqueEntityName(std::string name);
 		std::string UniquePlaneName(std::string name) const;
+		void FitLocalToWorld(uint32_t id, const Transform& world);
+		void SetLocalPose(uint32_t id, float x, float y, float rotation);
+		int Depth(uint32_t id) const;
+		void DestroyRecord(uint32_t id);
 
 		Record* FindRecord(uint32_t id);
 		const Record* FindRecord(uint32_t id) const;
@@ -262,6 +283,13 @@ namespace Lite {
 	{
 		if (m_Scene != nullptr)
 			m_Scene->RemoveComponent(ComponentTraits<T>::Id, m_Id);
+	}
+
+	inline Transform Entity::WorldTransform() const
+	{
+		if (m_Scene == nullptr)
+			return {};
+		return m_Scene->WorldTransform(m_Id);
 	}
 
 }

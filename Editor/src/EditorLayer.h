@@ -42,7 +42,7 @@ private:
 	void OpenScene(const std::string& path);
 	void SaveScene();
 	void DuplicateSelected();
-	void DeleteSelected();
+	void DeleteSelected(bool detachChildren = false);
 	void UndoSelected();
 	void RedoSelected();
 	void SyncName();

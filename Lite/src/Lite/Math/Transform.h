@@ -76,6 +76,25 @@ namespace Lite {
 		{
 			return Rotation.Rotate({ direction.x * Scale.x, direction.y * Scale.y, direction.z * Scale.z });
 		}
+
+		Vec3 InverseTransformPoint(const Vec3& point) const
+		{
+			const Vec3 unrotated = Rotation.Normalized().Conjugate().Rotate(point - Position);
+			auto axis = [](float value, float scale)
+			{
+				return std::fabs(scale) > 0.0001f ? value / scale : value;
+			};
+			return { axis(unrotated.x, Scale.x), axis(unrotated.y, Scale.y), axis(unrotated.z, Scale.z) };
+		}
 	};
+
+	inline Transform CombineTransforms(const Transform& parent, const Transform& local)
+	{
+		Transform world;
+		world.Position = parent.TransformPoint(local.Position);
+		world.Rotation = (parent.Rotation * local.Rotation).Normalized();
+		world.Scale = { parent.Scale.x * local.Scale.x, parent.Scale.y * local.Scale.y, parent.Scale.z * local.Scale.z };
+		return world;
+	}
 
 }

@@ -5,6 +5,7 @@
 
 #include <box2d/box2d.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -202,11 +203,12 @@ namespace Lite {
 		if (rigidbody == nullptr && box == nullptr && circle == nullptr)
 			return;
 
-		const Transform& transform = transformComponent->Local;
+		const Transform& local = transformComponent->Local;
+		const Transform world = WorldTransform(entity.GetId());
 		PhysicsStorage::Body stored {};
 		stored.Entity = entity.GetId();
-		stored.Position = keepSnapshot ? position : transform.Position;
-		stored.Rotation = keepSnapshot ? rotation : transform.GetRotationZ();
+		stored.Position = keepSnapshot ? position : local.Position;
+		stored.Rotation = keepSnapshot ? rotation : local.GetRotationZ();
 		stored.HasRigidbody = rigidbody != nullptr;
 		if (rigidbody != nullptr)
 		{
@@ -216,8 +218,8 @@ namespace Lite {
 
 		b2BodyDef bodyDef = b2DefaultBodyDef();
 		bodyDef.type = rigidbody != nullptr ? ToBodyType(rigidbody->Type) : b2_staticBody;
-		bodyDef.position = { transform.Position.x, transform.Position.y };
-		bodyDef.rotation = b2MakeRot(transform.GetRotationZ());
+		bodyDef.position = { world.Position.x, world.Position.y };
+		bodyDef.rotation = b2MakeRot(world.GetRotationZ());
 		bodyDef.fixedRotation = rigidbody != nullptr && rigidbody->FreezeRotation;
 		bodyDef.gravityScale = rigidbody != nullptr ? rigidbody->GravityScale : 1.0f;
 		bodyDef.isBullet = bodyDef.type == b2_dynamicBody;
@@ -236,9 +238,9 @@ namespace Lite {
 
 		bool solid = false;
 		if (box != nullptr)
-			solid = AddBox(stored.Id, transform, *box) || solid;
+			solid = AddBox(stored.Id, world, *box) || solid;
 		if (circle != nullptr)
-			solid = AddCircle(stored.Id, transform, *circle) || solid;
+			solid = AddCircle(stored.Id, world, *circle) || solid;
 		if (rigidbody != nullptr)
 			ApplyMass(stored.Id, *rigidbody, solid);
 
@@ -264,10 +266,21 @@ namespace Lite {
 
 	void Scene::RefreshPhysics(uint32_t entityId)
 	{
-		Entity entity = GetEntity(entityId);
-		if (!entity)
+		if (!GetEntity(entityId))
 			return;
-		SpawnPhysicsBody(entity, true);
+
+		std::vector<uint32_t> ids { entityId };
+		for (size_t index = 0; index < ids.size(); ++index)
+		{
+			for (const Record& record : m_Records)
+			{
+				if (record.Parent == ids[index])
+					ids.push_back(record.Id);
+			}
+		}
+
+		for (uint32_t id : ids)
+			SpawnPhysicsBody(GetEntity(id), true);
 	}
 
 	void Scene::StopPhysics()
@@ -314,8 +327,8 @@ namespace Lite {
 			if (transformComponent == nullptr || !b2Body_IsValid(body.Id))
 				continue;
 
-			const Transform& transform = transformComponent->Local;
-			b2Body_SetTransform(body.Id, { transform.Position.x, transform.Position.y }, b2MakeRot(transform.GetRotationZ()));
+			const Transform world = WorldTransform(body.Entity);
+			b2Body_SetTransform(body.Id, { world.Position.x, world.Position.y }, b2MakeRot(world.GetRotationZ()));
 			if (Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>())
 			{
 				b2Body_SetLinearVelocity(body.Id, { rigidbody->LinearVelocity.x, rigidbody->LinearVelocity.y });
@@ -352,25 +365,57 @@ namespace Lite {
 		for (int index = 0; index < sensors.endCount; ++index)
 			ReportOverlap(*this, sensors.endEvents[index].sensorShapeId, sensors.endEvents[index].visitorShapeId, "Trigger end");
 
-		for (const PhysicsStorage::Body& body : m_Physics->Bodies)
+		std::vector<size_t> order(m_Physics->Bodies.size());
+		for (size_t index = 0; index < order.size(); ++index)
+			order[index] = index;
+		std::stable_sort(order.begin(), order.end(), [&](size_t left, size_t right)
 		{
+			return Depth(m_Physics->Bodies[left].Entity) < Depth(m_Physics->Bodies[right].Entity);
+		});
+
+		for (size_t index : order)
+		{
+			const PhysicsStorage::Body& body = m_Physics->Bodies[index];
 			Entity entity = GetEntity(body.Entity);
 			TransformComponent* transform = entity.Get<TransformComponent>();
 			if (transform == nullptr || !b2Body_IsValid(body.Id))
 				continue;
 
-			b2Vec2 position = b2Body_GetPosition(body.Id);
-			transform->Local.Position.x = position.x;
-			transform->Local.Position.y = position.y;
-			transform->Local.SetRotationZ(b2Rot_GetAngle(b2Body_GetRotation(body.Id)));
-
 			Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>();
+			const bool simulated = rigidbody != nullptr && rigidbody->Type != BodyType::Static;
+			if (simulated)
+			{
+				b2Vec2 position = b2Body_GetPosition(body.Id);
+				SetLocalPose(body.Entity, position.x, position.y, b2Rot_GetAngle(b2Body_GetRotation(body.Id)));
+			}
+
 			if (!body.HasRigidbody || rigidbody == nullptr)
 				continue;
 
 			b2Vec2 velocity = b2Body_GetLinearVelocity(body.Id);
 			rigidbody->LinearVelocity = { velocity.x, velocity.y };
 			rigidbody->AngularVelocity = b2Body_GetAngularVelocity(body.Id);
+		}
+
+		for (const PhysicsStorage::Body& body : m_Physics->Bodies)
+		{
+			if (GetParent(body.Entity) == 0 || !b2Body_IsValid(body.Id))
+				continue;
+
+			Entity entity = GetEntity(body.Entity);
+			Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>();
+			if (rigidbody != nullptr && rigidbody->Type != BodyType::Static)
+				continue;
+
+			const Transform world = WorldTransform(body.Entity);
+			b2Vec2 position = b2Body_GetPosition(body.Id);
+			float angle = b2Rot_GetAngle(b2Body_GetRotation(body.Id));
+			if (std::fabs(position.x - world.Position.x) < 0.0001f
+				&& std::fabs(position.y - world.Position.y) < 0.0001f
+				&& std::fabs(angle - world.GetRotationZ()) < 0.0001f)
+				continue;
+
+			b2Body_SetTransform(body.Id, { world.Position.x, world.Position.y }, b2MakeRot(world.GetRotationZ()));
 		}
 	}
 

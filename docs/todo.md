@@ -15,24 +15,16 @@ Work left on the engine, the editor, and the player. Items already finished are 
 - **Draw path.** A sprite rotates its two axes once per shape, then places every corner from those axes. The scene looks up each drawable entity once, then submits it.
 - **Core.** `FileSystem::Contains` is the path-inside-folder check. The layer stack walks forward and backward through one pair of helpers. The two loggers share one setup. The application passes the native window as an untyped handle.
 - **Prefabs.** File > Save Prefab, or the scene panel context menu, writes the selection to `assets/prefabs` as the same component YAML a scene entity uses. The plane name is only a hint. Double-click a prefab, or drag it into the viewport, to place a normal copy with a fresh name, its own physics body, and no second primary camera. The inspector shows the prefab path. Later edits to the file do not rewrite copies already in the scene.
-- **Scripts.** The scene panel sets the project script module. The path stays relative to the project file. Play loads that DLL and stop unloads it. A missing file or a failed load is a console error, and the scene still plays. A Script component stores a class name. On play, a class start function runs when it exists. Each frame, an update function receives the timestep. A collision begin calls a class that provided one, with the other entity's id. Sandbox and the editor load the same module. Sandbox ships `scripts/SandboxScripts.dll` with a `Bounce` class on the scene quad.
+- **Scripts.** The scene panel sets the project script module. The path stays relative to the project file. Play loads that DLL and stop unloads it. A missing file or a failed load is a console error, and the scene still plays. A Script component stores a class name. On play, a class start function runs when it exists. Each frame, an update function receives the timestep. A collision begin calls a class that provided one, with the other entity's id. Sandbox and the editor load the same module. Sandbox ships `scripts/SandboxScripts.dll` with `Bounce` on the crate, `Patrol` on the carrier, and `Sensor` on the trigger.
 - **Planes in the editor.** Add Plane creates a plane in front of the highest draw order. The name is edited on the row, and two planes cannot share a name regardless of capitalization. Deleting an empty plane removes it. Deleting a plane that still has entities moves those entities to World and says so in the panel. World stays while it has entities, and the scene keeps at least one plane. The list stays in document order. The number on the row is still the draw order.
 - **Selection while playing.** A viewport click selects the frontmost entity during play and pause, using the same pick as edit mode. Del, Ctrl+D, and removing a component stay available and still update physics.
 - **Undo.** The open scene has one undo stack. Ctrl+Z undoes and Ctrl+Y redoes an inspector edit, a gizmo drag, a delete, or an added component. A drag or a field edit becomes one step when it ends. Opening another scene clears the stack. Play and stop are not steps.
 - **Asset paths.** The asset registry turns a texture path into the form that is saved. A file inside the project asset folder is stored relative to that folder. An absolute path outside the project is kept. Loading accepts either form, including an older `assets/...` path. The material field shows the stored path. The same file is loaded once.
 - **Materials as files.** File > Save Material, or the scene panel context menu, writes the selected `MaterialComponent` to `assets/materials` as `*.material` YAML. The file stores the shader, color, vertex colors, tiling, opacity, and texture path. Dragging that file onto an entity's material copies those fields onto the same component. Sandbox includes `Red.material`.
 - **Physics callbacks.** Contact end is logged the same way contact begin is, and it calls the collision script. A trigger stays out of the blocking collision and still reports the overlap, including when that overlap ends. Those reports use the same script hook.
+- **Entity parenting.** An entity stores a parent id. The scene panel lists children under that parent, and dragging one entity onto another parents it there. Local position, rotation, and scale stay on the transform. Drawing, picking, the camera, and the physics body use the world transform. Deleting a parent deletes the children. Detach Children and Delete keeps them, and the panel says which. Gizmos edit the local transform. The handles are drawn from the world transform.
 
 ## Next
-
-### 9. Entity parenting
-
-Every entity is a root. A child's transform is not relative to a parent.
-
-- Store a parent id on the entity. The scene panel shows children under the parent.
-- Local position, rotation, and scale stay on the transform. The draw and the physics body use the world transform.
-- Deleting a parent deletes the children, or detaches them, and the panel says which.
-- Gizmos edit the local transform. The handles are drawn from the world transform.
 
 ### 10. Tests
 

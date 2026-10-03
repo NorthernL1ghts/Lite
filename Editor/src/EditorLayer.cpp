@@ -24,6 +24,7 @@
 #include <cstring>
 #include <filesystem>
 #include <format>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -520,7 +521,7 @@ void EditorLayer::DuplicateSelected()
 	Lite::Console::Log(std::format("Duplicated {}", copy.GetName()));
 }
 
-void EditorLayer::DeleteSelected()
+void EditorLayer::DeleteSelected(bool detachChildren)
 {
 	if (m_Scene == nullptr || m_Selected == 0)
 		return;
@@ -529,13 +530,62 @@ void EditorLayer::DeleteSelected()
 	if (!entity)
 		return;
 
-	uint32_t next = m_Scene->NextEntity(m_Selected);
+	const int direct = static_cast<int>(m_Scene->GetChildren(m_Selected).size());
+	const int descendants = m_Scene->CountDescendants(m_Selected);
+	uint32_t next = 0;
+	uint32_t previous = 0;
+	bool passed = false;
+	for (Lite::Entity candidate : m_Scene->GetEntities())
+	{
+		const uint32_t id = candidate.GetId();
+		if (id == m_Selected)
+		{
+			passed = true;
+			continue;
+		}
+
+		bool child = false;
+		if (!detachChildren)
+		{
+			for (uint32_t parent = m_Scene->GetParent(id); parent != 0; parent = m_Scene->GetParent(parent))
+			{
+				if (parent != m_Selected)
+					continue;
+				child = true;
+				break;
+			}
+		}
+		if (child)
+			continue;
+
+		if (!passed)
+			previous = id;
+		else
+		{
+			next = id;
+			break;
+		}
+	}
+	if (next == 0)
+		next = previous;
+
 	std::string name = entity.GetName();
-	m_Scene->DestroyEntity(m_Selected);
+	const Lite::Scene::EntityDestroy result = m_Scene->DestroyEntity(m_Selected, detachChildren);
+	if (result == Lite::Scene::EntityDestroy::Missing)
+		return;
+
 	m_Selected = next;
 	m_Inspector.Reset();
 	m_History.Commit(*m_Scene, m_Selected);
-	Lite::Console::Log(std::format("Deleted {}", name));
+
+	if (result == Lite::Scene::EntityDestroy::RemovedChildren)
+		m_PlaneNotice = std::format("Deleted {} and {} {}.", name, descendants, descendants == 1 ? "child" : "children");
+	else if (result == Lite::Scene::EntityDestroy::DetachedChildren)
+		m_PlaneNotice = std::format("Detached {} {} and deleted {}.", direct, direct == 1 ? "child" : "children", name);
+	else
+		m_PlaneNotice.clear();
+
+	Lite::Console::Log(m_PlaneNotice.empty() ? std::format("Deleted {}", name) : m_PlaneNotice);
 }
 
 void EditorLayer::UndoSelected()
@@ -1093,8 +1143,12 @@ void EditorLayer::DrawScene()
 		if (!planeOpen)
 			continue;
 
-		for (Lite::Entity entity : m_Scene->GetEntities(plane.Id))
+		std::function<bool(Lite::Entity)> drawEntity;
+		drawEntity = [&](Lite::Entity entity) -> bool
 		{
+			if (sceneChanged)
+				return false;
+
 			std::string label = std::format("{}##entity{}", entity.GetName(), entity.GetId());
 			ImGuiTreeNodeFlags entityFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
 			if (m_Selected == entity.GetId())
@@ -1103,12 +1157,49 @@ void EditorLayer::DrawScene()
 			bool entityOpen = ImGui::TreeNodeEx(label.c_str(), entityFlags);
 			if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
 				m_Selected = entity.GetId();
+
+			const uint32_t entityId = entity.GetId();
+			if (ImGui::BeginDragDropSource())
+			{
+				ImGui::SetDragDropPayload("LITE_ENTITY", &entityId, sizeof(entityId));
+				ImGui::TextUnformatted(entity.GetName().c_str());
+				ImGui::EndDragDropSource();
+			}
+			if (ImGui::BeginDragDropTarget())
+			{
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LITE_ENTITY"))
+				{
+					const uint32_t child = *static_cast<const uint32_t*>(payload->Data);
+					if (child != entityId && m_Scene->GetParent(child) != entityId)
+					{
+						Lite::Entity dropped = m_Scene->GetEntity(child);
+						if (dropped && m_Scene->SetParent(child, entityId, true))
+						{
+							m_Selected = child;
+							m_Inspector.Reset();
+							m_History.Commit(*m_Scene, child);
+							sceneChanged = true;
+						}
+						else if (dropped)
+							Lite::Console::Log("Can't parent an entity to itself or to one of its children.");
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+
 			if (ImGui::BeginPopupContextItem())
 			{
 				m_Selected = entity.GetId();
 				if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
 				{
 					DuplicateSelected();
+					sceneChanged = true;
+				}
+				if (m_Scene->GetParent(entity.GetId()) != 0 && ImGui::MenuItem("Unparent"))
+				{
+					m_Scene->SetParent(entity.GetId(), 0, true);
+					m_Inspector.Reset();
+					m_History.Commit(*m_Scene, entity.GetId());
 					sceneChanged = true;
 				}
 				if (ImGui::MenuItem("Save Prefab"))
@@ -1120,6 +1211,11 @@ void EditorLayer::DrawScene()
 					DeleteSelected();
 					sceneChanged = true;
 				}
+				if (!m_Scene->GetChildren(entity.GetId()).empty() && ImGui::MenuItem("Detach Children and Delete"))
+				{
+					DeleteSelected(true);
+					sceneChanged = true;
+				}
 				ImGui::EndPopup();
 			}
 
@@ -1127,11 +1223,20 @@ void EditorLayer::DrawScene()
 			{
 				if (entityOpen)
 					ImGui::TreePop();
-				break;
+				return false;
 			}
 
 			if (!entityOpen)
-				continue;
+				return true;
+
+			for (Lite::Entity child : m_Scene->GetChildren(entity.GetId()))
+			{
+				if (!drawEntity(child))
+				{
+					ImGui::TreePop();
+					return false;
+				}
+			}
 
 			for (size_t index = 0; index < componentCount; ++index)
 			{
@@ -1139,6 +1244,15 @@ void EditorLayer::DrawScene()
 					ImGui::TextDisabled("%s", component);
 			}
 			ImGui::TreePop();
+			return true;
+		};
+
+		for (Lite::Entity entity : m_Scene->GetEntities(plane.Id))
+		{
+			if (m_Scene->GetParent(entity.GetId()) != 0)
+				continue;
+			if (!drawEntity(entity))
+				break;
 		}
 
 		ImGui::TreePop();
@@ -1229,10 +1343,11 @@ void EditorLayer::DrawGizmo()
 		draw->AddLine(center, { center.x + direction.x, center.y + direction.y }, color, 2.0f);
 	};
 
-	if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
+	if (entity.Get<Lite::TransformComponent>() != nullptr)
 	{
-		Lite::Vec3 axisX = transform->Local.TransformPoint({ 1.0f, 0.0f, 0.0f });
-		Lite::Vec3 axisY = transform->Local.TransformPoint({ 0.0f, 1.0f, 0.0f });
+		const Lite::Transform world = entity.WorldTransform();
+		Lite::Vec3 axisX = world.TransformPoint({ 1.0f, 0.0f, 0.0f });
+		Lite::Vec3 axisY = world.TransformPoint({ 0.0f, 1.0f, 0.0f });
 		axis({ axisX.x, axisX.y }, IM_COL32(230, 74, 74, 230));
 		axis({ axisY.x, axisY.y }, IM_COL32(78, 206, 96, 230));
 	}

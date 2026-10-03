@@ -129,6 +129,8 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 	const std::string prefab = scene->GetPrefab(entity.GetId());
 	if (!prefab.empty())
 		ImGui::TextDisabled("Prefab: %s", prefab.c_str());
+	if (Lite::Entity parent = scene->GetEntity(scene->GetParent(entity.GetId())))
+		ImGui::TextDisabled("Parent: %s", parent.GetName().c_str());
 
 	if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
 	{

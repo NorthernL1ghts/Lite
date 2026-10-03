@@ -74,7 +74,7 @@ namespace Lite {
 			const TransformComponent* transform = entity.Get<TransformComponent>();
 			if (mesh == nullptr || transform == nullptr)
 				continue;
-			if (Hits(mesh->Type, transform->Local, *world))
+			if (Hits(mesh->Type, entity.WorldTransform(), *world))
 				return entity.GetId();
 		}
 
