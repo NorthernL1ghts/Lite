@@ -19,6 +19,7 @@ namespace Lite {
 	namespace {
 
 		constexpr uint32_t MaxTextures = 16;
+		constexpr uint32_t MaxBatches = 32;
 		constexpr uint32_t MaxQuads = 4096;
 		constexpr uint32_t MaxVertices = MaxQuads * 4;
 		constexpr uint32_t MaxIndices = MaxQuads * 6;
@@ -50,8 +51,15 @@ namespace Lite {
 		std::array<Ref<Texture>, MaxTextures> s_Slots;
 		uint32_t s_SlotCount = 0;
 		Ref<Material> s_Material;
+		struct TextureBatch
+		{
+			VkDescriptorSet Set = VK_NULL_HANDLE;
+			std::array<const Texture*, MaxTextures> Bound {};
+		};
+
 		std::array<VertexArray, VulkanSync::FramesInFlight> s_Meshes;
-		std::array<VkDescriptorSet, VulkanSync::FramesInFlight> s_TextureSets {};
+		std::array<std::vector<TextureBatch>, VulkanSync::FramesInFlight> s_Batches;
+		std::array<uint32_t, VulkanSync::FramesInFlight> s_BatchUsed {};
 		VkDescriptorSetLayout s_TextureLayout = VK_NULL_HANDLE;
 		VkDescriptorPool s_TexturePool = VK_NULL_HANDLE;
 		VkDevice s_Device = VK_NULL_HANDLE;
@@ -97,25 +105,48 @@ namespace Lite {
 
 			VkDescriptorPoolSize poolSize {};
 			poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			poolSize.descriptorCount = MaxTextures * VulkanSync::FramesInFlight;
+			poolSize.descriptorCount = MaxTextures * VulkanSync::FramesInFlight * MaxBatches;
 
 			VkDescriptorPoolCreateInfo poolInfo {};
 			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			poolInfo.maxSets = VulkanSync::FramesInFlight;
+			poolInfo.maxSets = VulkanSync::FramesInFlight * MaxBatches;
 			poolInfo.poolSizeCount = 1;
 			poolInfo.pPoolSizes = &poolSize;
 			if (!CheckVk(vkCreateDescriptorPool(s_Device, &poolInfo, nullptr, &s_TexturePool), "create batch texture pool"))
 				return false;
 
-			std::array<VkDescriptorSetLayout, VulkanSync::FramesInFlight> layouts {};
-			layouts.fill(s_TextureLayout);
+			return true;
+		}
 
+		bool AllocateBatch(std::vector<TextureBatch>& batches)
+		{
+			if (batches.size() >= MaxBatches)
+				return false;
+
+			VkDescriptorSet set = VK_NULL_HANDLE;
 			VkDescriptorSetAllocateInfo allocateInfo {};
 			allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 			allocateInfo.descriptorPool = s_TexturePool;
-			allocateInfo.descriptorSetCount = VulkanSync::FramesInFlight;
-			allocateInfo.pSetLayouts = layouts.data();
-			return CheckVk(vkAllocateDescriptorSets(s_Device, &allocateInfo, s_TextureSets.data()), "allocate batch texture sets");
+			allocateInfo.descriptorSetCount = 1;
+			allocateInfo.pSetLayouts = &s_TextureLayout;
+			if (!CheckVk(vkAllocateDescriptorSets(s_Device, &allocateInfo, &set), "allocate batch texture set"))
+				return false;
+
+			TextureBatch batch;
+			batch.Set = set;
+			batches.push_back(batch);
+			return true;
+		}
+
+		TextureBatch* NextBatch(uint32_t frame)
+		{
+			std::vector<TextureBatch>& batches = s_Batches[frame];
+			const uint32_t index = s_BatchUsed[frame];
+			if (index >= batches.size() && !AllocateBatch(batches))
+				return nullptr;
+
+			s_BatchUsed[frame] = index + 1;
+			return &batches[index];
 		}
 
 		void DestroyTextureArray()
@@ -129,31 +160,50 @@ namespace Lite {
 			if (s_TextureLayout)
 				vkDestroyDescriptorSetLayout(s_Device, s_TextureLayout, nullptr);
 
-			s_TextureSets.fill(VK_NULL_HANDLE);
+			for (std::vector<TextureBatch>& batches : s_Batches)
+				batches.clear();
+			s_BatchUsed.fill(0);
 			s_TexturePool = VK_NULL_HANDLE;
 			s_TextureLayout = VK_NULL_HANDLE;
 			s_Device = VK_NULL_HANDLE;
 		}
 
-		void WriteTextures(uint32_t frame)
+		const Texture* SlotTexture(uint32_t index)
+		{
+			if (index < s_SlotCount && s_Slots[index])
+				return s_Slots[index].get();
+			return s_White.get();
+		}
+
+		void WriteChangedSlots(TextureBatch& batch)
 		{
 			std::array<VkDescriptorImageInfo, MaxTextures> images {};
+			std::array<VkWriteDescriptorSet, MaxTextures> writes {};
+			uint32_t count = 0;
 			for (uint32_t index = 0; index < MaxTextures; ++index)
 			{
-				const Ref<Texture>& slot = index < s_SlotCount && s_Slots[index] ? s_Slots[index] : s_White;
-				images[index].sampler = slot->GetSampler();
-				images[index].imageView = slot->GetView();
-				images[index].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				const Texture* texture = SlotTexture(index);
+				if (batch.Bound[index] == texture)
+					continue;
+
+				images[count].sampler = texture->GetSampler();
+				images[count].imageView = texture->GetView();
+				images[count].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+				VkWriteDescriptorSet& write = writes[count];
+				write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write.dstSet = batch.Set;
+				write.dstBinding = 0;
+				write.dstArrayElement = index;
+				write.descriptorCount = 1;
+				write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				write.pImageInfo = &images[count];
+				batch.Bound[index] = texture;
+				++count;
 			}
 
-			VkWriteDescriptorSet write {};
-			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			write.dstSet = s_TextureSets[frame];
-			write.dstBinding = 0;
-			write.descriptorCount = MaxTextures;
-			write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			write.pImageInfo = images.data();
-			vkUpdateDescriptorSets(s_Device, 1, &write, 0, nullptr);
+			if (count > 0)
+				vkUpdateDescriptorSets(s_Device, count, writes.data(), 0, nullptr);
 		}
 
 		int FindSlot(const Texture* texture)
@@ -183,7 +233,10 @@ namespace Lite {
 			}
 
 			if (s_SlotCount >= MaxTextures)
+			{
+				LITE_ERROR("Batch ran out of texture slots");
 				return 0.0f;
+			}
 
 			s_Slots[s_SlotCount] = texture ? texture : s_White;
 			return static_cast<float>(s_SlotCount++);
@@ -275,6 +328,17 @@ namespace Lite {
 			return;
 		}
 
+		for (std::vector<TextureBatch>& batches : s_Batches)
+		{
+			if (!AllocateBatch(batches))
+			{
+				LITE_ERROR("Renderer2D batch texture set failed to allocate");
+				DestroyTextureArray();
+				s_White.reset();
+				return;
+			}
+		}
+
 		std::vector<BatchVertex> vertices(MaxVertices);
 		std::vector<uint16_t> indices(MaxIndices);
 		for (VertexArray& mesh : s_Meshes)
@@ -317,6 +381,7 @@ namespace Lite {
 		s_Indices.clear();
 		s_Slots.fill({});
 		s_SlotCount = 0;
+		s_BatchUsed.fill(0);
 		s_Material.reset();
 		s_White.reset();
 		for (VertexArray& mesh : s_Meshes)
@@ -332,6 +397,8 @@ namespace Lite {
 		s_Vertices.clear();
 		s_Indices.clear();
 		ResetSlots();
+		if (Renderer::IsFrameActive())
+			s_BatchUsed[Renderer::GetFrameIndex()] = 0;
 	}
 
 	void Renderer2D::DrawQuad(const Transform& transform, const Vec4& color, const DrawSurface& surface)
@@ -409,12 +476,22 @@ namespace Lite {
 			static_cast<uint32_t>(s_Indices.size())))
 			return;
 
-		WriteTextures(frame);
+		TextureBatch* batch = NextBatch(frame);
+		if (batch == nullptr)
+		{
+			LITE_ERROR("Batch ran out of texture sets");
+			s_Vertices.clear();
+			s_Indices.clear();
+			ResetSlots();
+			return;
+		}
+
+		WriteChangedSlots(*batch);
 		Renderer::SetModel(Mat4::Identity());
 		s_Material->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 		s_Material->SetTiling({ 1.0f, 1.0f });
 		s_Material->Bind();
-		vkCmdBindDescriptorSets(Renderer::GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_Material->GetLayout(), 2, 1, &s_TextureSets[frame], 0, nullptr);
+		vkCmdBindDescriptorSets(Renderer::GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_Material->GetLayout(), 2, 1, &batch->Set, 0, nullptr);
 		RendererAPI::DrawIndexed(s_Meshes[frame]);
 
 		s_Vertices.clear();

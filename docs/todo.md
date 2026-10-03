@@ -32,21 +32,13 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Sandbox scene.** `assets/scenes/Sandbox.scene` shows one use of each current feature: three planes, a sprite, a quad, and a triangle, an orthographic camera and a perspective camera that is not primary, a static ground, a dynamic crate and ball, a kinematic spinner, a trigger, `Bounce`, `Patrol`, and `Sensor`, a parent with two children, and prefab links on the ground, crate, and ball. The crate and the ball start above the ground.
 - **Scene check.** `SceneCheck` loads `Sandbox/assets/scenes/Sandbox.scene` with no window. Background is behind World, and World is behind Foreground. Before play, the bottom of the crate and the bottom of the ball are above the top of the ground. `scripts\build.bat --check` builds, runs that program, and does not open the editor. A failure prints one line and exits non-zero.
 - **Viewport target.** The editor draws the scene into a color target the size of the Viewport panel and shows that image in the panel. Picking and gizmos use that rectangle and the same view projection. Resizing the panel resizes the target. A zero-size panel draws nothing. Play uses the same image. Sandbox still draws into its window.
+- **Batch flush.** Vertex and index memory stay mapped. A flush copies only the vertices and indices written since the last flush. A texture slot is written when that slot changes, and an unchanged frame does not call `vkUpdateDescriptorSets`. More than 16 textures flush and continue on another descriptor set, so the next texture is drawn.
 
 ## Next
 
 Do these in order.
 
-### 1. Batch flush
-
-Every flush uploads the whole vertex buffer and rewrites all 16 texture slots, including slots that did not change.
-
-- Vertex memory stays mapped. A flush copies only the vertices written since the last flush.
-- A texture slot is written when that slot changes. An unchanged frame does not call `vkUpdateDescriptorSets` for the full array.
-- A scene that uses more than 16 textures still flushes and continues. The 17th texture is not dropped.
-- The Sandbox picture stays the same.
-
-### 2. Matte shader path
+### 1. Matte shader path
 
 The fragment shader always builds the highlight. A material with roughness 1, metallic 0, and emission 0 is the common case, and that highlight is zero. Vertex UVs already include tiling, and the flush sets the material tiling uniform to 1.
 
@@ -54,7 +46,7 @@ The fragment shader always builds the highlight. A material with roughness 1, me
 - Roughness below 1, metallic above 0, and emission above 0 keep the current highlight, metal tint, and glow.
 - The unused tiling multiply is removed, or the uniform stops pretending to tile. Existing scenes do not shift their UVs.
 
-### 3. Scripted motion
+### 2. Scripted motion
 
 A script runs before the physics step. The step then copies velocity from Box2D back onto the component. Writing `LinearVelocity` during update does not move a kinematic body. `Patrol` works by moving a parent that has no body, and a static child collider is teleported after the step.
 

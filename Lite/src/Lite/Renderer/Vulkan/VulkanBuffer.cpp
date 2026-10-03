@@ -21,25 +21,35 @@ namespace Lite {
 
 		m_Buffer = allocated.Buffer;
 		m_Memory = allocated.Memory;
+		m_Capacity = size;
+		m_Mapped = nullptr;
+		if (!CheckVk(vkMapMemory(m_Device, m_Memory, 0, size, 0, &m_Mapped), "map buffer") || m_Mapped == nullptr)
+		{
+			m_Mapped = nullptr;
+			Destroy();
+			return false;
+		}
+
 		return true;
 	}
 
 	bool VulkanBuffer::Upload(const void* data, VkDeviceSize size)
 	{
-		if (!data || size == 0)
+		if (m_Mapped == nullptr || data == nullptr || size == 0 || size > m_Capacity)
 			return false;
 
-		void* mapped = nullptr;
-		if (!CheckVk(vkMapMemory(m_Device, m_Memory, 0, size, 0, &mapped), "map buffer") || !mapped)
-			return false;
-
-		std::memcpy(mapped, data, static_cast<size_t>(size));
-		vkUnmapMemory(m_Device, m_Memory);
+		std::memcpy(m_Mapped, data, static_cast<size_t>(size));
 		return true;
 	}
 
 	void VulkanBuffer::Destroy()
 	{
+		if (m_Mapped != nullptr && m_Memory != VK_NULL_HANDLE)
+		{
+			vkUnmapMemory(m_Device, m_Memory);
+			m_Mapped = nullptr;
+		}
+
 		if (m_Buffer)
 		{
 			vkDestroyBuffer(m_Device, m_Buffer, nullptr);
@@ -51,6 +61,8 @@ namespace Lite {
 			vkFreeMemory(m_Device, m_Memory, nullptr);
 			m_Memory = VK_NULL_HANDLE;
 		}
+
+		m_Capacity = 0;
 	}
 
 	void VulkanBuffer::BindVertex(VkCommandBuffer commandBuffer) const

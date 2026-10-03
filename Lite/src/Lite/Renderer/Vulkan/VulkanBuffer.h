@@ -20,6 +20,8 @@ namespace Lite {
 		VkDevice m_Device = VK_NULL_HANDLE;
 		VkBuffer m_Buffer = VK_NULL_HANDLE;
 		VkDeviceMemory m_Memory = VK_NULL_HANDLE;
+		void* m_Mapped = nullptr;
+		VkDeviceSize m_Capacity = 0;
 	};
 
 }
