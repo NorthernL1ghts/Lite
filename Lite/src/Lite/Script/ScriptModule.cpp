@@ -21,7 +21,7 @@ namespace Lite {
 			std::string Name;
 			void (*Start)(Entity entity) = nullptr;
 			void (*Update)(Entity entity, float seconds) = nullptr;
-			void (*OnCollision)(Entity entity, uint32_t other) = nullptr;
+			void (*OnCollision)(Entity entity, uint32_t other, bool begin) = nullptr;
 		};
 
 		HMODULE s_Module = nullptr;
@@ -74,7 +74,7 @@ namespace Lite {
 			}
 		}
 
-		void CallCollision(Scene& scene, uint32_t self, uint32_t other)
+		void CallCollision(Scene& scene, uint32_t self, uint32_t other, bool begin)
 		{
 			if (self == 0)
 				return;
@@ -86,7 +86,7 @@ namespace Lite {
 
 			const LoadedScript* type = FindScript(script->Class);
 			if (type != nullptr && type->OnCollision != nullptr)
-				type->OnCollision(entity, other);
+				type->OnCollision(entity, other, begin);
 		}
 
 	}
@@ -181,13 +181,13 @@ namespace Lite {
 		}
 	}
 
-	void ScriptRuntime::OnCollision(Scene& scene, uint32_t first, uint32_t second)
+	void ScriptRuntime::OnCollision(Scene& scene, uint32_t first, uint32_t second, bool begin)
 	{
 		if (s_Module == nullptr)
 			return;
 
-		CallCollision(scene, first, second);
-		CallCollision(scene, second, first);
+		CallCollision(scene, first, second, begin);
+		CallCollision(scene, second, first, begin);
 	}
 
 }

@@ -164,8 +164,6 @@ planes:
           position: [0, -0.75, 0]
           rotation: 0
           scale: [1, 1, 1]
-        script:
-          class: Patrol
       - name: Platform
         parent: 7
         transform:
@@ -180,12 +178,14 @@ planes:
           tiling: [1, 1]
           vertex-colors: false
         rigidbody2d:
-          type: static
+          type: kinematic
           mass: 1
-          gravity: 1
+          gravity: 0
           velocity: [0, 0]
           angular: 0
           freeze: true
+        script:
+          class: Patrol
         box-collider2d:
           size: [1, 1]
           offset: [0, 0]
@@ -193,7 +193,7 @@ planes:
         sorting:
           order: 1
       - name: Flag
-        parent: 7
+        parent: 8
         transform:
           position: [0.72, 0.34, 0]
           rotation: 0

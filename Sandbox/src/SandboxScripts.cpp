@@ -10,8 +10,8 @@ namespace {
 
 	float s_BounceTime = 0.0f;
 	float s_PatrolTime = 0.0f;
-	float s_PatrolOrigin = 0.0f;
 	float s_SensorFlash = 0.0f;
+	int s_SensorContacts = 0;
 
 	std::string OtherName(std::uint32_t other)
 	{
@@ -40,33 +40,38 @@ namespace {
 		material->Color.x = 0.55f + 0.45f * std::sin(s_BounceTime * 6.0f);
 	}
 
-	void BounceCollision(Lite::Entity self, std::uint32_t other)
+	void BounceCollision(Lite::Entity self, std::uint32_t other, bool begin)
 	{
-		Lite::Console::Log(std::format("{} collided with {} ({})", self.GetName(), OtherName(other), other));
+		const char* verb = begin ? "collided with" : "left";
+		Lite::Console::Log(std::format("{} {} {} ({})", self.GetName(), verb, OtherName(other), other));
 	}
 
 	void PatrolStart(Lite::Entity entity)
 	{
-		if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
-			s_PatrolOrigin = transform->Local.Position.x;
 		Lite::Console::Log(std::format("{} started", entity.GetName()));
 	}
 
 	void PatrolUpdate(Lite::Entity entity, float seconds)
 	{
 		s_PatrolTime += seconds;
-		Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>();
-		if (transform == nullptr)
+		Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>();
+		if (body == nullptr)
 			return;
 
-		transform->Local.Position.x = s_PatrolOrigin + std::sin(s_PatrolTime * 0.85f) * 1.35f;
+		body->LinearVelocity.x = std::cos(s_PatrolTime * 0.85f) * 1.35f * 0.85f;
+		body->LinearVelocity.y = 0.0f;
 	}
 
 	void SensorUpdate(Lite::Entity entity, float seconds)
 	{
-		s_SensorFlash -= seconds * 1.6f;
-		if (s_SensorFlash < 0.0f)
-			s_SensorFlash = 0.0f;
+		if (s_SensorContacts > 0)
+			s_SensorFlash = 1.0f;
+		else
+		{
+			s_SensorFlash -= seconds * 1.6f;
+			if (s_SensorFlash < 0.0f)
+				s_SensorFlash = 0.0f;
+		}
 
 		Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>();
 		if (material == nullptr)
@@ -75,10 +80,19 @@ namespace {
 		material->Color.w = 0.35f + 0.55f * s_SensorFlash;
 	}
 
-	void SensorCollision(Lite::Entity self, std::uint32_t other)
+	void SensorCollision(Lite::Entity self, std::uint32_t other, bool begin)
 	{
-		s_SensorFlash = 1.0f;
-		Lite::Console::Log(std::format("{} overlapped {} ({})", self.GetName(), OtherName(other), other));
+		if (begin)
+		{
+			++s_SensorContacts;
+			s_SensorFlash = 1.0f;
+			Lite::Console::Log(std::format("{} overlapped {} ({})", self.GetName(), OtherName(other), other));
+			return;
+		}
+
+		if (s_SensorContacts > 0)
+			--s_SensorContacts;
+		Lite::Console::Log(std::format("{} cleared {} ({})", self.GetName(), OtherName(other), other));
 	}
 
 }

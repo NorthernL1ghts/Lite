@@ -75,7 +75,7 @@ namespace Lite {
 			return entity.GetName();
 		}
 
-		void ReportOverlap(Scene& scene, b2ShapeId first, b2ShapeId second, const char* label)
+		void ReportOverlap(Scene& scene, b2ShapeId first, b2ShapeId second, const char* label, bool begin)
 		{
 			if (!b2Shape_IsValid(first) || !b2Shape_IsValid(second))
 				return;
@@ -83,7 +83,7 @@ namespace Lite {
 			uint32_t firstId = EntityId(first);
 			uint32_t secondId = EntityId(second);
 			Console::Log(std::format("{}: {} and {}", label, EntityName(scene, firstId), EntityName(scene, secondId)));
-			ScriptRuntime::OnCollision(scene, firstId, secondId);
+			ScriptRuntime::OnCollision(scene, firstId, secondId, begin);
 		}
 
 		bool AddBox(b2BodyId body, const Transform& transform, const BoxCollider2DComponent& box)
@@ -351,19 +351,32 @@ namespace Lite {
 		if (seconds > 0.05f)
 			seconds = 0.05f;
 
+		for (const PhysicsStorage::Body& body : m_Physics->Bodies)
+		{
+			if (!b2Body_IsValid(body.Id))
+				continue;
+
+			Entity entity = GetEntity(body.Entity);
+			Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>();
+			if (rigidbody == nullptr || rigidbody->Type == BodyType::Static)
+				continue;
+
+			b2Body_SetLinearVelocity(body.Id, { rigidbody->LinearVelocity.x, rigidbody->LinearVelocity.y });
+		}
+
 		b2World_Step(m_Physics->World, seconds, 4);
 
 		b2ContactEvents contacts = b2World_GetContactEvents(m_Physics->World);
 		for (int index = 0; index < contacts.beginCount; ++index)
-			ReportOverlap(*this, contacts.beginEvents[index].shapeIdA, contacts.beginEvents[index].shapeIdB, "Collision");
+			ReportOverlap(*this, contacts.beginEvents[index].shapeIdA, contacts.beginEvents[index].shapeIdB, "Collision", true);
 		for (int index = 0; index < contacts.endCount; ++index)
-			ReportOverlap(*this, contacts.endEvents[index].shapeIdA, contacts.endEvents[index].shapeIdB, "Collision end");
+			ReportOverlap(*this, contacts.endEvents[index].shapeIdA, contacts.endEvents[index].shapeIdB, "Collision end", false);
 
 		b2SensorEvents sensors = b2World_GetSensorEvents(m_Physics->World);
 		for (int index = 0; index < sensors.beginCount; ++index)
-			ReportOverlap(*this, sensors.beginEvents[index].sensorShapeId, sensors.beginEvents[index].visitorShapeId, "Trigger");
+			ReportOverlap(*this, sensors.beginEvents[index].sensorShapeId, sensors.beginEvents[index].visitorShapeId, "Trigger", true);
 		for (int index = 0; index < sensors.endCount; ++index)
-			ReportOverlap(*this, sensors.endEvents[index].sensorShapeId, sensors.endEvents[index].visitorShapeId, "Trigger end");
+			ReportOverlap(*this, sensors.endEvents[index].sensorShapeId, sensors.endEvents[index].visitorShapeId, "Trigger end", false);
 
 		std::vector<size_t> order(m_Physics->Bodies.size());
 		for (size_t index = 0; index < order.size(); ++index)
