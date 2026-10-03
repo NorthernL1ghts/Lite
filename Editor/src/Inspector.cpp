@@ -19,27 +19,64 @@ namespace {
 
 	void ColorField(const char* label, Lite::Vec4& color)
 	{
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextUnformatted(label);
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(-1.0f);
-		ImGui::ColorEdit4(label, &color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_NoLabel);
+		ImGui::PushID(label);
+		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0.0f, 2.0f));
+		if (ImGui::BeginTable("##color", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoPadOuterX))
+		{
+			ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn("swatch", ImGuiTableColumnFlags_WidthFixed, 54.0f);
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted(label);
+			ImGui::TableSetColumnIndex(1);
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::ColorEdit4("##swatch", &color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_NoLabel);
+			ImGui::EndTable();
+		}
+		ImGui::PopStyleVar();
+		ImGui::PopID();
 	}
 
-	bool ComponentHeader(const char* label, const char* id)
+	enum class SectionAction
 	{
-		ImGui::Separator();
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextUnformatted(label);
-		const float width = ImGui::CalcTextSize("Remove").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-		ImGui::SameLine();
-		const float spare = ImGui::GetContentRegionAvail().x - width;
-		if (spare > 0.0f)
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + spare);
+		Closed,
+		Open,
+		Remove
+	};
+
+	SectionAction ComponentSection(const char* label, const char* id, bool openByDefault)
+	{
+		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth;
+		if (openByDefault)
+			flags |= ImGuiTreeNodeFlags_DefaultOpen;
+
 		ImGui::PushID(id);
-		const bool pressed = ImGui::SmallButton("Remove");
+		const float removeWidth = ImGui::CalcTextSize("Remove").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+		bool open = false;
+		bool remove = false;
+		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0.0f, 2.0f));
+		if (ImGui::BeginTable("##row", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoPadOuterX))
+		{
+			ImGui::TableSetupColumn("title", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn("remove", ImGuiTableColumnFlags_WidthFixed, removeWidth + 8.0f);
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			open = ImGui::CollapsingHeader(label, flags);
+			ImGui::TableSetColumnIndex(1);
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.16f, 0.16f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.48f, 0.22f, 0.22f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.58f, 0.24f, 0.24f, 1.0f));
+			remove = ImGui::Button("Remove", ImVec2(removeWidth, ImGui::GetFrameHeight()));
+			ImGui::PopStyleColor(3);
+			ImGui::EndTable();
+		}
+		ImGui::PopStyleVar();
 		ImGui::PopID();
-		return pressed;
+		if (remove)
+			return SectionAction::Remove;
+		return open ? SectionAction::Open : SectionAction::Closed;
 	}
 
 	void SaveMaterial(Lite::Scene& scene, Lite::Entity entity)
@@ -73,8 +110,8 @@ namespace {
 	{
 		ImGui::AlignTextToFramePadding();
 		ImGui::TextUnformatted(label);
-		ImGui::SameLine(110.0f);
-		ImGui::SetNextItemWidth(-1.0f);
+		ImGui::SameLine(0.0f, 8.0f);
+		ImGui::SetNextItemWidth(std::max(48.0f, ImGui::GetContentRegionAvail().x));
 		return ImGui::SliderFloat(std::format("##{}", label).c_str(), &value, min, max, "%.2f");
 	}
 
@@ -164,6 +201,7 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 	if (ImGui::InputText("##ObjectName", m_ObjectName, sizeof(m_ObjectName)))
 		entity.SetName(m_ObjectName);
 	finish();
+	ImGui::PushItemWidth(std::max(80.0f, ImGui::GetContentRegionAvail().x * 0.62f));
 
 	const std::string prefab = scene->GetPrefab(entity.GetId());
 	if (!prefab.empty())
@@ -173,13 +211,14 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 
 	if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
 	{
-		if (ComponentHeader("Transform", "Transform"))
+		switch (ComponentSection("Transform", "Transform", true))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::TransformComponent>();
 			removed("Transform");
-		}
-		else
-		{
+			break;
+			case SectionAction::Open:
+			{
 			if (ImGui::DragFloat3("Position", &transform->Local.Position.x, 0.01f))
 				refreshPhysics();
 			finish();
@@ -193,19 +232,24 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			if (ImGui::DragFloat3("Scale", &transform->Local.Scale.x, 0.01f))
 				refreshPhysics();
 			finish();
+			break;
+			}
+			default:
+				break;
 		}
 	}
 
 	if (Lite::CameraComponent* camera = entity.Get<Lite::CameraComponent>())
 	{
 		const char* cameraLabel = EntryLabel(entity, "Orthographic Camera", "Orthographic Camera");
-		if (ComponentHeader(cameraLabel, "Camera"))
+		switch (ComponentSection(cameraLabel, "Camera", false))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::CameraComponent>();
 			removed(cameraLabel);
-		}
-		else
-		{
+			break;
+			case SectionAction::Open:
+			{
 		const char* projections[] = { "Orthographic", "Perspective" };
 		int projection = static_cast<int>(camera->Projection);
 		if (ImGui::Combo("Projection", &projection, projections, 2))
@@ -229,10 +273,6 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			finish();
 		}
 		finish();
-		ImGui::DragFloat("Near", &camera->Near, 0.01f);
-		finish();
-		ImGui::DragFloat("Far", &camera->Far, 0.01f);
-		finish();
 		bool primary = camera->Primary;
 		if (ImGui::Checkbox("Primary", &primary))
 		{
@@ -242,39 +282,55 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 				camera->Primary = false;
 		}
 		finish();
+		if (ImGui::TreeNode("Clipping"))
+		{
+			ImGui::DragFloat("Near", &camera->Near, 0.01f);
+			finish();
+			ImGui::DragFloat("Far", &camera->Far, 0.01f);
+			finish();
+			ImGui::TreePop();
+		}
+			break;
+			}
+			default:
+				break;
 		}
 	}
 
 	if (Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>())
 	{
 		const char* meshLabel = EntryLabel(entity, "Quad", "Quad");
-		if (ComponentHeader(meshLabel, "Mesh"))
+		switch (ComponentSection(meshLabel, "Mesh", true))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::MeshComponent>();
 			removed(meshLabel);
-		}
-		else
-		{
+			break;
+			case SectionAction::Open:
+			{
 			const char* types[] = { "Quad", "Triangle", "Sprite" };
 			int current = static_cast<int>(mesh->Type);
 			if (ImGui::Combo("Type", &current, types, 3))
 				mesh->Type = static_cast<Lite::MeshType>(current);
 			finish();
+			break;
+			}
+			default:
+				break;
 		}
 	}
 
 	if (Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>())
 	{
 		ImGui::BeginGroup();
-		if (ComponentHeader("Material", "Material"))
+		switch (ComponentSection("Material", "Material", true))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::MaterialComponent>();
 			removed("Material");
-		}
-		else
-		{
-		Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
-		const bool triangle = mesh != nullptr && mesh->Type == Lite::MeshType::Triangle;
+			break;
+			case SectionAction::Open:
+			{
 		if (!material->UseVertexColors)
 		{
 			ColorField("Color", material->Color);
@@ -285,58 +341,63 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 		if (SurfaceSlider("Opacity", opacity, 0.0f, 1.0f))
 			material->Color.w = opacity;
 		finish();
-		if (SurfaceSlider("Roughness", material->Roughness, 0.0f, 1.0f))
-			material->Roughness = std::clamp(material->Roughness, 0.0f, 1.0f);
-		finish();
-		if (SurfaceSlider("Metallic", material->Metallic, 0.0f, 1.0f))
-			material->Metallic = std::clamp(material->Metallic, 0.0f, 1.0f);
-		finish();
-		if (SurfaceSlider("Emission", material->Emission, 0.0f, 4.0f))
-			material->Emission = std::max(material->Emission, 0.0f);
-		finish();
-		ImGui::TextDisabled("0 roughness is smooth. 1 is matte. Emission adds glow.");
 
-		ImGui::Checkbox("Vertex colors", &material->UseVertexColors);
-		finish();
-		if (material->UseVertexColors)
+		if (ImGui::TreeNode("Surface"))
 		{
-			const char* quadNames[] = { "Bottom left", "Bottom right", "Top right", "Top left" };
-			const char* triangleNames[] = { "Bottom", "Upper left", "Upper right" };
-			int colors = triangle ? 3 : 4;
-			for (int index = 0; index < colors; ++index)
-			{
-				const char* name = triangle ? triangleNames[index] : quadNames[index];
-				ColorField(name, material->Colors[index]);
-				finish();
-			}
+			if (SurfaceSlider("Roughness", material->Roughness, 0.0f, 1.0f))
+				material->Roughness = std::clamp(material->Roughness, 0.0f, 1.0f);
+			finish();
+			if (SurfaceSlider("Metallic", material->Metallic, 0.0f, 1.0f))
+				material->Metallic = std::clamp(material->Metallic, 0.0f, 1.0f);
+			finish();
+			if (SurfaceSlider("Emission", material->Emission, 0.0f, 4.0f))
+				material->Emission = std::max(material->Emission, 0.0f);
+			finish();
+			ImGui::TextDisabled("0 roughness is smooth. 1 is matte.");
+			ImGui::TreePop();
 		}
 
-		ImGui::DragFloat2("Tiling", &material->Tiling.x, 0.01f, 0.0f, 64.0f);
-		finish();
-		ImGui::DragFloat2("Offset", &material->Offset.x, 0.01f);
-		finish();
+		if (ImGui::TreeNode("More"))
+		{
+			Lite::MeshComponent* mesh = entity.Get<Lite::MeshComponent>();
+			const bool triangle = mesh != nullptr && mesh->Type == Lite::MeshType::Triangle;
+			ImGui::Checkbox("Vertex colors", &material->UseVertexColors);
+			finish();
+			if (material->UseVertexColors)
+			{
+				const char* quadNames[] = { "Bottom left", "Bottom right", "Top right", "Top left" };
+				const char* triangleNames[] = { "Bottom", "Upper left", "Upper right" };
+				int colors = triangle ? 3 : 4;
+				for (int index = 0; index < colors; ++index)
+				{
+					const char* name = triangle ? triangleNames[index] : quadNames[index];
+					ColorField(name, material->Colors[index]);
+					finish();
+				}
+			}
 
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextUnformatted("Texture");
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(-1.0f);
-		if (ImGui::InputText("##Texture", m_TextureText, sizeof(m_TextureText)))
-			scene->AssignTexture(entity.GetId(), m_TextureText);
-		if (ImGui::IsItemDeactivatedAfterEdit())
-			std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material->TexturePath.c_str());
-		finish();
-		ImGui::TextDisabled("Drop a texture or a .material file on this section.");
-
-		if (ImGui::Button("Save Material"))
-			SaveMaterial(*scene, entity);
-		ImGui::SameLine();
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextUnformatted("Shader");
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(-1.0f);
-		if (ImGui::InputText("##Shader", m_ShaderText, sizeof(m_ShaderText)))
-			material->Shader = m_ShaderText;
-		finish();
+			ImGui::DragFloat2("Tiling", &material->Tiling.x, 0.01f, 0.0f, 64.0f);
+			finish();
+			ImGui::DragFloat2("Offset", &material->Offset.x, 0.01f);
+			finish();
+			ImGui::SetNextItemWidth(-1.0f);
+			if (ImGui::InputTextWithHint("##Texture", "Texture path", m_TextureText, sizeof(m_TextureText)))
+				scene->AssignTexture(entity.GetId(), m_TextureText);
+			if (ImGui::IsItemDeactivatedAfterEdit())
+				std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material->TexturePath.c_str());
+			finish();
+			if (ImGui::Button("Save Material"))
+				SaveMaterial(*scene, entity);
+			ImGui::SetNextItemWidth(-1.0f);
+			if (ImGui::InputTextWithHint("##Shader", "Shader", m_ShaderText, sizeof(m_ShaderText)))
+				material->Shader = m_ShaderText;
+			finish();
+			ImGui::TreePop();
+		}
+			break;
+			}
+			default:
+				break;
 		}
 		ImGui::EndGroup();
 		if (ImGui::BeginDragDropTarget())
@@ -361,26 +422,33 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 
 	if (Lite::SpinComponent* spin = entity.Get<Lite::SpinComponent>())
 	{
-		if (ComponentHeader("Spin", "Spin"))
+		switch (ComponentSection("Spin", "Spin", false))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::SpinComponent>();
 			removed("Spin");
+			break;
+			case SectionAction::Open:
+			if (ImGui::DragFloat("Rate", &spin->Rate, 0.01f))
+				refreshPhysics();
+			finish();
+			break;
+			default:
+				break;
 		}
-		else if (ImGui::DragFloat("Rate", &spin->Rate, 0.01f))
-			refreshPhysics();
-		finish();
 	}
 
 	if (Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>())
 	{
 		const char* bodyLabel = EntryLabel(entity, "Rigidbody 2D", "Dynamic Rigidbody");
-		if (ComponentHeader(bodyLabel, "Rigidbody"))
+		switch (ComponentSection(bodyLabel, "Rigidbody", false))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::Rigidbody2DComponent>();
 			removed(bodyLabel);
-		}
-		else
-		{
+			break;
+			case SectionAction::Open:
+			{
 		const char* types[] = { "Static", "Kinematic", "Dynamic" };
 		int current = static_cast<int>(body->Type);
 		if (ImGui::Combo("Body", &current, types, 3))
@@ -389,33 +457,42 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			refreshPhysics();
 		}
 		finish();
-		if (ImGui::DragFloat("Mass", &body->Mass, 0.01f, 0.0f, 1000.0f))
-			refreshPhysics();
-		finish();
-		if (ImGui::DragFloat("Gravity", &body->GravityScale, 0.01f))
-			refreshPhysics();
-		finish();
-		if (ImGui::DragFloat2("Velocity", &body->LinearVelocity.x, 0.01f))
-			refreshPhysics();
-		finish();
-		if (ImGui::DragFloat("Angular", &body->AngularVelocity, 0.01f))
-			refreshPhysics();
-		finish();
 		if (ImGui::Checkbox("Freeze rotation", &body->FreezeRotation))
 			refreshPhysics();
 		finish();
+		if (ImGui::TreeNode("Motion"))
+		{
+			if (ImGui::DragFloat("Mass", &body->Mass, 0.01f, 0.0f, 1000.0f))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat("Gravity", &body->GravityScale, 0.01f))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat2("Velocity", &body->LinearVelocity.x, 0.01f))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat("Angular", &body->AngularVelocity, 0.01f))
+				refreshPhysics();
+			finish();
+			ImGui::TreePop();
+		}
+			break;
+			}
+			default:
+				break;
 		}
 	}
 
 	if (Lite::BoxCollider2DComponent* box = entity.Get<Lite::BoxCollider2DComponent>())
 	{
-		if (ComponentHeader("Box Collider 2D", "BoxCollider"))
+		switch (ComponentSection("Box Collider 2D", "BoxCollider", false))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::BoxCollider2DComponent>();
 			removed("Box Collider 2D");
-		}
-		else
-		{
+			break;
+			case SectionAction::Open:
+			{
 			if (ImGui::DragFloat2("Box size", &box->Size.x, 0.01f, 0.0f, 100.0f))
 				refreshPhysics();
 			finish();
@@ -425,18 +502,23 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			if (ImGui::Checkbox("Box trigger", &box->IsTrigger))
 				refreshPhysics();
 			finish();
+			break;
+			}
+			default:
+				break;
 		}
 	}
 
 	if (Lite::CircleCollider2DComponent* circle = entity.Get<Lite::CircleCollider2DComponent>())
 	{
-		if (ComponentHeader("Circle Collider 2D", "CircleCollider"))
+		switch (ComponentSection("Circle Collider 2D", "CircleCollider", false))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::CircleCollider2DComponent>();
 			removed("Circle Collider 2D");
-		}
-		else
-		{
+			break;
+			case SectionAction::Open:
+			{
 			if (ImGui::DragFloat("Radius", &circle->Radius, 0.01f, 0.0f, 100.0f))
 				refreshPhysics();
 			finish();
@@ -446,35 +528,46 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			if (ImGui::Checkbox("Circle trigger", &circle->IsTrigger))
 				refreshPhysics();
 			finish();
+			break;
+			}
+			default:
+				break;
 		}
 	}
 
 	if (Lite::SortingComponent* sorting = entity.Get<Lite::SortingComponent>())
 	{
-		if (ComponentHeader("Sorting", "Sorting"))
+		switch (ComponentSection("Sorting", "Sorting", false))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::SortingComponent>();
 			removed("Sorting");
-		}
-		else
+			break;
+			case SectionAction::Open:
 			ImGui::DragInt("Order", &sorting->Order);
-		finish();
+			finish();
+			break;
+			default:
+				break;
+		}
 	}
 
 	if (Lite::ScriptComponent* script = entity.Get<Lite::ScriptComponent>())
 	{
-		if (ComponentHeader("Script", "Script"))
+		switch (ComponentSection("Script", "Script", false))
 		{
+			case SectionAction::Remove:
 			entity.Remove<Lite::ScriptComponent>();
 			removed("Script");
-		}
-		else
-		{
+			break;
+			case SectionAction::Open:
 			ImGui::SetNextItemWidth(-1.0f);
-			if (ImGui::InputText("##ScriptClass", m_ScriptText, sizeof(m_ScriptText)))
+			if (ImGui::InputTextWithHint("##ScriptClass", "Class name", m_ScriptText, sizeof(m_ScriptText)))
 				script->Class = m_ScriptText;
 			finish();
-			ImGui::TextDisabled("Class name in the project script module");
+			break;
+			default:
+				break;
 		}
 	}
 
@@ -496,5 +589,6 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 		history.Commit(*scene, entity.GetId());
 	}
 
+	ImGui::PopItemWidth();
 	ImGui::End();
 }

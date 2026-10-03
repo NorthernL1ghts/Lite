@@ -329,7 +329,7 @@ void EditorLayer::AssignScriptModule(const std::filesystem::path& picked)
 		SaveProject();
 }
 
-void EditorLayer::DrawScriptModule()
+void EditorLayer::DrawScriptModule(bool showFields)
 {
 	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
 	if (!project)
@@ -342,26 +342,29 @@ void EditorLayer::DrawScriptModule()
 		std::snprintf(m_ScriptModule, sizeof(m_ScriptModule), "%s", current.c_str());
 	}
 
-	ImGui::AlignTextToFramePadding();
-	ImGui::TextUnformatted("Script module");
-	ImGui::SetNextItemWidth(-80.0f);
-	ImGui::InputText("##ScriptModule", m_ScriptModule, sizeof(m_ScriptModule));
-	if (ImGui::IsItemDeactivatedAfterEdit())
-		AssignScriptModule(m_ScriptModule);
-	ImGui::SameLine();
-	if (ImGui::Button("Browse"))
+	if (showFields)
 	{
-		m_PickScript = true;
-		std::filesystem::path start = project->GetProjectDirectory();
-		if (!current.empty())
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted("Script module");
+		ImGui::SetNextItemWidth(-80.0f);
+		ImGui::InputText("##ScriptModule", m_ScriptModule, sizeof(m_ScriptModule));
+		if (ImGui::IsItemDeactivatedAfterEdit())
+			AssignScriptModule(m_ScriptModule);
+		ImGui::SameLine();
+		if (ImGui::Button("Browse"))
 		{
-			std::filesystem::path file = std::filesystem::path(current);
-			if (!file.is_absolute())
-				file = start / file;
-			if (!file.parent_path().empty())
-				start = file.parent_path();
+			m_PickScript = true;
+			std::filesystem::path start = project->GetProjectDirectory();
+			if (!current.empty())
+			{
+				std::filesystem::path file = std::filesystem::path(current);
+				if (!file.is_absolute())
+					file = start / file;
+				if (!file.parent_path().empty())
+					start = file.parent_path();
+			}
+			m_ScriptBrowserDir = start.empty() ? Lite::FileSystem::ExecutableDirectory().string() : start.string();
 		}
-		m_ScriptBrowserDir = start.empty() ? Lite::FileSystem::ExecutableDirectory().string() : start.string();
 	}
 
 	if (m_PickScript)
@@ -841,7 +844,7 @@ void EditorLayer::OnEvent(Lite::Event& event)
 
 void EditorLayer::DrawMenu()
 {
-	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 8.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
 	if (!ImGui::BeginMainMenuBar())
 	{
 		ImGui::PopStyleVar();
@@ -899,8 +902,15 @@ void EditorLayer::DrawMenu()
 		ImGui::EndMenu();
 	}
 
-	float transport = 28.0f * 3.0f + 8.0f * 2.0f;
-	ImGui::SetCursorPosX((ImGui::GetWindowWidth() - transport) * 0.5f);
+	const float transport = 28.0f * 3.0f + 8.0f * 2.0f;
+	const float gap = 16.0f;
+	const float menuEnd = ImGui::GetCursorPosX();
+	const float centered = (ImGui::GetWindowWidth() - transport) * 0.5f;
+	const float right = ImGui::GetWindowWidth() - transport - ImGui::GetStyle().WindowPadding.x;
+	float transportX = centered >= menuEnd + gap ? centered : right;
+	if (transportX < menuEnd + gap)
+		transportX = menuEnd + gap;
+	ImGui::SetCursorPosX(transportX);
 	bool playing = m_Scene && m_Scene->IsPlaying();
 	bool paused = m_Scene && m_Scene->GetPlayback() == Lite::ScenePlayback::Paused;
 	if (TransportButton("##Play", m_Scene != nullptr, playing, ImVec4(0.18f, 0.48f, 0.28f, 1.0f), TransportSymbol::Play))
@@ -993,12 +1003,12 @@ void EditorLayer::OnImGuiRender()
 void EditorLayer::DrawScene()
 {
 	ImGui::Begin("Scene");
-	if (Lite::Ref<Lite::Project> project = Lite::Project::GetActive())
+	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
+	if (project)
 	{
-		ImGui::TextDisabled("%s", project->GetConfig().Name.c_str());
-		if (!m_ProjectPath.empty())
-			ImGui::TextWrapped("%s", m_ProjectPath.string().c_str());
-		DrawScriptModule();
+		ImGui::TextUnformatted(project->GetConfig().Name.c_str());
+		if (!m_ProjectPath.empty() && ImGui::IsItemHovered())
+			ImGui::SetTooltip("%s", m_ProjectPath.string().c_str());
 	}
 
 	if (m_Scene)
@@ -1012,6 +1022,14 @@ void EditorLayer::DrawScene()
 			m_History.Commit(*m_Scene, m_Selected);
 	}
 
+	const bool projectOpen = project && ImGui::CollapsingHeader("Project");
+	if (projectOpen)
+	{
+		if (!m_ProjectPath.empty())
+			ImGui::TextWrapped("%s", m_ProjectPath.string().c_str());
+	}
+	DrawScriptModule(projectOpen);
+
 	if (m_Scene == nullptr)
 	{
 		ImGui::TextDisabled("No scene");
@@ -1020,12 +1038,10 @@ void EditorLayer::DrawScene()
 	}
 
 	const char* playback = Lite::PlaybackName(m_Scene->GetPlayback());
-	ImGui::TextDisabled("%s  %s", m_Scene->GetName().c_str(), playback);
-	if (!m_Scene->GetPath().empty())
-		ImGui::TextWrapped("%s", m_Scene->GetPath().c_str());
+	ImGui::TextDisabled("%s", playback);
+	if (!m_Scene->GetPath().empty() && ImGui::IsItemHovered())
+		ImGui::SetTooltip("%s", m_Scene->GetPath().c_str());
 
-	size_t componentCount = 0;
-	const Lite::ComponentEntry* catalog = Lite::ComponentCatalog(componentCount);
 	ImGuiTreeNodeFlags planeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow;
 	bool sceneChanged = false;
 
@@ -1086,62 +1102,74 @@ void EditorLayer::DrawScene()
 		}
 
 		std::string planeId = std::format("##plane{}", plane.Id);
-		bool planeOpen = ImGui::TreeNodeEx(planeId.c_str(), planeFlags);
 		const int entityCount = static_cast<int>(m_Scene->GetEntities(plane.Id).size());
 		const bool isWorld = m_Scene->FindPlane("World") == plane.Id;
-		if (ImGui::BeginPopupContextItem())
-		{
-			const bool lastPlane = planes.size() <= 1;
-			const bool blocked = lastPlane || (entityCount > 0 && isWorld);
-			const char* label = entityCount > 0 && !isWorld ? "Move to World and Delete" : "Delete";
-			if (ImGui::MenuItem(label, nullptr, false, !blocked))
-			{
-				std::string name = plane.Name;
-				Lite::Scene::PlaneRemove result = m_Scene->RemovePlane(plane.Id);
-				describeRemoval(name, entityCount, result);
-				sceneChanged = result == Lite::Scene::PlaneRemove::Removed || result == Lite::Scene::PlaneRemove::MovedToWorld;
-			}
-			if (lastPlane)
-				ImGui::TextDisabled("The scene needs a plane.");
-			else if (entityCount > 0 && isWorld)
-				ImGui::TextDisabled("Move the entities off World first.");
-			ImGui::EndPopup();
-		}
-
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(-72.0f);
+		bool planeOpen = false;
 		ImGui::PushID(static_cast<int>(plane.Id));
-		const ImGuiID nameId = ImGui::GetID("##PlaneName");
-		if (ImGui::GetActiveID() != nameId && std::strcmp(draft->Name, plane.Name.c_str()) != 0)
-			std::snprintf(draft->Name, sizeof(draft->Name), "%s", plane.Name.c_str());
-		ImGui::InputText("##PlaneName", draft->Name, sizeof(draft->Name));
-		if (ImGui::IsItemDeactivatedAfterEdit())
+		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4.0f, 3.0f));
+		if (ImGui::BeginTable("##planeRow", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoPadOuterX))
 		{
-			if (draft->Name[0] == '\0' || !m_Scene->SetPlaneName(plane.Id, draft->Name))
+			ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn("order", ImGuiTableColumnFlags_WidthFixed, 46.0f);
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			planeOpen = ImGui::TreeNodeEx(planeId.c_str(), planeFlags);
+			if (ImGui::BeginPopupContextItem())
 			{
-				m_PlaneNotice = draft->Name[0] == '\0' ? "A plane needs a name." : "A plane already has that name.";
-				Lite::Console::Log(m_PlaneNotice);
-				std::snprintf(draft->Name, sizeof(draft->Name), "%s", plane.Name.c_str());
+				const bool lastPlane = planes.size() <= 1;
+				const bool blocked = lastPlane || (entityCount > 0 && isWorld);
+				const char* label = entityCount > 0 && !isWorld ? "Move to World and Delete" : "Delete";
+				if (ImGui::MenuItem(label, nullptr, false, !blocked))
+				{
+					std::string name = plane.Name;
+					Lite::Scene::PlaneRemove result = m_Scene->RemovePlane(plane.Id);
+					describeRemoval(name, entityCount, result);
+					sceneChanged = result == Lite::Scene::PlaneRemove::Removed || result == Lite::Scene::PlaneRemove::MovedToWorld;
+				}
+				if (lastPlane)
+					ImGui::TextDisabled("The scene needs a plane.");
+				else if (entityCount > 0 && isWorld)
+					ImGui::TextDisabled("Move the entities off World first.");
+				ImGui::EndPopup();
 			}
-			else
-				m_PlaneNotice.clear();
-		}
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(64.0f);
-		int order = plane.Order;
-		if (ImGui::DragInt("##PlaneOrder", &order, 0.1f))
-			m_Scene->SetPlaneOrder(plane.Id, order);
-		if (ImGui::IsItemHovered())
-			ImGui::SetTooltip("Draw order. A higher plane renders in front.");
-		ImGui::PopID();
-		if (sceneChanged)
-		{
+
+			ImGui::SameLine(0.0f, 4.0f);
+			ImGui::SetNextItemWidth(-1.0f);
+			const ImGuiID nameId = ImGui::GetID("##PlaneName");
+			if (ImGui::GetActiveID() != nameId && std::strcmp(draft->Name, plane.Name.c_str()) != 0)
+				std::snprintf(draft->Name, sizeof(draft->Name), "%s", plane.Name.c_str());
+			ImGui::InputText("##PlaneName", draft->Name, sizeof(draft->Name));
+			if (ImGui::IsItemDeactivatedAfterEdit())
+			{
+				if (draft->Name[0] == '\0' || !m_Scene->SetPlaneName(plane.Id, draft->Name))
+				{
+					m_PlaneNotice = draft->Name[0] == '\0' ? "A plane needs a name." : "A plane already has that name.";
+					Lite::Console::Log(m_PlaneNotice);
+					std::snprintf(draft->Name, sizeof(draft->Name), "%s", plane.Name.c_str());
+				}
+				else
+					m_PlaneNotice.clear();
+			}
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::SetNextItemWidth(-1.0f);
+			int order = plane.Order;
+			if (ImGui::DragInt("##PlaneOrder", &order, 0.1f))
+				m_Scene->SetPlaneOrder(plane.Id, order);
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Draw order. A higher plane renders in front.");
 			if (planeOpen)
 				ImGui::TreePop();
-			break;
+			ImGui::EndTable();
 		}
+		ImGui::PopStyleVar();
+		ImGui::PopID();
+		if (sceneChanged)
+			break;
 		if (!planeOpen)
 			continue;
+
+		ImGui::Indent();
 
 		std::function<bool(Lite::Entity)> drawEntity;
 		drawEntity = [&](Lite::Entity entity) -> bool
@@ -1149,10 +1177,15 @@ void EditorLayer::DrawScene()
 			if (sceneChanged)
 				return false;
 
+			const bool hasChildren = !m_Scene->GetChildren(entity.GetId()).empty();
 			std::string label = std::format("{}##entity{}", entity.GetName(), entity.GetId());
-			ImGuiTreeNodeFlags entityFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+			ImGuiTreeNodeFlags entityFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
 			if (m_Selected == entity.GetId())
 				entityFlags |= ImGuiTreeNodeFlags_Selected;
+			if (hasChildren)
+				entityFlags |= ImGuiTreeNodeFlags_DefaultOpen;
+			else
+				entityFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 
 			bool entityOpen = ImGui::TreeNodeEx(label.c_str(), entityFlags);
 			if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
@@ -1221,12 +1254,12 @@ void EditorLayer::DrawScene()
 
 			if (sceneChanged)
 			{
-				if (entityOpen)
+				if (hasChildren && entityOpen)
 					ImGui::TreePop();
 				return false;
 			}
 
-			if (!entityOpen)
+			if (!hasChildren || !entityOpen)
 				return true;
 
 			for (Lite::Entity child : m_Scene->GetChildren(entity.GetId()))
@@ -1238,11 +1271,6 @@ void EditorLayer::DrawScene()
 				}
 			}
 
-			for (size_t index = 0; index < componentCount; ++index)
-			{
-				if (const char* component = catalog[index].Label(entity))
-					ImGui::TextDisabled("%s", component);
-			}
 			ImGui::TreePop();
 			return true;
 		};
@@ -1255,7 +1283,7 @@ void EditorLayer::DrawScene()
 				break;
 		}
 
-		ImGui::TreePop();
+		ImGui::Unindent();
 		if (sceneChanged)
 			break;
 	}
@@ -1410,8 +1438,14 @@ void EditorLayer::DrawViewport()
 
 	const char* name = m_Scene != nullptr ? m_Scene->GetName().c_str() : "No scene";
 	const char* playback = m_Scene != nullptr ? Lite::PlaybackName(m_Scene->GetPlayback()) : "stopped";
-	ImGui::SetCursorScreenPos(origin);
-	ImGui::TextDisabled("%s  %s  %.0f x %.0f", name, playback, size.x, size.y);
+	char status[160];
+	std::snprintf(status, sizeof(status), "%s   %s   %.0f x %.0f", name, playback, size.x, size.y);
+	ImVec2 textSize = ImGui::CalcTextSize(status);
+	ImVec2 badge { origin.x + 10.0f, origin.y + 8.0f };
+	ImVec2 pad { 8.0f, 4.0f };
+	ImDrawList* overlay = ImGui::GetWindowDrawList();
+	overlay->AddRectFilled(ImVec2(badge.x - pad.x, badge.y - pad.y), ImVec2(badge.x + textSize.x + pad.x, badge.y + textSize.y + pad.y), IM_COL32(16, 18, 24, 190), 5.0f);
+	overlay->AddText(badge, IM_COL32(214, 220, 230, 255), status);
 	ImGui::End();
 }
 

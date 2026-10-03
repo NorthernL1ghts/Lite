@@ -82,6 +82,19 @@ namespace {
 		return IconKind::File;
 	}
 
+	float ButtonWidth(const char* label)
+	{
+		return ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+	}
+
+	void PlaceInline(float width)
+	{
+		const float spacing = ImGui::GetStyle().ItemSpacing.x;
+		const float regionEnd = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+		if (ImGui::GetItemRectMax().x + spacing + width <= regionEnd)
+			ImGui::SameLine(0.0f, spacing);
+	}
+
 	void DrawFolderIcon(ImDrawList* draw, ImVec2 min, ImVec2 max, ImU32 color)
 	{
 		float width = max.x - min.x;
@@ -514,17 +527,17 @@ void Explorer::Draw(
 			m_Selected = m_View.empty() ? assets : m_View;
 		}
 	}
-	ImGui::SameLine();
+	PlaceInline(ButtonWidth("New Folder"));
 	if (ImGui::SmallButton("New Folder"))
 	{
 		m_FolderName[0] = '\0';
 		m_ShowNewFolder = true;
 	}
-	ImGui::SameLine();
+	PlaceInline(ButtonWidth("Import"));
 	if (ImGui::SmallButton("Import"))
 		ImportFiles();
 
-	ImGui::SameLine();
+	ImGui::Spacing();
 	if (m_View.empty())
 	{
 		ImGui::TextDisabled("Content");
@@ -558,10 +571,10 @@ void Explorer::Draw(
 				if (part.empty() || part == ".")
 					continue;
 				walked /= part;
-				ImGui::SameLine(0.0f, 4.0f);
+				PlaceInline(ImGui::CalcTextSize("/").x);
 				ImGui::TextDisabled("/");
-				ImGui::SameLine(0.0f, 4.0f);
 				std::string crumb = part.string() + "##crumb" + walked.string();
+				PlaceInline(ButtonWidth(part.string().c_str()));
 				if (ImGui::SmallButton(crumb.c_str()))
 				{
 					m_View = walked;

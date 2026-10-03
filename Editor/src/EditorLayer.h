@@ -37,7 +37,7 @@ private:
 	bool SaveProjectTo(const std::filesystem::path& path);
 	void SaveProject();
 	void AssignScriptModule(const std::filesystem::path& path);
-	void DrawScriptModule();
+	void DrawScriptModule(bool showFields);
 	void NewScene();
 	void OpenScene(const std::string& path);
 	void SaveScene();
