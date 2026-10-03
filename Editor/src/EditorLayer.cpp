@@ -213,11 +213,23 @@ void EditorLayer::OnUpdate(Lite::Timestep timestep)
 void EditorLayer::OnRender()
 {
 	LITE_PROFILE_SCOPE("Editor Render");
-	if (!m_Scene)
+	m_ViewportReady = false;
+	if (!m_Scene || !Lite::Renderer2D::IsFrameActive())
+		return;
+
+	if (m_ViewportW < 1.0f || m_ViewportH < 1.0f)
+		return;
+
+	const uint32_t width = static_cast<uint32_t>(std::lround(m_ViewportW));
+	const uint32_t height = static_cast<uint32_t>(std::lround(m_ViewportH));
+	if (width == 0 || height == 0 || !m_Target.Ensure(width, height) || !m_Target.Begin())
 		return;
 
 	ApplyPlayCamera();
 	m_Scene->Render();
+	Lite::Renderer2D::Flush();
+	m_Target.End();
+	m_ViewportReady = true;
 }
 
 void EditorLayer::NewProject()
@@ -626,20 +638,20 @@ void EditorLayer::SaveScene()
 
 void EditorLayer::ApplyPlayCamera()
 {
-	float aspect = Lite::kDefaultAspect;
-	if (m_ViewportH > 1.0f)
-		aspect = Lite::AspectRatio(m_ViewportW, m_ViewportH);
-	else
-	{
-		VkExtent2D extent = Lite::Renderer::GetExtent();
-		aspect = Lite::AspectRatio(static_cast<float>(extent.width), static_cast<float>(extent.height));
-	}
-
 	Lite::CameraComponent camera;
 	camera.Size = m_ViewSize;
-	Lite::Mat4 viewProjection = m_Scene->ViewProjection(aspect, m_Camera.GetTransform(), camera);
-	m_ViewProjection = Lite::FitViewport(viewProjection, m_ViewportX, m_ViewportY, m_ViewportW, m_ViewportH, m_WindowW, m_WindowH);
+	m_ViewProjection = m_Scene->ViewProjection(Lite::AspectRatio(m_ViewportW, m_ViewportH), m_Camera.GetTransform(), camera);
 	Lite::Renderer2D::SetViewProjection(m_ViewProjection);
+}
+
+bool EditorLayer::ViewportCursor(float screenX, float screenY, float& x, float& y) const
+{
+	if (m_ViewportW <= 1.0f || m_ViewportH <= 1.0f)
+		return false;
+
+	x = screenX - m_ViewportX;
+	y = screenY - m_ViewportY;
+	return true;
 }
 
 void EditorLayer::DropSprite(const std::string& path, float mouseX, float mouseY)
@@ -647,7 +659,11 @@ void EditorLayer::DropSprite(const std::string& path, float mouseX, float mouseY
 	if (m_Scene == nullptr || path.empty())
 		return;
 
-	const Lite::Vec2 world = Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY).value_or(Lite::Vec2 {});
+	float localX = 0.0f;
+	float localY = 0.0f;
+	const Lite::Vec2 world = ViewportCursor(mouseX, mouseY, localX, localY)
+		? Lite::ScreenToWorld(m_ViewProjection, m_ViewportW, m_ViewportH, localX, localY).value_or(Lite::Vec2 {})
+		: Lite::Vec2 {};
 	float aspect = m_ViewportH > 1.0f ? m_ViewportW / m_ViewportH : 1.0f;
 	Lite::Vec2 viewCenter { m_Camera.GetPosition().x, m_Camera.GetPosition().y };
 	Lite::Scene::SpritePlacement placed = m_Scene->PlaceSprite(path, world, viewCenter, m_ViewSize, aspect);
@@ -732,7 +748,12 @@ void EditorLayer::PlacePrefab(const std::string& path, float mouseX, float mouse
 
 	std::optional<Lite::Vec2> position;
 	if (atMouse)
-		position = Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouseX, mouseY);
+	{
+		float localX = 0.0f;
+		float localY = 0.0f;
+		if (ViewportCursor(mouseX, mouseY, localX, localY))
+			position = Lite::ScreenToWorld(m_ViewProjection, m_ViewportW, m_ViewportH, localX, localY);
+	}
 
 	Lite::Entity entity = m_Scene->PlacePrefab(path, position);
 	if (!entity)
@@ -748,7 +769,12 @@ void EditorLayer::PickObject(float mouseX, float mouseY)
 	if (m_Scene == nullptr)
 		return;
 
-	uint32_t id = m_Scene->Pick(m_ViewProjection, mouseX, mouseY, m_WindowW, m_WindowH);
+	float localX = 0.0f;
+	float localY = 0.0f;
+	if (!ViewportCursor(mouseX, mouseY, localX, localY))
+		return;
+
+	uint32_t id = m_Scene->Pick(m_ViewProjection, localX, localY, m_ViewportW, m_ViewportH);
 	if (id == 0)
 		return;
 
@@ -935,8 +961,6 @@ void EditorLayer::DrawMenu()
 void EditorLayer::OnImGuiRender()
 {
 	ImGuiIO& io = ImGui::GetIO();
-	m_WindowW = io.DisplaySize.x;
-	m_WindowH = io.DisplaySize.y;
 
 	if (m_Scene != nullptr)
 		m_History.Observe(*m_Scene, m_Selected, ImGui::GetActiveID() == 0);
@@ -1323,20 +1347,23 @@ void EditorLayer::DrawGizmo()
 
 	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
 	Lite::GizmoLayout layout;
-	if (!entity || !Lite::BuildGizmo(m_ViewProjection, m_WindowW, m_WindowH, entity, layout))
+	if (!entity || !Lite::BuildGizmo(m_ViewProjection, m_ViewportW, m_ViewportH, entity, layout))
 		return;
 
 	ImDrawList* draw = ImGui::GetWindowDrawList();
 	ImVec2 mouse = ImGui::GetIO().MousePos;
+	float localX = 0.0f;
+	float localY = 0.0f;
+	const bool inside = ViewportCursor(mouse.x, mouse.y, localX, localY);
 	Lite::GizmoHot hot;
 	if (m_Gizmo.Action != Lite::GizmoAction::None)
 	{
 		hot.Action = m_Gizmo.Action;
 		hot.Corner = m_Gizmo.Corner;
 	}
-	else if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
+	else if (inside && ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem))
 	{
-		hot = Lite::HitGizmo(layout, { mouse.x, mouse.y }, Lite::ScreenToWorld(m_ViewProjection, m_WindowW, m_WindowH, mouse.x, mouse.y));
+		hot = Lite::HitGizmo(layout, { localX, localY }, Lite::ScreenToWorld(m_ViewProjection, m_ViewportW, m_ViewportH, localX, localY));
 	}
 
 	if (hot.Action == Lite::GizmoAction::Move)
@@ -1348,8 +1375,8 @@ void EditorLayer::DrawGizmo()
 
 	ImVec2 screen[4];
 	for (int index = 0; index < layout.Count; ++index)
-		screen[index] = { layout.Screen[index].x, layout.Screen[index].y };
-	ImVec2 center { layout.Center.x, layout.Center.y };
+		screen[index] = { layout.Screen[index].x + m_ViewportX, layout.Screen[index].y + m_ViewportY };
+	ImVec2 center { layout.Center.x + m_ViewportX, layout.Center.y + m_ViewportY };
 
 	const ImU32 outline = IM_COL32(236, 240, 246, 210);
 	const bool hotRing = hot.Action == Lite::GizmoAction::Rotate;
@@ -1359,10 +1386,10 @@ void EditorLayer::DrawGizmo()
 
 	auto axis = [&](Lite::Vec2 world, ImU32 color)
 	{
-		const std::optional<Lite::Vec2> point = Lite::WorldToScreen(m_ViewProjection, m_WindowW, m_WindowH, world);
+		const std::optional<Lite::Vec2> point = Lite::WorldToScreen(m_ViewProjection, m_ViewportW, m_ViewportH, world);
 		if (!point)
 			return;
-		ImVec2 direction { point->x - center.x, point->y - center.y };
+		ImVec2 direction { point->x + m_ViewportX - center.x, point->y + m_ViewportY - center.y };
 		float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 		if (length <= 0.001f)
 			return;
@@ -1393,14 +1420,24 @@ void EditorLayer::DrawGizmo()
 
 void EditorLayer::DrawViewport()
 {
-	ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 	ImVec2 origin = ImGui::GetCursorScreenPos();
 	ImVec2 size = ImGui::GetContentRegionAvail();
+	if (size.x < 1.0f)
+		size.x = 0.0f;
+	if (size.y < 1.0f)
+		size.y = 0.0f;
 	m_ViewportX = origin.x;
 	m_ViewportY = origin.y;
 	m_ViewportW = size.x;
 	m_ViewportH = size.y;
-	ImGui::InvisibleButton("##ViewportPick", size);
+
+	VkDescriptorSet texture = m_ViewportReady ? m_Target.GetTexture() : VK_NULL_HANDLE;
+	if (size.x >= 1.0f && size.y >= 1.0f && texture != VK_NULL_HANDLE)
+		ImGui::Image(static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(texture)), size);
+	else if (size.x >= 1.0f && size.y >= 1.0f)
+		ImGui::Dummy(size);
+
 	if (ImGui::BeginDragDropTarget())
 	{
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LITE_SCENE"))
@@ -1418,10 +1455,13 @@ void EditorLayer::DrawViewport()
 		ImGui::EndDragDropTarget();
 	}
 	ImVec2 mouse = ImGui::GetIO().MousePos;
+	float localX = 0.0f;
+	float localY = 0.0f;
+	const bool inside = ViewportCursor(mouse.x, mouse.y, localX, localY);
 	if (m_Gizmo.Action != Lite::GizmoAction::None)
 	{
-		if (m_Scene != nullptr && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-			Lite::ApplyGizmo(*m_Scene, m_ViewProjection, m_WindowW, m_WindowH, m_Selected, mouse.x, mouse.y, m_Gizmo);
+		if (m_Scene != nullptr && inside && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+			Lite::ApplyGizmo(*m_Scene, m_ViewProjection, m_ViewportW, m_ViewportH, m_Selected, localX, localY, m_Gizmo);
 		else
 		{
 			m_Gizmo = {};
@@ -1429,9 +1469,9 @@ void EditorLayer::DrawViewport()
 				m_History.Commit(*m_Scene, m_Selected);
 		}
 	}
-	else if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && m_Scene != nullptr)
+	else if (inside && ImGui::IsItemClicked(ImGuiMouseButton_Left) && m_Scene != nullptr)
 	{
-		if (!Lite::BeginGizmo(*m_Scene, m_ViewProjection, m_WindowW, m_WindowH, m_Selected, mouse.x, mouse.y, m_Gizmo))
+		if (!Lite::BeginGizmo(*m_Scene, m_ViewProjection, m_ViewportW, m_ViewportH, m_Selected, localX, localY, m_Gizmo))
 			PickObject(mouse.x, mouse.y);
 	}
 	DrawGizmo();

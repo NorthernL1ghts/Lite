@@ -25,6 +25,10 @@ namespace Lite {
 
 		static void BeginFrame();
 		static void EndFrame();
+		static void EndPass();
+		static bool BeginSwapchain();
+		static bool IsPassOpen();
+		static void SetDrawExtent(VkExtent2D extent);
 		static void OnResize(int width, int height);
 		static bool IsFrameActive();
 

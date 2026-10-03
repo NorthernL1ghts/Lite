@@ -31,22 +31,13 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Editor chrome.** The scene list is entity names. Children sit under their parent. The project path and the script module are under Project. Play, pause, and reset stay off the File, Edit, and View menus. The viewport status sits on a dark badge. Explorer actions and the folder path wrap instead of drawing on top of each other.
 - **Sandbox scene.** `assets/scenes/Sandbox.scene` shows one use of each current feature: three planes, a sprite, a quad, and a triangle, an orthographic camera and a perspective camera that is not primary, a static ground, a dynamic crate and ball, a kinematic spinner, a trigger, `Bounce`, `Patrol`, and `Sensor`, a parent with two children, and prefab links on the ground, crate, and ball. The crate and the ball start above the ground.
 - **Scene check.** `SceneCheck` loads `Sandbox/assets/scenes/Sandbox.scene` with no window. Background is behind World, and World is behind Foreground. Before play, the bottom of the crate and the bottom of the ball are above the top of the ground. `scripts\build.bat --check` builds, runs that program, and does not open the editor. A failure prints one line and exits non-zero.
+- **Viewport target.** The editor draws the scene into a color target the size of the Viewport panel and shows that image in the panel. Picking and gizmos use that rectangle and the same view projection. Resizing the panel resizes the target. A zero-size panel draws nothing. Play uses the same image. Sandbox still draws into its window.
 
 ## Next
 
 Do these in order.
 
-### 1. Viewport target
-
-The scene is drawn into the swapchain. The panels only cover that image. The camera uses the window size, not the Viewport panel.
-
-- The scene renders into a color target the size of the viewport.
-- The Viewport panel shows that image.
-- Picking and gizmos use the same rectangle and the same view projection.
-- Resizing the panel resizes the target. A zero-size panel draws nothing and does not crash.
-- Sandbox keeps drawing into its window. It has no viewport panel.
-
-### 2. Batch flush
+### 1. Batch flush
 
 Every flush uploads the whole vertex buffer and rewrites all 16 texture slots, including slots that did not change.
 
@@ -55,7 +46,7 @@ Every flush uploads the whole vertex buffer and rewrites all 16 texture slots, i
 - A scene that uses more than 16 textures still flushes and continues. The 17th texture is not dropped.
 - The Sandbox picture stays the same.
 
-### 3. Matte shader path
+### 2. Matte shader path
 
 The fragment shader always builds the highlight. A material with roughness 1, metallic 0, and emission 0 is the common case, and that highlight is zero. Vertex UVs already include tiling, and the flush sets the material tiling uniform to 1.
 
@@ -63,7 +54,7 @@ The fragment shader always builds the highlight. A material with roughness 1, me
 - Roughness below 1, metallic above 0, and emission above 0 keep the current highlight, metal tint, and glow.
 - The unused tiling multiply is removed, or the uniform stops pretending to tile. Existing scenes do not shift their UVs.
 
-### 4. Scripted motion
+### 3. Scripted motion
 
 A script runs before the physics step. The step then copies velocity from Box2D back onto the component. Writing `LinearVelocity` during update does not move a kinematic body. `Patrol` works by moving a parent that has no body, and a static child collider is teleported after the step.
 
@@ -125,7 +116,6 @@ The dock is Scene, Viewport, Inspector, Console, and Explorer. Playback is F5, F
 - **Multi-select.** Shift-click and a box drag in the viewport add to the selection. Gizmos move the group. Delete removes the group. Duplicate copies the group onto the same planes. A single click returns to one entity.
 - **Snap.** Holding Ctrl while dragging a gizmo snaps position to a grid. The grid size is one field in the viewport, remembered for the session.
 - **Console.** The panel can clear, and it can hide lines that do not contain a typed word. Physics contact spam can be muted without muting script errors.
-- **Play in the viewport target.** Once item 2 exists, play and the editor camera both show through that image. Stop restores the editor camera. The game view does not jump to the full window.
 - **Material preview.** The inspector swatch shows the material's color. A later pass can show roughness and emission on that swatch. Do not block the swatch on that.
 
 ### Sandbox and shipping

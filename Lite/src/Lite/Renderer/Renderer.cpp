@@ -25,7 +25,9 @@ namespace {
 		uint32_t CurrentFrame = 0;
 		uint32_t ImageIndex = 0;
 		bool FrameActive = false;
+		bool PassOpen = false;
 		bool FramebufferResized = false;
+		VkExtent2D DrawExtent {};
 		bool ContextReady = false;
 		bool Ready = false;
 		uint32_t DrawCalls = 0;
@@ -186,7 +188,9 @@ namespace Lite {
 		s_Renderer.CurrentFrame = 0;
 		s_Renderer.ImageIndex = 0;
 		s_Renderer.FrameActive = false;
+		s_Renderer.PassOpen = false;
 		s_Renderer.FramebufferResized = false;
+		s_Renderer.DrawExtent = {};
 		s_Renderer.ContextReady = false;
 		s_Renderer.Ready = false;
 		s_Renderer.ViewProjection = Mat4::Identity();
@@ -263,15 +267,47 @@ namespace Lite {
 			PresentRecovered(frame, s_Renderer.Sync.InFlight(frame));
 			return;
 		}
+
+		s_Renderer.FrameActive = true;
+		s_Renderer.PassOpen = false;
+		s_Renderer.DrawExtent = {};
+		if (acquire == VK_SUBOPTIMAL_KHR)
+			s_Renderer.FramebufferResized = true;
+	}
+
+	void Renderer::EndPass()
+	{
+		if (!s_Renderer.PassOpen)
+			return;
+
+		s_Renderer.RenderPass.End(s_Renderer.Commands.Get(s_Renderer.CurrentFrame));
+		s_Renderer.PassOpen = false;
+		s_Renderer.DrawExtent = {};
+	}
+
+	bool Renderer::BeginSwapchain()
+	{
+		if (!s_Renderer.FrameActive || s_Renderer.PassOpen)
+			return s_Renderer.PassOpen;
+
+		s_Renderer.DrawExtent = {};
 		s_Renderer.RenderPass.Begin(
-			commandBuffer,
+			s_Renderer.Commands.Get(s_Renderer.CurrentFrame),
 			s_Renderer.Frames.Get(s_Renderer.ImageIndex),
 			s_Renderer.Swapchain.GetImageView(s_Renderer.ImageIndex),
 			s_Renderer.Swapchain.GetExtent());
+		s_Renderer.PassOpen = true;
+		return true;
+	}
 
-		s_Renderer.FrameActive = true;
-		if (acquire == VK_SUBOPTIMAL_KHR)
-			s_Renderer.FramebufferResized = true;
+	bool Renderer::IsPassOpen()
+	{
+		return s_Renderer.PassOpen;
+	}
+
+	void Renderer::SetDrawExtent(VkExtent2D extent)
+	{
+		s_Renderer.DrawExtent = extent;
 	}
 
 	void Renderer::EndFrame()
@@ -280,9 +316,9 @@ namespace Lite {
 		if (!s_Renderer.FrameActive)
 			return;
 
+		EndPass();
 		uint32_t frame = s_Renderer.CurrentFrame;
 		VkCommandBuffer commandBuffer = s_Renderer.Commands.Get(frame);
-		s_Renderer.RenderPass.End(commandBuffer);
 		s_Renderer.FrameActive = false;
 		if (!s_Renderer.Commands.End(frame))
 		{
@@ -411,6 +447,8 @@ namespace Lite {
 
 	VkExtent2D Renderer::GetExtent()
 	{
+		if (s_Renderer.DrawExtent.width > 0 && s_Renderer.DrawExtent.height > 0)
+			return s_Renderer.DrawExtent;
 		return s_Renderer.Swapchain.GetExtent();
 	}
 

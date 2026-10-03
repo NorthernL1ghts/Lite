@@ -42,6 +42,7 @@ void SandboxLayer::OnUpdate(Lite::Timestep timestep)
 void SandboxLayer::OnRender()
 {
 	LITE_PROFILE_SCOPE("Sandbox Render");
+	Lite::Renderer::BeginSwapchain();
 	VkExtent2D extent = Lite::Renderer::GetExtent();
 	m_Player.Render(static_cast<float>(extent.width), static_cast<float>(extent.height));
 }

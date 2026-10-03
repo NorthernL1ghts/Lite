@@ -7,6 +7,7 @@
 
 #include <Lite/Core/Layer.h>
 #include <Lite/Renderer/OrthographicCamera.h>
+#include <Lite/Renderer/RenderTarget.h>
 #include <Lite/Scene/Scene.h>
 #include <Lite/Scene/SceneGizmo.h>
 
@@ -54,16 +55,17 @@ private:
 	void PlacePrefab(const std::string& path, float mouseX, float mouseY, bool atMouse);
 	void ApplyPlayCamera();
 	void DrawGizmo();
+	bool ViewportCursor(float screenX, float screenY, float& x, float& y) const;
 
 	Lite::OrthographicCamera m_Camera;
 	Lite::Mat4 m_ViewProjection = Lite::Mat4::Identity();
 	float m_ViewSize = 2.0f;
+	Lite::RenderTarget m_Target;
 	float m_ViewportX = 0.0f;
 	float m_ViewportY = 0.0f;
 	float m_ViewportW = 0.0f;
 	float m_ViewportH = 0.0f;
-	float m_WindowW = 0.0f;
-	float m_WindowH = 0.0f;
+	bool m_ViewportReady = false;
 	Lite::Scope<Lite::Scene> m_Scene;
 	std::filesystem::path m_ProjectPath;
 	std::string m_PlaneNotice;

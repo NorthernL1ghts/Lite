@@ -99,6 +99,8 @@ namespace Lite {
 				}
 
 				Renderer2D::Flush();
+				if (!Renderer::IsPassOpen())
+					Renderer::BeginSwapchain();
 
 				{
 					LITE_PROFILE_SCOPE("ImGui");
