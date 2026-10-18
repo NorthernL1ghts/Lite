@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 class EditorLayer final : public Lite::Layer
 {
@@ -42,6 +43,13 @@ private:
 	void NewScene();
 	void OpenScene(const std::string& path);
 	void SaveScene();
+	void SetSelection(const std::vector<uint32_t>& ids);
+	void ToggleSelection(uint32_t id);
+	void AddSelection(const std::vector<uint32_t>& ids);
+	bool SelectionContains(uint32_t id) const;
+	bool HasSelectedAncestor(uint32_t id) const;
+	void MoveSelection(float localX, float localY);
+	void SelectInRect(Lite::Vec2 start, Lite::Vec2 end);
 	void DuplicateSelected();
 	void DeleteSelected(bool detachChildren = false);
 	void UndoSelected();
@@ -76,7 +84,21 @@ private:
 	Lite::Scene* m_NamedScene = nullptr;
 	char m_Name[128] {};
 	char m_TagFilter[128] {};
+	char m_ConsoleFilter[128] {};
+	bool m_MuteContacts = false;
+	std::vector<uint32_t> m_Selection;
 	uint32_t m_Selected = 0;
+	float m_Grid = 1.0f;
+	bool m_Marquee = false;
+	bool m_MarqueeMoved = false;
+	Lite::Vec2 m_MarqueeStart {};
+	struct SelectionGrab
+	{
+		uint32_t Id = 0;
+		Lite::Vec2 World {};
+		Lite::Vec3 Local {};
+	};
+	std::vector<SelectionGrab> m_Grab;
 	Lite::GizmoDrag m_Gizmo;
 	Inspector m_Inspector;
 	SceneHistory m_History;

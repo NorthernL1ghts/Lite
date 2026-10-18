@@ -52,6 +52,10 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Editor surfaces.** The scene panel filters by tag. An empty filter shows every entity. Typed text keeps an entity whose tag contains it, ignoring capitalization, and keeps a parent when a child matches. A tag is shown on the row. The playback line says Unsaved while the scene is dirty. The inspector edits the tag, a collider's layer and mask, and a distance joint's other entity and rest length. Changing the layer, the mask, or the joint rebuilds the body while playing.
 - **Script reload.** Play copies the project DLL and loads that copy, so the file can be replaced while the scene is stopped. The next play loads the replacement. If the file is locked, the console says so and the scripts already loaded keep running. A failed load does not register part of the new file. Collision stays the one callback.
 - **Watched textures.** A loaded texture is refreshed when its file changes on disk. The scene does not restart. A failed reload keeps the previous image and logs the path.
+- **Multi-select.** Shift-click and a box drag in the viewport add to the selection. The scene list shows the whole selection. Dragging the gizmo moves every selected entity. Delete removes the group, and duplicate copies the group onto the same planes. A click without Shift leaves one entity selected.
+- **Snap.** Holding Ctrl while moving a gizmo snaps that position to the grid. The grid size is the Grid field in the viewport and lasts for the session.
+- **Console.** Clear empties the panel. A filter hides lines that do not contain the typed word. Mute contacts hides collision and trigger lines and leaves script errors visible.
+- **Material color.** The inspector swatch shows the material color. Roughness and emission stay in the Surface section.
 
 ## Next
 
@@ -60,15 +64,6 @@ Nothing is queued. The backlog is under Later.
 ## Later
 
 Real gaps. They are not the next session. Each block says what exists today so the work is not started from a blank guess.
-
-### Editor
-
-The dock is Scene, Viewport, Inspector, Console, and Explorer. Playback is F5, F6, and F7. Undo is Ctrl+Z and Ctrl+Y. The explorer creates folders, imports files, and opens scenes, prefabs, and projects.
-
-- **Multi-select.** Shift-click and a box drag in the viewport add to the selection. Gizmos move the group. Delete removes the group. Duplicate copies the group onto the same planes. A single click returns to one entity.
-- **Snap.** Holding Ctrl while dragging a gizmo snaps position to a grid. The grid size is one field in the viewport, remembered for the session.
-- **Console.** The panel can clear, and it can hide lines that do not contain a typed word. Physics contact spam can be muted without muting script errors.
-- **Material preview.** The inspector swatch shows the material's color. A later pass can show roughness and emission on that swatch. Do not block the swatch on that.
 
 ### Sandbox and shipping
 
@@ -80,8 +75,6 @@ Sandbox is a player. It locates `Sandbox/Sandbox.lite`, opens the start scene, a
 
 ### Out of scope until a game needs them
 
-- **Audio.** No listener, clip, or play call.
-- **Animation.** No timeline for transform, color, or sprite frames.
 - **3D meshes.** Drawing stays quads, triangles, and sprites.
 - **Tile maps.** A background is one sprite. There is no grid.
 - **A second render API.** Do not start one.

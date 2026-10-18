@@ -25,6 +25,7 @@
 #include <filesystem>
 #include <format>
 #include <functional>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -32,7 +33,7 @@ namespace {
 
 	const char* kEditorWindows[] = { "Scene", "Viewport", "Inspector", "Console", "Explorer" };
 
-	bool TagContains(const std::string& tag, const char* filter)
+	bool ContainsText(const std::string& tag, const char* filter)
 	{
 		if (filter == nullptr || filter[0] == '\0')
 			return true;
@@ -475,7 +476,7 @@ void EditorLayer::NewScene()
 	m_History.Clear();
 	Lite::Project::EnsureContentFolders();
 	Lite::Scene::SetActive(m_Scene.get());
-	m_Selected = 0;
+	SetSelection({});
 	m_Inspector.Reset();
 
 	if (Lite::Ref<Lite::Project> project = Lite::Project::GetActive())
@@ -515,15 +516,16 @@ void EditorLayer::OpenScene(const std::string& path)
 	Lite::Project::EnsureContentFolders();
 	Lite::Scene::SetActive(m_Scene.get());
 	m_Gizmo = {};
-	m_Selected = 0;
+	uint32_t first = 0;
 	for (Lite::Entity entity : m_Scene->GetEntities())
 	{
 		if (entity.Has<Lite::MeshComponent>())
 		{
-			m_Selected = entity.GetId();
+			first = entity.GetId();
 			break;
 		}
 	}
+	SetSelection(first != 0 ? std::vector<uint32_t> { first } : std::vector<uint32_t> {});
 	m_Inspector.Reset();
 	SyncName();
 }
@@ -546,25 +548,237 @@ void EditorLayer::SyncName()
 	std::snprintf(m_Name, sizeof(m_Name), "%s", name);
 }
 
+void EditorLayer::SetSelection(const std::vector<uint32_t>& ids)
+{
+	const uint32_t previous = m_Selected;
+	m_Selection.clear();
+	for (uint32_t id : ids)
+	{
+		if (id == 0 || m_Scene == nullptr || !m_Scene->GetEntity(id))
+			continue;
+		if (!SelectionContains(id))
+			m_Selection.push_back(id);
+	}
+
+	m_Selected = m_Selection.empty() ? 0 : m_Selection.back();
+	if (m_Selected != previous)
+		m_Inspector.Reset();
+}
+
+void EditorLayer::ToggleSelection(uint32_t id)
+{
+	if (id == 0 || m_Scene == nullptr || !m_Scene->GetEntity(id))
+		return;
+
+	const auto found = std::find(m_Selection.begin(), m_Selection.end(), id);
+	if (found != m_Selection.end())
+	{
+		m_Selection.erase(found);
+		if (m_Selected == id)
+			m_Selected = m_Selection.empty() ? 0 : m_Selection.back();
+	}
+	else
+	{
+		m_Selection.push_back(id);
+		m_Selected = id;
+	}
+
+	m_Inspector.Reset();
+}
+
+void EditorLayer::AddSelection(const std::vector<uint32_t>& ids)
+{
+	for (uint32_t id : ids)
+	{
+		if (id == 0 || m_Scene == nullptr || !m_Scene->GetEntity(id) || SelectionContains(id))
+			continue;
+		m_Selection.push_back(id);
+	}
+
+	if (m_Selected == 0 && !m_Selection.empty())
+	{
+		m_Selected = m_Selection.back();
+		m_Inspector.Reset();
+	}
+}
+
+bool EditorLayer::SelectionContains(uint32_t id) const
+{
+	return std::find(m_Selection.begin(), m_Selection.end(), id) != m_Selection.end();
+}
+
+bool EditorLayer::HasSelectedAncestor(uint32_t id) const
+{
+	if (m_Scene == nullptr)
+		return false;
+
+	for (uint32_t parent = m_Scene->GetParent(id); parent != 0; parent = m_Scene->GetParent(parent))
+	{
+		if (SelectionContains(parent))
+			return true;
+	}
+
+	return false;
+}
+
+void EditorLayer::MoveSelection(float localX, float localY)
+{
+	if (m_Scene == nullptr || m_Gizmo.Action != Lite::GizmoAction::Move)
+		return;
+
+	const std::optional<Lite::Vec2> world = Lite::ScreenToWorld(m_ViewProjection, m_ViewportW, m_ViewportH, localX, localY);
+	if (!world)
+		return;
+
+	Lite::Vec2 delta { world->x - m_Gizmo.Grab.x, world->y - m_Gizmo.Grab.y };
+	for (const SelectionGrab& grab : m_Grab)
+	{
+		if (grab.Id != m_Selected)
+			continue;
+
+		Lite::Vec2 target { grab.World.x + delta.x, grab.World.y + delta.y };
+		if (ImGui::GetIO().KeyCtrl && m_Grid > 0.0f)
+		{
+			target.x = std::round(target.x / m_Grid) * m_Grid;
+			target.y = std::round(target.y / m_Grid) * m_Grid;
+		}
+		delta = { target.x - grab.World.x, target.y - grab.World.y };
+		break;
+	}
+
+	for (const SelectionGrab& grab : m_Grab)
+	{
+		Lite::Entity entity = m_Scene->GetEntity(grab.Id);
+		Lite::TransformComponent* transform = entity ? entity.Get<Lite::TransformComponent>() : nullptr;
+		if (transform == nullptr)
+			continue;
+
+		const uint32_t parent = m_Scene->GetParent(grab.Id);
+		const Lite::Transform parentWorld = parent != 0 ? m_Scene->WorldTransform(parent) : Lite::Transform {};
+		Lite::Vec3 local = parentWorld.InverseTransformPoint({ grab.World.x + delta.x, grab.World.y + delta.y, 0.0f });
+		local.z = grab.Local.z;
+		transform->Local.Position = local;
+		m_Scene->RefreshPhysics(grab.Id);
+	}
+}
+
+void EditorLayer::SelectInRect(Lite::Vec2 start, Lite::Vec2 end)
+{
+	if (m_Scene == nullptr)
+		return;
+
+	const float minX = std::min(start.x, end.x);
+	const float maxX = std::max(start.x, end.x);
+	const float minY = std::min(start.y, end.y);
+	const float maxY = std::max(start.y, end.y);
+	std::vector<uint32_t> hits;
+	for (Lite::Entity entity : m_Scene->GetEntities())
+	{
+		Lite::GizmoLayout layout;
+		if (!Lite::BuildGizmo(m_ViewProjection, m_ViewportW, m_ViewportH, entity, layout))
+			continue;
+
+		float left = layout.Screen[0].x;
+		float right = left;
+		float top = layout.Screen[0].y;
+		float bottom = top;
+		for (int index = 1; index < layout.Count; ++index)
+		{
+			const Lite::Vec2 point = layout.Screen[static_cast<size_t>(index)];
+			left = std::min(left, point.x);
+			right = std::max(right, point.x);
+			top = std::min(top, point.y);
+			bottom = std::max(bottom, point.y);
+		}
+
+		if (right < minX || left > maxX || bottom < minY || top > maxY)
+			continue;
+		hits.push_back(entity.GetId());
+	}
+
+	AddSelection(hits);
+}
+
 void EditorLayer::DuplicateSelected()
 {
-	if (m_Scene == nullptr || m_Selected == 0)
+	if (m_Scene == nullptr || m_Selection.empty())
 		return;
 
-	Lite::Entity copy = m_Scene->DuplicateEntity(m_Selected);
-	if (!copy)
+	std::vector<uint32_t> copies;
+	for (uint32_t id : m_Selection)
+	{
+		if (HasSelectedAncestor(id))
+			continue;
+
+		Lite::Entity copy = m_Scene->DuplicateEntity(id);
+		if (copy)
+			copies.push_back(copy.GetId());
+	}
+
+	if (copies.empty())
 		return;
 
-	m_Selected = copy.GetId();
-	m_Inspector.Reset();
+	SetSelection(copies);
 	m_History.Commit(*m_Scene, m_Selected);
-	Lite::Console::Log(std::format("Duplicated {}", copy.GetName()));
+	if (copies.size() == 1)
+		Lite::Console::Log(std::format("Duplicated {}", m_Scene->GetEntity(copies[0]).GetName()));
+	else
+		Lite::Console::Log(std::format("Duplicated {} entities", copies.size()));
 }
 
 void EditorLayer::DeleteSelected(bool detachChildren)
 {
 	if (m_Scene == nullptr || m_Selected == 0)
 		return;
+
+	if (!detachChildren && m_Selection.size() > 1)
+	{
+		std::vector<uint32_t> order;
+		for (Lite::Entity entity : m_Scene->GetEntities())
+			order.push_back(entity.GetId());
+
+		std::vector<uint32_t> roots;
+		for (uint32_t id : m_Selection)
+		{
+			if (m_Scene->GetEntity(id) && !HasSelectedAncestor(id))
+				roots.push_back(id);
+		}
+
+		const std::size_t removed = roots.size();
+		for (uint32_t id : roots)
+			m_Scene->DestroyEntity(id, false);
+
+		uint32_t next = 0;
+		const auto primary = std::find(order.begin(), order.end(), m_Selected);
+		if (primary != order.end())
+		{
+			for (auto it = primary + 1; it != order.end(); ++it)
+			{
+				if (m_Scene->GetEntity(*it))
+				{
+					next = *it;
+					break;
+				}
+			}
+			if (next == 0)
+			{
+				for (auto it = std::make_reverse_iterator(primary); it != order.rend(); ++it)
+				{
+					if (m_Scene->GetEntity(*it))
+					{
+						next = *it;
+						break;
+					}
+				}
+			}
+		}
+
+		SetSelection(next != 0 ? std::vector<uint32_t> { next } : std::vector<uint32_t> {});
+		m_History.Commit(*m_Scene, m_Selected);
+		m_PlaneNotice.clear();
+		Lite::Console::Log(std::format("Deleted {} entities", removed));
+		return;
+	}
 
 	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
 	if (!entity)
@@ -614,8 +828,7 @@ void EditorLayer::DeleteSelected(bool detachChildren)
 	if (result == Lite::Scene::EntityDestroy::Missing)
 		return;
 
-	m_Selected = next;
-	m_Inspector.Reset();
+	SetSelection(next != 0 ? std::vector<uint32_t> { next } : std::vector<uint32_t> {});
 	m_History.Commit(*m_Scene, m_Selected);
 
 	if (result == Lite::Scene::EntityDestroy::RemovedChildren)
@@ -633,6 +846,9 @@ void EditorLayer::UndoSelected()
 	if (m_Scene == nullptr || !m_History.Undo(*m_Scene, m_Selected))
 		return;
 
+	m_Selection.clear();
+	if (m_Selected != 0)
+		m_Selection.push_back(m_Selected);
 	m_Gizmo = {};
 	m_Inspector.Reset();
 	SyncName();
@@ -644,6 +860,9 @@ void EditorLayer::RedoSelected()
 	if (m_Scene == nullptr || !m_History.Redo(*m_Scene, m_Selected))
 		return;
 
+	m_Selection.clear();
+	if (m_Selected != 0)
+		m_Selection.push_back(m_Selected);
 	m_Gizmo = {};
 	m_Inspector.Reset();
 	SyncName();
@@ -696,8 +915,7 @@ void EditorLayer::DropSprite(const std::string& path, float mouseX, float mouseY
 		return;
 
 	m_Gizmo = {};
-	m_Selected = placed.Entity;
-	m_Inspector.Reset();
+	SetSelection({ placed.Entity });
 	std::string name = m_Scene->GetEntity(placed.Entity).GetName();
 	if (!placed.Loaded)
 		Lite::Console::Log(std::format("Failed to load texture {}", path));
@@ -785,8 +1003,7 @@ void EditorLayer::PlacePrefab(const std::string& path, float mouseX, float mouse
 		return;
 
 	m_Gizmo = {};
-	m_Selected = entity.GetId();
-	m_Inspector.Reset();
+	SetSelection({ entity.GetId() });
 }
 
 void EditorLayer::PickObject(float mouseX, float mouseY)
@@ -803,9 +1020,15 @@ void EditorLayer::PickObject(float mouseX, float mouseY)
 	if (id == 0)
 		return;
 
-	if (m_Selected != id)
+	if (ImGui::GetIO().KeyShift)
+	{
+		ToggleSelection(id);
+		return;
+	}
+
+	if (m_Selected != id || m_Selection.size() != 1)
 		Lite::Console::Log(std::format("Selected: {}", m_Scene->GetEntity(id).GetName()));
-	m_Selected = id;
+	SetSelection({ id });
 }
 
 void EditorLayer::OnEvent(Lite::Event& event)
@@ -1229,7 +1452,7 @@ void EditorLayer::DrawScene()
 		std::function<bool(Lite::Entity)> passesFilter;
 		passesFilter = [&](Lite::Entity entity) -> bool
 		{
-			if (TagContains(m_Scene->GetTag(entity.GetId()), m_TagFilter))
+			if (ContainsText(m_Scene->GetTag(entity.GetId()), m_TagFilter))
 				return true;
 
 			for (Lite::Entity child : m_Scene->GetChildren(entity.GetId()))
@@ -1252,7 +1475,7 @@ void EditorLayer::DrawScene()
 				? std::format("{}##entity{}", entity.GetName(), entity.GetId())
 				: std::format("{}  [{}]##entity{}", entity.GetName(), tag, entity.GetId());
 			ImGuiTreeNodeFlags entityFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-			if (m_Selected == entity.GetId())
+			if (SelectionContains(entity.GetId()))
 				entityFlags |= ImGuiTreeNodeFlags_Selected;
 			if (hasChildren)
 				entityFlags |= ImGuiTreeNodeFlags_DefaultOpen;
@@ -1261,7 +1484,12 @@ void EditorLayer::DrawScene()
 
 			bool entityOpen = ImGui::TreeNodeEx(label.c_str(), entityFlags);
 			if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
-				m_Selected = entity.GetId();
+			{
+				if (ImGui::GetIO().KeyShift)
+					ToggleSelection(entity.GetId());
+				else
+					SetSelection({ entity.GetId() });
+			}
 
 			const uint32_t entityId = entity.GetId();
 			if (ImGui::BeginDragDropSource())
@@ -1280,8 +1508,7 @@ void EditorLayer::DrawScene()
 						Lite::Entity dropped = m_Scene->GetEntity(child);
 						if (dropped && m_Scene->SetParent(child, entityId, true))
 						{
-							m_Selected = child;
-							m_Inspector.Reset();
+							SetSelection({ child });
 							m_History.Commit(*m_Scene, child);
 							sceneChanged = true;
 						}
@@ -1294,7 +1521,13 @@ void EditorLayer::DrawScene()
 
 			if (ImGui::BeginPopupContextItem())
 			{
-				m_Selected = entity.GetId();
+				if (!SelectionContains(entity.GetId()))
+					SetSelection({ entity.GetId() });
+				else if (m_Selected != entity.GetId())
+				{
+					m_Selected = entity.GetId();
+					m_Inspector.Reset();
+				}
 				if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
 				{
 					DuplicateSelected();
@@ -1318,6 +1551,7 @@ void EditorLayer::DrawScene()
 				}
 				if (!m_Scene->GetChildren(entity.GetId()).empty() && ImGui::MenuItem("Detach Children and Delete"))
 				{
+					SetSelection({ entity.GetId() });
 					DeleteSelected(true);
 					sceneChanged = true;
 				}
@@ -1373,7 +1607,7 @@ void EditorLayer::DrawScene()
 		ImGui::TextWrapped("%s", m_PlaneNotice.c_str());
 
 	ImGui::Separator();
-	ImGui::BeginDisabled(m_Selected == 0);
+	ImGui::BeginDisabled(m_Selection.empty());
 	if (ImGui::Button("Duplicate"))
 		DuplicateSelected();
 	ImGui::SameLine();
@@ -1394,7 +1628,27 @@ void EditorLayer::DrawScene()
 
 void EditorLayer::DrawGizmo()
 {
-	if (m_Scene == nullptr || m_Selected == 0)
+	if (m_Scene == nullptr)
+		return;
+
+	ImDrawList* draw = ImGui::GetWindowDrawList();
+	for (uint32_t id : m_Selection)
+	{
+		if (id == m_Selected)
+			continue;
+
+		Lite::Entity selected = m_Scene->GetEntity(id);
+		Lite::GizmoLayout outline;
+		if (!selected || !Lite::BuildGizmo(m_ViewProjection, m_ViewportW, m_ViewportH, selected, outline))
+			continue;
+
+		ImVec2 screen[4];
+		for (int index = 0; index < outline.Count; ++index)
+			screen[index] = { outline.Screen[static_cast<size_t>(index)].x + m_ViewportX, outline.Screen[static_cast<size_t>(index)].y + m_ViewportY };
+		draw->AddPolyline(screen, outline.Count, IM_COL32(236, 240, 246, 140), 1.2f, ImDrawFlags_Closed);
+	}
+
+	if (m_Selected == 0)
 		return;
 
 	Lite::Entity entity = m_Scene->GetEntity(m_Selected);
@@ -1402,7 +1656,6 @@ void EditorLayer::DrawGizmo()
 	if (!entity || !Lite::BuildGizmo(m_ViewProjection, m_ViewportW, m_ViewportH, entity, layout))
 		return;
 
-	ImDrawList* draw = ImGui::GetWindowDrawList();
 	ImVec2 mouse = ImGui::GetIO().MousePos;
 	float localX = 0.0f;
 	float localY = 0.0f;
@@ -1506,6 +1759,13 @@ void EditorLayer::DrawViewport()
 		}
 		ImGui::EndDragDropTarget();
 	}
+	const bool imageClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+	ImGui::SetCursorScreenPos({ origin.x + std::max(8.0f, size.x - 168.0f), origin.y + 8.0f });
+	ImGui::SetNextItemWidth(72.0f);
+	ImGui::DragFloat("Grid", &m_Grid, 0.05f, 0.05f, 100.0f, "%.2f");
+	if (ImGui::IsItemHovered())
+		ImGui::SetTooltip("Hold Ctrl while moving to snap to this grid.");
+
 	ImVec2 mouse = ImGui::GetIO().MousePos;
 	float localX = 0.0f;
 	float localY = 0.0f;
@@ -1513,29 +1773,81 @@ void EditorLayer::DrawViewport()
 	if (m_Gizmo.Action != Lite::GizmoAction::None)
 	{
 		if (m_Scene != nullptr && inside && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-			Lite::ApplyGizmo(*m_Scene, m_ViewProjection, m_ViewportW, m_ViewportH, m_Selected, localX, localY, m_Gizmo);
+		{
+			if (m_Gizmo.Action == Lite::GizmoAction::Move)
+				MoveSelection(localX, localY);
+			else
+				Lite::ApplyGizmo(*m_Scene, m_ViewProjection, m_ViewportW, m_ViewportH, m_Selected, localX, localY, m_Gizmo);
+		}
 		else
 		{
 			m_Gizmo = {};
+			m_Grab.clear();
 			if (m_Scene != nullptr)
 				m_History.Commit(*m_Scene, m_Selected);
 		}
 	}
-	else if (inside && ImGui::IsItemClicked(ImGuiMouseButton_Left) && m_Scene != nullptr)
+	else if (imageClicked && m_Scene != nullptr && inside)
 	{
-		if (!Lite::BeginGizmo(*m_Scene, m_ViewProjection, m_ViewportW, m_ViewportH, m_Selected, localX, localY, m_Gizmo))
-			PickObject(mouse.x, mouse.y);
+		if (Lite::BeginGizmo(*m_Scene, m_ViewProjection, m_ViewportW, m_ViewportH, m_Selected, localX, localY, m_Gizmo))
+		{
+			m_Grab.clear();
+			for (uint32_t id : m_Selection)
+			{
+				Lite::Entity selected = m_Scene->GetEntity(id);
+				Lite::TransformComponent* transform = selected ? selected.Get<Lite::TransformComponent>() : nullptr;
+				if (transform == nullptr)
+					continue;
+
+				const Lite::Transform world = selected.WorldTransform();
+				m_Grab.push_back({ id, { world.Position.x, world.Position.y }, transform->Local.Position });
+			}
+		}
+		else
+		{
+			m_Marquee = true;
+			m_MarqueeMoved = false;
+			m_MarqueeStart = { localX, localY };
+		}
+	}
+	else if (m_Marquee && m_Scene != nullptr)
+	{
+		const float dx = localX - m_MarqueeStart.x;
+		const float dy = localY - m_MarqueeStart.y;
+		if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		{
+			if (dx * dx + dy * dy > 16.0f)
+				m_MarqueeMoved = true;
+		}
+		else
+		{
+			if (m_MarqueeMoved)
+				SelectInRect(m_MarqueeStart, { localX, localY });
+			else
+				PickObject(mouse.x, mouse.y);
+			m_Marquee = false;
+		}
 	}
 	DrawGizmo();
 
 	const char* name = m_Scene != nullptr ? m_Scene->GetName().c_str() : "No scene";
 	const char* playback = m_Scene != nullptr ? Lite::PlaybackName(m_Scene->GetPlayback()) : "stopped";
-	char status[160];
-	std::snprintf(status, sizeof(status), "%s   %s   %.0f x %.0f", name, playback, size.x, size.y);
+	char status[192];
+	if (m_Selection.size() > 1)
+		std::snprintf(status, sizeof(status), "%s   %s   %.0f x %.0f   %zu selected", name, playback, size.x, size.y, m_Selection.size());
+	else
+		std::snprintf(status, sizeof(status), "%s   %s   %.0f x %.0f", name, playback, size.x, size.y);
 	ImVec2 textSize = ImGui::CalcTextSize(status);
 	ImVec2 badge { origin.x + 10.0f, origin.y + 8.0f };
 	ImVec2 pad { 8.0f, 4.0f };
 	ImDrawList* overlay = ImGui::GetWindowDrawList();
+	if (m_Marquee && m_MarqueeMoved)
+	{
+		ImVec2 first { m_ViewportX + m_MarqueeStart.x, m_ViewportY + m_MarqueeStart.y };
+		ImVec2 second { m_ViewportX + localX, m_ViewportY + localY };
+		overlay->AddRectFilled(first, second, IM_COL32(120, 170, 230, 40));
+		overlay->AddRect(first, second, IM_COL32(170, 210, 255, 220));
+	}
 	overlay->AddRectFilled(ImVec2(badge.x - pad.x, badge.y - pad.y), ImVec2(badge.x + textSize.x + pad.x, badge.y + textSize.y + pad.y), IM_COL32(16, 18, 24, 190), 5.0f);
 	overlay->AddText(badge, IM_COL32(214, 220, 230, 255), status);
 	ImGui::End();
@@ -1544,13 +1856,37 @@ void EditorLayer::DrawViewport()
 void EditorLayer::DrawConsole()
 {
 	ImGui::Begin("Console");
+	if (ImGui::Button("Clear"))
+		Lite::Console::Clear();
+	ImGui::SameLine();
+	ImGui::Checkbox("Mute contacts", &m_MuteContacts);
+	ImGui::SetNextItemWidth(-1.0f);
+	ImGui::InputTextWithHint("##ConsoleFilter", "Filter", m_ConsoleFilter, sizeof(m_ConsoleFilter));
+
 	const std::vector<std::string>& lines = Lite::Console::GetLines();
 	const bool follow = ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f;
-	if (lines.empty())
-		ImGui::TextDisabled("No messages");
-
+	bool shown = false;
 	for (const std::string& line : lines)
+	{
+		if (m_MuteContacts)
+		{
+			const bool contact = line.find("LITE: Collision:") != std::string::npos
+				|| line.find("LITE: Collision end:") != std::string::npos
+				|| line.find("LITE: Trigger:") != std::string::npos
+				|| line.find("LITE: Trigger end:") != std::string::npos;
+			if (contact)
+				continue;
+		}
+
+		if (m_ConsoleFilter[0] != '\0' && !ContainsText(line, m_ConsoleFilter))
+			continue;
+
 		ImGui::TextUnformatted(line.c_str());
+		shown = true;
+	}
+
+	if (!shown)
+		ImGui::TextDisabled("No messages");
 
 	if (follow)
 		ImGui::SetScrollHereY(1.0f);
