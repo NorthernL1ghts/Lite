@@ -286,7 +286,11 @@ namespace Lite {
 		void RespawnDistanceJoints(const std::vector<uint32_t>& ids);
 
 		struct PhysicsStorage;
-		PhysicsStorage* m_Physics = nullptr;
+		struct PhysicsDeleter
+		{
+			void operator()(PhysicsStorage* storage) const;
+		};
+		std::unique_ptr<PhysicsStorage, PhysicsDeleter> m_Physics;
 		Scope<ComponentStorage> m_Components;
 
 		std::string m_Name;

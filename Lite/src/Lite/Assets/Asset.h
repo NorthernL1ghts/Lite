@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Lite/Core/Base.h>
-#include <Lite/Core/UUID.h>
 
 #include <string>
 
@@ -21,7 +20,6 @@ namespace Lite {
 
 		virtual AssetType GetType() const = 0;
 
-		const UUID& GetID() const { return m_ID; }
 		const std::string& GetName() const { return m_Name; }
 		const std::string& GetPath() const { return m_Path; }
 		bool IsLoaded() const { return m_Loaded; }
@@ -29,12 +27,10 @@ namespace Lite {
 	protected:
 		void SetIdentity(std::string path, std::string name)
 		{
-			m_ID = UUID();
 			m_Path = std::move(path);
 			m_Name = std::move(name);
 		}
 
-		UUID m_ID = UUID::Null();
 		std::string m_Path;
 		std::string m_Name;
 		bool m_Loaded = false;

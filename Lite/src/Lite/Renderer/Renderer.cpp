@@ -1,6 +1,6 @@
 #include <Lite/Renderer/Renderer.h>
 
-#include <Lite/Renderer/Resources/Framebuffer.h>
+#include <Lite/Renderer/Vulkan/VulkanFramebuffer.h>
 
 #include <Lite/Core/Log/Logger.h>
 #include <Lite/Core/Profile/Profiler.h>
@@ -18,7 +18,7 @@ namespace {
 		Lite::VulkanDevice Device;
 		Lite::VulkanSwapchain Swapchain;
 		Lite::VulkanRenderPass RenderPass;
-		Lite::Framebuffer Frames;
+		Lite::VulkanFramebuffer Frames;
 		Lite::VulkanCommandBuffer Commands;
 		Lite::VulkanSync Sync;
 		GLFWwindow* Window = nullptr;

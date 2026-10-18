@@ -1,8 +1,8 @@
 #include <Lite/Renderer/Renderer2D.h>
 
 #include <Lite/Renderer/Material.h>
-#include <Lite/Renderer/RendererAPI.h>
 #include <Lite/Renderer/Resources/VertexArray.h>
+#include <Lite/Renderer/Shader/ShaderLibrary.h>
 #include <Lite/Renderer/Resources/VertexLayout.h>
 #include <Lite/Renderer/Vulkan/VulkanSync.h>
 
@@ -364,11 +364,6 @@ namespace Lite {
 		LITE_INFO("Renderer2D batch ready ({} quads, {} textures)", MaxQuads, MaxTextures);
 	}
 
-	ShaderLibrary& Renderer2D::GetShaderLibrary()
-	{
-		return s_ShaderLibrary;
-	}
-
 	void Renderer2D::SetViewProjection(const Mat4& viewProjection)
 	{
 		Renderer::SetViewProjection(viewProjection);
@@ -491,7 +486,10 @@ namespace Lite {
 		s_Material->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 		s_Material->Bind();
 		vkCmdBindDescriptorSets(Renderer::GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, s_Material->GetLayout(), 2, 1, &batch->Set, 0, nullptr);
-		RendererAPI::DrawIndexed(s_Meshes[frame]);
+		const VertexArray& mesh = s_Meshes[frame];
+		mesh.Bind();
+		Renderer::RecordDraw(mesh.GetIndexCount());
+		vkCmdDrawIndexed(Renderer::GetCommandBuffer(), mesh.GetIndexCount(), 1, 0, 0, 0);
 
 		s_Vertices.clear();
 		s_Indices.clear();

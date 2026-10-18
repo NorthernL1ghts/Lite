@@ -37,6 +37,11 @@ namespace Lite {
 		std::vector<Joint> Joints;
 	};
 
+	void Scene::PhysicsDeleter::operator()(PhysicsStorage* storage) const
+	{
+		delete storage;
+	}
+
 	namespace {
 
 		b2BodyType ToBodyType(BodyType type)
@@ -163,7 +168,7 @@ namespace Lite {
 		constexpr float kGravity = 9.81f;
 		b2WorldDef worldDef = b2DefaultWorldDef();
 		worldDef.gravity = { 0.0f, -kGravity };
-		m_Physics = new PhysicsStorage();
+		m_Physics.reset(new PhysicsStorage());
 		m_Physics->World = b2CreateWorld(&worldDef);
 
 		for (Entity entity : GetEntities())
@@ -329,8 +334,7 @@ namespace Lite {
 		if (b2World_IsValid(m_Physics->World))
 			b2DestroyWorld(m_Physics->World);
 
-		delete m_Physics;
-		m_Physics = nullptr;
+		m_Physics.reset();
 	}
 
 	void Scene::SyncPhysics()

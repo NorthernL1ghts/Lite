@@ -75,7 +75,7 @@ namespace Lite {
 			return nullptr;
 
 		m_Assets.emplace(key, asset);
-		LITE_INFO("Loaded asset {} ({})", key, asset->GetID().ToString());
+		LITE_INFO("Loaded asset {}", key);
 		return asset;
 	}
 
