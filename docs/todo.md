@@ -49,6 +49,7 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Tags.** An entity stores a short tag. It is saved when it is not empty. A duplicate keeps it. `FindTagged` returns the matches. Physics does not read it.
 - **Dirty scene.** `IsDirty` is set when an entity, plane, parent, component, name, or tag changes. `SetLocalPose` does not set it, because the physics step uses it. Save clears it. Play and stop do not mark it. Loading a scene leaves it clean.
 - **Runtime scene change.** `RequestScene` loads another scene after the physics steps, into the same scene object, which stays in play. A missing file is a console line and the current scene keeps playing. Stop puts back the scene that was open when play began. The swap and that restore do not mark the scene dirty.
+- **Editor surfaces.** The scene panel filters by tag. An empty filter shows every entity. Typed text keeps an entity whose tag contains it, ignoring capitalization, and keeps a parent when a child matches. A tag is shown on the row. The playback line says Unsaved while the scene is dirty. The inspector edits the tag, a collider's layer and mask, and a distance joint's other entity and rest length. Changing the layer, the mask, or the joint rebuilds the body while playing.
 
 ## Next
 
@@ -57,10 +58,6 @@ Nothing is queued. The backlog is under Later.
 ## Later
 
 Real gaps. They are not the next session. Each block says what exists today so the work is not started from a blank guess.
-
-### Editor surfaces
-
-The engine stores tags, the dirty flag, collider layer and mask, and the distance joint. The scene panel does not filter by tag or show that the scene is unsaved. The inspector does not edit layer, mask, or the joint. Those fields are set from code, scripts, or YAML.
 
 ### Scripts and assets
 

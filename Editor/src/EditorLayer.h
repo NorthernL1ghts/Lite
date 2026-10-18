@@ -75,6 +75,7 @@ private:
 	bool m_PickScript = false;
 	Lite::Scene* m_NamedScene = nullptr;
 	char m_Name[128] {};
+	char m_TagFilter[128] {};
 	uint32_t m_Selected = 0;
 	Lite::GizmoDrag m_Gizmo;
 	Inspector m_Inspector;

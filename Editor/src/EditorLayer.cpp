@@ -32,6 +32,25 @@ namespace {
 
 	const char* kEditorWindows[] = { "Scene", "Viewport", "Inspector", "Console", "Explorer" };
 
+	bool TagContains(const std::string& tag, const char* filter)
+	{
+		if (filter == nullptr || filter[0] == '\0')
+			return true;
+
+		auto lower = [](unsigned char character)
+		{
+			return static_cast<char>(std::tolower(character));
+		};
+
+		std::string haystack = tag;
+		std::string needle = filter;
+		for (char& character : haystack)
+			character = lower(static_cast<unsigned char>(character));
+		for (char& character : needle)
+			character = lower(static_cast<unsigned char>(character));
+		return haystack.find(needle) != std::string::npos;
+	}
+
 	bool EditorDockNeedsBuild(ImGuiID dockspaceId)
 	{
 		ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
@@ -1068,9 +1087,15 @@ void EditorLayer::DrawScene()
 	}
 
 	const char* playback = Lite::PlaybackName(m_Scene->GetPlayback());
-	ImGui::TextDisabled("%s", playback);
+	if (m_Scene->IsDirty())
+		ImGui::TextDisabled("%s  ·  Unsaved", playback);
+	else
+		ImGui::TextDisabled("%s", playback);
 	if (!m_Scene->GetPath().empty() && ImGui::IsItemHovered())
 		ImGui::SetTooltip("%s", m_Scene->GetPath().c_str());
+
+	ImGui::SetNextItemWidth(-1.0f);
+	ImGui::InputTextWithHint("##TagFilter", "Filter by tag", m_TagFilter, sizeof(m_TagFilter));
 
 	ImGuiTreeNodeFlags planeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow;
 	bool sceneChanged = false;
@@ -1201,6 +1226,20 @@ void EditorLayer::DrawScene()
 
 		ImGui::Indent();
 
+		std::function<bool(Lite::Entity)> passesFilter;
+		passesFilter = [&](Lite::Entity entity) -> bool
+		{
+			if (TagContains(m_Scene->GetTag(entity.GetId()), m_TagFilter))
+				return true;
+
+			for (Lite::Entity child : m_Scene->GetChildren(entity.GetId()))
+			{
+				if (passesFilter(child))
+					return true;
+			}
+			return false;
+		};
+
 		std::function<bool(Lite::Entity)> drawEntity;
 		drawEntity = [&](Lite::Entity entity) -> bool
 		{
@@ -1208,7 +1247,10 @@ void EditorLayer::DrawScene()
 				return false;
 
 			const bool hasChildren = !m_Scene->GetChildren(entity.GetId()).empty();
-			std::string label = std::format("{}##entity{}", entity.GetName(), entity.GetId());
+			const std::string tag = m_Scene->GetTag(entity.GetId());
+			std::string label = tag.empty()
+				? std::format("{}##entity{}", entity.GetName(), entity.GetId())
+				: std::format("{}  [{}]##entity{}", entity.GetName(), tag, entity.GetId());
 			ImGuiTreeNodeFlags entityFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
 			if (m_Selected == entity.GetId())
 				entityFlags |= ImGuiTreeNodeFlags_Selected;
@@ -1294,6 +1336,8 @@ void EditorLayer::DrawScene()
 
 			for (Lite::Entity child : m_Scene->GetChildren(entity.GetId()))
 			{
+				if (!passesFilter(child))
+					continue;
 				if (!drawEntity(child))
 				{
 					ImGui::TreePop();
@@ -1308,6 +1352,8 @@ void EditorLayer::DrawScene()
 		for (Lite::Entity entity : m_Scene->GetEntities(plane.Id))
 		{
 			if (m_Scene->GetParent(entity.GetId()) != 0)
+				continue;
+			if (!passesFilter(entity))
 				continue;
 			if (!drawEntity(entity))
 				break;

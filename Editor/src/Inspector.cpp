@@ -7,6 +7,7 @@
 #include <Lite/Scene/Scene.h>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -115,6 +116,21 @@ namespace {
 		return ImGui::SliderFloat(std::format("##{}", label).c_str(), &value, min, max, "%.2f");
 	}
 
+	template<typename Edited, typename Finished>
+	void CollisionFilter(uint64_t& layer, uint64_t& mask, Edited&& edited, Finished&& finished)
+	{
+		if (ImGui::InputScalar("Layer", ImGuiDataType_U64, &layer))
+			edited();
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Category bit. The default is 1.");
+		finished();
+		if (ImGui::InputScalar("Mask", ImGuiDataType_U64, &mask))
+			edited();
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Categories this collider accepts. The default accepts every layer.");
+		finished();
+	}
+
 	const char* EntryLabel(Lite::Entity entity, const char* name, const char* fallback)
 	{
 		size_t count = 0;
@@ -171,6 +187,9 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 	{
 		m_SyncedId = entity.GetId();
 		std::snprintf(m_ObjectName, sizeof(m_ObjectName), "%s", entity.GetName().c_str());
+		std::snprintf(m_TagText, sizeof(m_TagText), "%s", scene->GetTag(entity.GetId()).c_str());
+		Lite::DistanceJoint2DComponent* joint = entity.Get<Lite::DistanceJoint2DComponent>();
+		std::snprintf(m_JointOther, sizeof(m_JointOther), "%s", joint != nullptr ? joint->Other.c_str() : "");
 		Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>();
 		std::snprintf(m_ShaderText, sizeof(m_ShaderText), "%s", material != nullptr ? material->Shader.c_str() : "");
 		std::snprintf(m_TextureText, sizeof(m_TextureText), "%s", material != nullptr ? material->TexturePath.c_str() : "");
@@ -200,6 +219,12 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 	ImGui::SetNextItemWidth(-1.0f);
 	if (ImGui::InputText("##ObjectName", m_ObjectName, sizeof(m_ObjectName)))
 		entity.SetName(m_ObjectName);
+	finish();
+	if (ImGui::GetActiveID() != ImGui::GetID("##Tag") && std::strcmp(m_TagText, scene->GetTag(entity.GetId()).c_str()) != 0)
+		std::snprintf(m_TagText, sizeof(m_TagText), "%s", scene->GetTag(entity.GetId()).c_str());
+	ImGui::SetNextItemWidth(-1.0f);
+	if (ImGui::InputTextWithHint("##Tag", "Tag", m_TagText, sizeof(m_TagText)))
+		scene->SetTag(entity.GetId(), m_TagText);
 	finish();
 	ImGui::PushItemWidth(std::max(80.0f, ImGui::GetContentRegionAvail().x * 0.62f));
 
@@ -502,6 +527,7 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			if (ImGui::Checkbox("Box trigger", &box->IsTrigger))
 				refreshPhysics();
 			finish();
+			CollisionFilter(box->Layer, box->Mask, refreshPhysics, finish);
 			break;
 			}
 			default:
@@ -528,8 +554,40 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			if (ImGui::Checkbox("Circle trigger", &circle->IsTrigger))
 				refreshPhysics();
 			finish();
+			CollisionFilter(circle->Layer, circle->Mask, refreshPhysics, finish);
 			break;
 			}
+			default:
+				break;
+		}
+	}
+
+	if (Lite::DistanceJoint2DComponent* joint = entity.Get<Lite::DistanceJoint2DComponent>())
+	{
+		switch (ComponentSection("Distance Joint", "DistanceJoint", false))
+		{
+			case SectionAction::Remove:
+			entity.Remove<Lite::DistanceJoint2DComponent>();
+			removed("Distance Joint");
+			break;
+			case SectionAction::Open:
+			if (ImGui::GetActiveID() != ImGui::GetID("##JointOther") && std::strcmp(m_JointOther, joint->Other.c_str()) != 0)
+				std::snprintf(m_JointOther, sizeof(m_JointOther), "%s", joint->Other.c_str());
+			ImGui::SetNextItemWidth(-1.0f);
+			if (ImGui::InputTextWithHint("##JointOther", "Other entity", m_JointOther, sizeof(m_JointOther)))
+			{
+				joint->Other = m_JointOther;
+				refreshPhysics();
+			}
+			finish();
+			if (ImGui::DragFloat("Length", &joint->Length, 0.01f, 0.0f, 1000.0f))
+			{
+				joint->Length = std::max(joint->Length, 0.0f);
+				refreshPhysics();
+			}
+			finish();
+			ImGui::TextDisabled("Zero uses the distance between the bodies when play starts.");
+			break;
 			default:
 				break;
 		}
