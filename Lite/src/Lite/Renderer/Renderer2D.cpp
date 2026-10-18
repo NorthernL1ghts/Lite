@@ -51,10 +51,16 @@ namespace Lite {
 		std::array<Ref<Texture>, MaxTextures> s_Slots;
 		uint32_t s_SlotCount = 0;
 		Ref<Material> s_Material;
+		struct SlotBinding
+		{
+			const Texture* Texture = nullptr;
+			VkImageView View = VK_NULL_HANDLE;
+		};
+
 		struct TextureBatch
 		{
 			VkDescriptorSet Set = VK_NULL_HANDLE;
-			std::array<const Texture*, MaxTextures> Bound {};
+			std::array<SlotBinding, MaxTextures> Bound {};
 		};
 
 		std::array<VertexArray, VulkanSync::FramesInFlight> s_Meshes;
@@ -183,7 +189,7 @@ namespace Lite {
 			for (uint32_t index = 0; index < MaxTextures; ++index)
 			{
 				const Texture* texture = SlotTexture(index);
-				if (batch.Bound[index] == texture)
+				if (batch.Bound[index].Texture == texture && batch.Bound[index].View == texture->GetView())
 					continue;
 
 				images[count].sampler = texture->GetSampler();
@@ -198,7 +204,7 @@ namespace Lite {
 				write.descriptorCount = 1;
 				write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				write.pImageInfo = &images[count];
-				batch.Bound[index] = texture;
+				batch.Bound[index] = { texture, texture->GetView() };
 				++count;
 			}
 

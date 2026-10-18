@@ -37,6 +37,18 @@ namespace Lite {
 		s_Registry.reset();
 	}
 
+	void AssetRegistry::Refresh()
+	{
+		if (!s_Registry)
+			return;
+
+		for (const auto& entry : s_Registry->m_Assets)
+		{
+			if (auto texture = std::dynamic_pointer_cast<Texture>(entry.second))
+				texture->Watch();
+		}
+	}
+
 	AssetRegistry& AssetRegistry::Get()
 	{
 		LITE_CORE_ASSERT(s_Registry, "Asset registry is not initialised");

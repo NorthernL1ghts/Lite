@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string_view>
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -31,10 +32,22 @@ namespace Lite {
 
 	private:
 		friend class TextureHandler;
+		friend class AssetRegistry;
+
+		struct Gpu;
 
 		bool LoadFromFile(const std::filesystem::path& path);
+		bool InstallFile(const std::filesystem::path& path);
+		void Watch();
+		void NoteSource(const std::filesystem::path& path);
 		bool CreateGpu(const std::vector<uint8_t>& pixels, std::string_view name);
+		Gpu DetachGpu();
+		void AttachGpu(Gpu gpu);
+		static void DestroyDetached(Gpu& gpu);
 		void DestroyGpu();
+
+		std::filesystem::path m_Source;
+		std::optional<std::filesystem::file_time_type> m_Seen;
 
 		uint32_t m_Width = 0;
 		uint32_t m_Height = 0;

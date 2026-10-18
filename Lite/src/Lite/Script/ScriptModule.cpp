@@ -8,6 +8,7 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include <cstdint>
 #include <format>
 #include <string>
 #include <vector>
@@ -25,11 +26,19 @@ namespace Lite {
 		};
 
 		HMODULE s_Module = nullptr;
+		std::filesystem::path s_Copy;
+		std::filesystem::path s_LoadedSource;
 		std::vector<LoadedScript> s_Classes;
+		std::vector<LoadedScript>* s_Registering = nullptr;
+
+		std::vector<LoadedScript>& Registering()
+		{
+			return s_Registering != nullptr ? *s_Registering : s_Classes;
+		}
 
 		const LoadedScript* FindScript(std::string_view name)
 		{
-			for (const LoadedScript& script : s_Classes)
+			for (const LoadedScript& script : Registering())
 			{
 				if (script.Name == name)
 					return &script;
@@ -51,7 +60,72 @@ namespace Lite {
 			loaded.Start = script->Start;
 			loaded.Update = script->Update;
 			loaded.OnCollision = script->OnCollision;
-			s_Classes.push_back(std::move(loaded));
+			Registering().push_back(std::move(loaded));
+		}
+
+		bool IsLocked(const std::error_code& error)
+		{
+			return error == std::errc::permission_denied
+				|| error.value() == ERROR_SHARING_VIOLATION
+				|| error.value() == ERROR_LOCK_VIOLATION;
+		}
+
+		void DeleteCopy(std::filesystem::path path)
+		{
+			if (path.empty())
+				return;
+
+			std::error_code error;
+			std::filesystem::remove(path, error);
+		}
+
+		bool ReadModule(const std::filesystem::path& file, HMODULE& module, std::filesystem::path& copy, std::vector<LoadedScript>& classes)
+		{
+			std::error_code error;
+			const std::filesystem::path directory = std::filesystem::temp_directory_path(error);
+			if (error)
+			{
+				Console::Log(std::format("Failed to load script module: {}", file.string()));
+				return false;
+			}
+
+			static uint64_t copyIndex = 0;
+			const std::filesystem::path extension = file.extension().empty() ? std::filesystem::path(".dll") : file.extension();
+			const std::filesystem::path dest = directory / std::format("lite-script-{}-{}{}", GetTickCount64(), ++copyIndex, extension.string());
+			std::filesystem::copy_file(file, dest, error);
+			if (error)
+			{
+				if (IsLocked(error))
+					Console::Log(std::format("Failed to load script module: {} is locked", file.string()));
+				else
+					Console::Log(std::format("Failed to load script module: {}", file.string()));
+				DeleteCopy(dest);
+				return false;
+			}
+
+			HMODULE loaded = LoadLibraryW(dest.c_str());
+			if (loaded == nullptr)
+			{
+				Console::Log(std::format("Failed to load script module: {} (error {})", file.string(), GetLastError()));
+				DeleteCopy(dest);
+				return false;
+			}
+
+			auto registerScripts = reinterpret_cast<void (*)(ScriptAddFn)>(GetProcAddress(loaded, ScriptRegisterExport));
+			if (registerScripts == nullptr)
+			{
+				Console::Log(std::format("Failed to load script module: {} has no LiteRegisterScripts", file.filename().string()));
+				FreeLibrary(loaded);
+				DeleteCopy(dest);
+				return false;
+			}
+
+			s_Registering = &classes;
+			registerScripts(&AddScript);
+			s_Registering = nullptr;
+			module = loaded;
+			copy = dest;
+			return true;
 		}
 
 		void StartScripts(Scene& scene)
@@ -93,15 +167,17 @@ namespace Lite {
 
 	void ScriptRuntime::Load(Scene& scene)
 	{
-		Unload();
-
 		Ref<Project> project = Project::GetActive();
 		if (!project)
+		{
+			Unload();
 			return;
+		}
 
 		const std::filesystem::path& configured = project->GetConfig().ScriptModulePath;
 		if (configured.empty())
 		{
+			Unload();
 			for (Entity entity : scene.GetEntities())
 			{
 				ScriptComponent* script = entity.Get<ScriptComponent>();
@@ -120,6 +196,7 @@ namespace Lite {
 			if (project->GetProjectDirectory().empty())
 			{
 				Console::Log(std::format("Failed to load script module: {}", configured.generic_string()));
+				Unload();
 				return;
 			}
 
@@ -130,26 +207,27 @@ namespace Lite {
 		if (!std::filesystem::is_regular_file(file, error))
 		{
 			Console::Log(std::format("Failed to load script module: {}", file.string()));
+			Unload();
 			return;
 		}
 
-		HMODULE module = LoadLibraryW(file.c_str());
-		if (module == nullptr)
+		HMODULE module = nullptr;
+		std::filesystem::path copy;
+		std::vector<LoadedScript> classes;
+		if (!ReadModule(file, module, copy, classes))
 		{
-			Console::Log(std::format("Failed to load script module: {} (error {})", file.string(), GetLastError()));
+			if (s_Module != nullptr && s_LoadedSource == file)
+				StartScripts(scene);
+			else
+				Unload();
 			return;
 		}
 
-		auto registerScripts = reinterpret_cast<void (*)(ScriptAddFn)>(GetProcAddress(module, ScriptRegisterExport));
-		if (registerScripts == nullptr)
-		{
-			Console::Log(std::format("Failed to load script module: {} has no LiteRegisterScripts", file.filename().string()));
-			FreeLibrary(module);
-			return;
-		}
-
-		registerScripts(&AddScript);
+		Unload();
 		s_Module = module;
+		s_Copy = std::move(copy);
+		s_Classes = std::move(classes);
+		s_LoadedSource = file;
 		Console::Log(std::format("Script module loaded: {}", configured.generic_string()));
 		StartScripts(scene);
 	}
@@ -157,11 +235,15 @@ namespace Lite {
 	void ScriptRuntime::Unload()
 	{
 		s_Classes.clear();
-		if (s_Module == nullptr)
-			return;
+		s_LoadedSource.clear();
+		if (s_Module != nullptr)
+		{
+			FreeLibrary(s_Module);
+			s_Module = nullptr;
+		}
 
-		FreeLibrary(s_Module);
-		s_Module = nullptr;
+		DeleteCopy(std::move(s_Copy));
+		s_Copy.clear();
 	}
 
 	void ScriptRuntime::Update(Scene& scene, float seconds)

@@ -15,6 +15,7 @@ namespace Lite {
 	public:
 		static void Init();
 		static void Shutdown();
+		static void Refresh();
 		static AssetRegistry& Get();
 
 		template<typename T>

@@ -10,6 +10,7 @@
 #include <Lite/ImGui/ImGuiLayer.h>
 #include <Lite/Input/Input.h>
 #include <Lite/Renderer/Renderer2D.h>
+#include <Lite/Script/ScriptModule.h>
 
 namespace Lite {
 
@@ -56,6 +57,7 @@ namespace Lite {
 
 		m_LayerStack.Clear();
 		m_ImGuiLayer = nullptr;
+		ScriptRuntime::Unload();
 		AssetRegistry::Shutdown();
 		Renderer2D::Shutdown();
 		Input::SetWindow(nullptr);
@@ -86,6 +88,7 @@ namespace Lite {
 
 			if (Renderer2D::IsFrameActive())
 			{
+				AssetRegistry::Refresh();
 				Timestep timestep = Time::GetTimestep();
 
 				{

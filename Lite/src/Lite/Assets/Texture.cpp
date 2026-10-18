@@ -253,17 +253,137 @@ namespace Lite {
 		return texture;
 	}
 
+	struct Texture::Gpu
+	{
+		uint32_t Width = 0;
+		uint32_t Height = 0;
+		VkDevice Device = VK_NULL_HANDLE;
+		VkImage Image = VK_NULL_HANDLE;
+		VkDeviceMemory Memory = VK_NULL_HANDLE;
+		VkImageView View = VK_NULL_HANDLE;
+		VkSampler Sampler = VK_NULL_HANDLE;
+		VkDescriptorSetLayout SetLayout = VK_NULL_HANDLE;
+		VkDescriptorPool Pool = VK_NULL_HANDLE;
+		VkDescriptorSet Set = VK_NULL_HANDLE;
+	};
+
+	void Texture::DestroyDetached(Gpu& gpu)
+	{
+		if (!gpu.Device)
+			return;
+
+		vkDeviceWaitIdle(gpu.Device);
+		if (gpu.Pool)
+			vkDestroyDescriptorPool(gpu.Device, gpu.Pool, nullptr);
+		if (gpu.SetLayout)
+			vkDestroyDescriptorSetLayout(gpu.Device, gpu.SetLayout, nullptr);
+		if (gpu.Sampler)
+			vkDestroySampler(gpu.Device, gpu.Sampler, nullptr);
+		if (gpu.View)
+			vkDestroyImageView(gpu.Device, gpu.View, nullptr);
+		if (gpu.Image)
+			vkDestroyImage(gpu.Device, gpu.Image, nullptr);
+		if (gpu.Memory)
+			vkFreeMemory(gpu.Device, gpu.Memory, nullptr);
+		gpu = {};
+	}
+
 	bool Texture::LoadFromFile(const std::filesystem::path& path)
 	{
+		if (!InstallFile(path))
+			return false;
+
+		NoteSource(path);
+		return true;
+	}
+
+	bool Texture::InstallFile(const std::filesystem::path& path)
+	{
 		std::vector<uint8_t> pixels;
-		if (!DecodeImage(path, m_Width, m_Height, pixels))
+		uint32_t width = 0;
+		uint32_t height = 0;
+		if (!DecodeImage(path, width, height, pixels))
 			return false;
 
+		Gpu previous = DetachGpu();
+		m_Width = width;
+		m_Height = height;
 		if (!CreateGpu(pixels, path.filename().string()))
+		{
+			AttachGpu(std::move(previous));
 			return false;
+		}
 
+		DestroyDetached(previous);
 		SetIdentity(path.generic_string(), path.filename().string());
 		return true;
+	}
+
+	void Texture::Watch()
+	{
+		if (m_Source.empty() || !m_Loaded || !m_Device)
+			return;
+
+		std::error_code error;
+		const auto stamp = std::filesystem::last_write_time(m_Source, error);
+		if (error || (m_Seen.has_value() && stamp == *m_Seen))
+			return;
+
+		m_Seen = stamp;
+		if (!InstallFile(m_Source))
+			LITE_ERROR("Failed to reload texture {}", m_Source.string());
+		else
+			LITE_INFO("Reloaded texture {}", m_Source.string());
+	}
+
+	void Texture::NoteSource(const std::filesystem::path& path)
+	{
+		m_Source = path;
+		std::error_code error;
+		const auto stamp = std::filesystem::last_write_time(path, error);
+		if (!error)
+			m_Seen = stamp;
+	}
+
+	Texture::Gpu Texture::DetachGpu()
+	{
+		Gpu gpu;
+		gpu.Width = m_Width;
+		gpu.Height = m_Height;
+		gpu.Device = m_Device;
+		gpu.Image = m_Image;
+		gpu.Memory = m_Memory;
+		gpu.View = m_View;
+		gpu.Sampler = m_Sampler;
+		gpu.SetLayout = m_SetLayout;
+		gpu.Pool = m_Pool;
+		gpu.Set = m_Set;
+		m_Width = 0;
+		m_Height = 0;
+		m_Device = VK_NULL_HANDLE;
+		m_Image = VK_NULL_HANDLE;
+		m_Memory = VK_NULL_HANDLE;
+		m_View = VK_NULL_HANDLE;
+		m_Sampler = VK_NULL_HANDLE;
+		m_SetLayout = VK_NULL_HANDLE;
+		m_Pool = VK_NULL_HANDLE;
+		m_Set = VK_NULL_HANDLE;
+		return gpu;
+	}
+
+	void Texture::AttachGpu(Gpu gpu)
+	{
+		m_Width = gpu.Width;
+		m_Height = gpu.Height;
+		m_Device = gpu.Device;
+		m_Image = gpu.Image;
+		m_Memory = gpu.Memory;
+		m_View = gpu.View;
+		m_Sampler = gpu.Sampler;
+		m_SetLayout = gpu.SetLayout;
+		m_Pool = gpu.Pool;
+		m_Set = gpu.Set;
+		m_Loaded = m_Device != VK_NULL_HANDLE;
 	}
 
 	bool Texture::CreateGpu(const std::vector<uint8_t>& pixels, std::string_view name)

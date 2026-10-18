@@ -308,7 +308,6 @@ namespace Lite {
 	{
 		m_Motion.clear();
 		m_StepRemainder = 0.0f;
-		ScriptRuntime::Unload();
 		if (m_Physics == nullptr)
 			return;
 

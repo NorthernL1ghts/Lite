@@ -50,6 +50,8 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Dirty scene.** `IsDirty` is set when an entity, plane, parent, component, name, or tag changes. `SetLocalPose` does not set it, because the physics step uses it. Save clears it. Play and stop do not mark it. Loading a scene leaves it clean.
 - **Runtime scene change.** `RequestScene` loads another scene after the physics steps, into the same scene object, which stays in play. A missing file is a console line and the current scene keeps playing. Stop puts back the scene that was open when play began. The swap and that restore do not mark the scene dirty.
 - **Editor surfaces.** The scene panel filters by tag. An empty filter shows every entity. Typed text keeps an entity whose tag contains it, ignoring capitalization, and keeps a parent when a child matches. A tag is shown on the row. The playback line says Unsaved while the scene is dirty. The inspector edits the tag, a collider's layer and mask, and a distance joint's other entity and rest length. Changing the layer, the mask, or the joint rebuilds the body while playing.
+- **Script reload.** Play copies the project DLL and loads that copy, so the file can be replaced while the scene is stopped. The next play loads the replacement. If the file is locked, the console says so and the scripts already loaded keep running. A failed load does not register part of the new file. Collision stays the one callback.
+- **Watched textures.** A loaded texture is refreshed when its file changes on disk. The scene does not restart. A failed reload keeps the previous image and logs the path.
 
 ## Next
 
@@ -58,14 +60,6 @@ Nothing is queued. The backlog is under Later.
 ## Later
 
 Real gaps. They are not the next session. Each block says what exists today so the work is not started from a blank guess.
-
-### Scripts and assets
-
-One DLL per project exports `LiteRegisterScripts`. A class is a name plus start, update, and collision function pointers. The editor and Sandbox load that file on play and free it on stop. Materials and prefabs placed in a scene are copies. Editing the file later does not change copies already in the scene. The asset registry loads a texture once.
-
-- **Collision phase.** Covered by scripted motion. Do not add a second callback.
-- **Reload while stopped.** Replacing the DLL on disk and pressing play loads the new file. If the file is locked, the console says so and the old behavior is not half-applied.
-- **Watched textures.** Changing a texture file on disk while the editor is open reloads that texture. The scene does not need a restart. A failed reload keeps the previous image and logs the path.
 
 ### Editor
 

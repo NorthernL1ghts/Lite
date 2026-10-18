@@ -1,8 +1,15 @@
 #include <Lite/Assets/AssetRegistry.h>
 #include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Core/Log/Logger.h>
+#include <Lite/Project/Project.h>
 #include <Lite/Scene/Components/Components.h>
+#include <Lite/Scene/Console.h>
 #include <Lite/Scene/Scene.h>
+#include <Lite/Script/ScriptModule.h>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 
 #include <cmath>
 #include <filesystem>
@@ -351,6 +358,85 @@ namespace {
 		return true;
 	}
 
+	bool Logged(std::string_view text)
+	{
+		for (const std::string& line : Lite::Console::GetLines())
+		{
+			if (line.find(text) != std::string::npos)
+				return true;
+		}
+		return false;
+	}
+
+	bool CheckScripts()
+	{
+		const std::filesystem::path source = Lite::FileSystem::Locate("Sandbox/scripts/SandboxScripts.dll");
+		if (source.empty())
+			return Fail("Scene check: SandboxScripts.dll was not found");
+
+		const std::filesystem::path directory = std::filesystem::temp_directory_path() / "lite-script-check";
+		std::error_code error;
+		std::filesystem::remove_all(directory, error);
+		std::filesystem::create_directories(directory, error);
+		if (error)
+			return Fail("Scene check: could not create a script directory");
+
+		const std::filesystem::path module = directory / "Module.dll";
+		std::filesystem::copy_file(source, module, std::filesystem::copy_options::overwrite_existing, error);
+		if (error)
+			return Fail("Scene check: could not copy the script module");
+
+		Lite::Ref<Lite::Project> project = Lite::Project::New();
+		project->GetConfig().ScriptModulePath = module;
+
+		Lite::Scene scene("Scripts");
+		scene.Create();
+		scene.CreateEntity("Box").Add<Lite::ScriptComponent>().Class = "Bounce";
+
+		auto played = [&](const char* loaded)
+		{
+			Lite::Console::Clear();
+			scene.Play();
+			const bool started = Logged("Box started");
+			const bool moduleLoaded = Logged("Script module loaded");
+			scene.Stop();
+			if (!started)
+				return Fail("Scene check: the script start did not run");
+			if (loaded != nullptr && !moduleLoaded)
+				return Fail(loaded);
+			return true;
+		};
+
+		if (!played("Scene check: play did not load the script module"))
+			return false;
+
+		std::filesystem::copy_file(source, module, std::filesystem::copy_options::overwrite_existing, error);
+		if (error)
+			return Fail("Scene check: could not replace the script module");
+		if (!played("Scene check: replacing the script module did not load it"))
+			return false;
+
+		HANDLE lock = CreateFileW(module.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		if (lock == INVALID_HANDLE_VALUE)
+			return Fail("Scene check: could not lock the script module");
+
+		Lite::Console::Clear();
+		scene.Play();
+		const bool locked = Logged("is locked");
+		const bool started = Logged("Box started");
+		const bool replaced = Logged("Script module loaded");
+		scene.Stop();
+		CloseHandle(lock);
+		Lite::ScriptRuntime::Unload();
+		std::filesystem::remove_all(directory, error);
+
+		if (!locked)
+			return Fail("Scene check: a locked script module was not reported");
+		if (!started || replaced)
+			return Fail("Scene check: a locked script module changed the loaded scripts");
+		return true;
+	}
+
 }
 
 int main()
@@ -367,7 +453,7 @@ int main()
 	}
 	else if (Lite::Scope<Lite::Scene> scene = Lite::Scene::Open(scenePath.string()))
 	{
-		if (Check(*scene) && CheckQueries() && CheckLayersAndJoint() && CheckSceneSwap())
+		if (Check(*scene) && CheckQueries() && CheckLayersAndJoint() && CheckSceneSwap() && CheckScripts())
 		{
 			std::cout << "Scene check passed\n";
 			code = 0;
