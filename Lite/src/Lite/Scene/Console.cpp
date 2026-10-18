@@ -12,8 +12,12 @@ namespace Lite {
 
 	void Console::Log(std::string_view message)
 	{
-		s_Lines.emplace_back(message);
 		LITE_INFO("{}", message);
+	}
+
+	void Console::Append(std::string_view line)
+	{
+		s_Lines.emplace_back(line);
 	}
 
 	const std::vector<std::string>& Console::GetLines()

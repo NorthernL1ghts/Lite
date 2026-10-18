@@ -23,6 +23,10 @@ namespace Lite {
 				box->Offset = ReadVec2(node["offset"], box->Offset);
 			if (node["trigger"])
 				box->IsTrigger = node["trigger"].as<bool>();
+			if (node["layer"])
+				box->Layer = node["layer"].as<uint64_t>();
+			if (node["mask"])
+				box->Mask = node["mask"].as<uint64_t>();
 		}
 
 		void Write(YAML::Node& node, const void* component)
@@ -31,6 +35,10 @@ namespace Lite {
 			node["size"] = WriteVec2(box.Size);
 			node["offset"] = WriteVec2(box.Offset);
 			node["trigger"] = box.IsTrigger;
+			if (box.Layer != kDefaultCollisionLayer)
+				node["layer"] = box.Layer;
+			if (box.Mask != kDefaultCollisionMask)
+				node["mask"] = box.Mask;
 		}
 
 		struct Registration

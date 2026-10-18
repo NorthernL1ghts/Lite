@@ -9,12 +9,15 @@
 #include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Core/String.h>
 #include <Lite/Project/Project.h>
+#include <Lite/Renderer/MeshShape.h>
+#include <Lite/Renderer/Renderer.h>
 #include <Lite/Renderer/Renderer2D.h>
 #include <Lite/Script/ScriptModule.h>
 
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -32,6 +35,8 @@ namespace Lite {
 				return entity;
 
 			entity["name"] = record->Name;
+			if (!record->Tag.empty())
+				entity["tag"] = record->Tag;
 			if (includePrefab && !record->Prefab.empty())
 				entity["prefab"] = record->Prefab;
 
@@ -60,6 +65,12 @@ namespace Lite {
 				const std::string key = it->first.as<std::string>();
 				if (key == "name" || key == "plane")
 					continue;
+				if (key == "tag")
+				{
+					if (it->second && it->second.IsScalar())
+						scene.SetTag(id, it->second.as<std::string>());
+					continue;
+				}
 				if (key == "prefab")
 				{
 					if (it->second && it->second.IsScalar())
@@ -111,6 +122,92 @@ namespace Lite {
 			surface.Emission = material.Emission;
 			surface.Offset = material.Offset;
 			return surface;
+		}
+
+		bool Unproject(const Mat4& inverse, float x, float y, float z, Vec3& world)
+		{
+			const Vec4 point = inverse * Vec4 { x, y, z, 1.0f };
+			if (std::fabs(point.w) < 1.0e-6f)
+				return false;
+
+			world = { point.x / point.w, point.y / point.w, point.z / point.w };
+			return true;
+		}
+
+		bool PlanePoint(const Mat4& inverse, float x, float y, Vec2& point)
+		{
+			Vec3 nearPoint {};
+			Vec3 farPoint {};
+			if (!Unproject(inverse, x, y, -1.0f, nearPoint) || !Unproject(inverse, x, y, 1.0f, farPoint))
+				return false;
+
+			const float delta = farPoint.z - nearPoint.z;
+			if (std::fabs(delta) < 1.0e-6f)
+			{
+				if (std::fabs(nearPoint.z) > 0.001f)
+					return false;
+				point = { nearPoint.x, nearPoint.y };
+				return true;
+			}
+
+			const float t = -nearPoint.z / delta;
+			point = { nearPoint.x + (farPoint.x - nearPoint.x) * t, nearPoint.y + (farPoint.y - nearPoint.y) * t };
+			return std::isfinite(point.x) && std::isfinite(point.y);
+		}
+
+		bool ViewBounds(Vec2& min, Vec2& max)
+		{
+			const Mat4 inverse = Renderer::GetViewProjection().Inverse();
+			const Vec2 clip[4] = { { -1.0f, -1.0f }, { 1.0f, -1.0f }, { 1.0f, 1.0f }, { -1.0f, 1.0f } };
+			bool any = false;
+			for (const Vec2& corner : clip)
+			{
+				Vec2 point {};
+				if (!PlanePoint(inverse, corner.x, corner.y, point))
+					return false;
+
+				if (!any)
+				{
+					min = max = point;
+					any = true;
+					continue;
+				}
+
+				min.x = std::min(min.x, point.x);
+				min.y = std::min(min.y, point.y);
+				max.x = std::max(max.x, point.x);
+				max.y = std::max(max.y, point.y);
+			}
+
+			return any;
+		}
+
+		bool MissesView(const Transform& drawn, MeshType type, const Vec2& min, const Vec2& max)
+		{
+			const std::span<const Vec2> local = type == MeshType::Triangle ? std::span<const Vec2> { kTriangleCorners } : std::span<const Vec2> { kQuadCorners };
+			Vec2 meshMin {};
+			Vec2 meshMax {};
+			bool any = false;
+			for (const Vec2 corner : local)
+			{
+				const Vec3 point = drawn.TransformPoint({ corner.x, corner.y, 0.0f });
+				if (!any)
+				{
+					meshMin = meshMax = { point.x, point.y };
+					any = true;
+					continue;
+				}
+
+				meshMin.x = std::min(meshMin.x, point.x);
+				meshMin.y = std::min(meshMin.y, point.y);
+				meshMax.x = std::max(meshMax.x, point.x);
+				meshMax.y = std::max(meshMax.y, point.y);
+			}
+
+			if (!any)
+				return false;
+
+			return meshMax.x < min.x || meshMin.x > max.x || meshMax.y < min.y || meshMin.y > max.y;
 		}
 
 		void SubmitMesh(const Transform& transform, const MaterialComponent& material, MeshType type)
@@ -167,8 +264,14 @@ namespace Lite {
 
 	void Entity::SetName(std::string name)
 	{
-		if (Scene::Record* record = m_Scene != nullptr ? m_Scene->FindRecord(m_Id) : nullptr)
-			record->Name = std::move(name);
+		Scene::Record* record = m_Scene != nullptr ? m_Scene->FindRecord(m_Id) : nullptr;
+		if (record == nullptr || record->Name == name)
+			return;
+
+		std::string previous = record->Name;
+		record->Name = std::move(name);
+		m_Scene->RetargetJoints(previous, record->Name);
+		m_Scene->MarkDirty();
 	}
 
 	void* Scene::AddComponent(ComponentId id, uint32_t entity)
@@ -176,7 +279,11 @@ namespace Lite {
 		if (FindRecord(entity) == nullptr || m_Components == nullptr)
 			return nullptr;
 
-		return m_Components->Emplace(id, entity);
+		void* component = m_Components->Emplace(id, entity);
+		MarkDirty();
+		if (id == ComponentId::Mesh || id == ComponentId::Material || id == ComponentId::Sorting)
+			MarkStructure();
+		return component;
 	}
 
 	void* Scene::GetComponent(ComponentId id, uint32_t entity)
@@ -191,8 +298,51 @@ namespace Lite {
 
 	void Scene::RemoveComponent(ComponentId id, uint32_t entity)
 	{
-		if (m_Components != nullptr)
-			m_Components->Erase(id, entity);
+		if (m_Components == nullptr || m_Components->Find(id, entity) == nullptr)
+			return;
+
+		if (id == ComponentId::DistanceJoint2D)
+			DestroyDistanceJoint(entity);
+
+		m_Components->Erase(id, entity);
+		MarkDirty();
+		if (id == ComponentId::Mesh || id == ComponentId::Material || id == ComponentId::Sorting)
+			MarkStructure();
+	}
+
+	void Scene::SetName(std::string name)
+	{
+		if (m_Name == name)
+			return;
+
+		m_Name = std::move(name);
+		MarkDirty();
+	}
+
+	void Scene::MarkDirty()
+	{
+		if (!m_SuppressDirty)
+			m_Dirty = true;
+	}
+
+	void Scene::MarkStructure()
+	{
+		++m_StructureRevision;
+		if (m_StructureRevision == 0)
+			++m_StructureRevision;
+	}
+
+	void Scene::RetargetJoints(const std::string& previous, const std::string& name)
+	{
+		if (previous.empty() || previous == name)
+			return;
+
+		for (const Record& record : m_Records)
+		{
+			auto* joint = static_cast<DistanceJoint2DComponent*>(GetComponent(ComponentId::DistanceJoint2D, record.Id));
+			if (joint != nullptr && joint->Other == previous)
+				joint->Other = name;
+		}
 	}
 
 	Scene::Scene(std::string name)
@@ -245,6 +395,43 @@ namespace Lite {
 		for (uint32_t parent = GetParent(id); parent != 0 && depth < 64; parent = GetParent(parent))
 			++depth;
 		return depth;
+	}
+
+	Transform Scene::DrawTransform(uint32_t id) const
+	{
+		const auto* component = static_cast<const TransformComponent*>(GetComponent(ComponentId::Transform, id));
+		if (component == nullptr)
+			return {};
+
+		Transform local = component->Local;
+		if (!IsPlaying())
+			return local;
+
+		float alpha = m_StepRemainder / kPhysicsStep;
+		if (alpha < 0.0f)
+			alpha = 0.0f;
+		if (alpha > 1.0f)
+			alpha = 1.0f;
+
+		for (const MotionSample& sample : m_Motion)
+		{
+			if (sample.Entity != id)
+				continue;
+
+			float delta = local.GetRotationZ() - sample.Angle;
+			const float turn = 3.14159265f;
+			while (delta > turn)
+				delta -= turn * 2.0f;
+			while (delta < -turn)
+				delta += turn * 2.0f;
+
+			local.Position.x = sample.X + (local.Position.x - sample.X) * alpha;
+			local.Position.y = sample.Y + (local.Position.y - sample.Y) * alpha;
+			local.SetRotationZ(sample.Angle + delta * alpha);
+			break;
+		}
+
+		return local;
 	}
 
 	Transform Scene::WorldTransform(uint32_t id) const
@@ -341,6 +528,8 @@ namespace Lite {
 		record->Parent = parent;
 		if (keepWorld)
 			FitLocalToWorld(id, world);
+		MarkDirty();
+		MarkStructure();
 		return true;
 	}
 
@@ -383,6 +572,8 @@ namespace Lite {
 		for (const Plane& existing : m_Planes)
 			plane.Order = std::max(plane.Order, existing.Order + 1);
 		m_Planes.push_back(std::move(plane));
+		MarkDirty();
+		MarkStructure();
 		return m_Planes.back().Id;
 	}
 
@@ -422,7 +613,11 @@ namespace Lite {
 			if (plane.Id != id)
 				continue;
 
+			if (plane.Name == name)
+				return true;
+
 			plane.Name = std::move(name);
+			MarkDirty();
 			return true;
 		}
 
@@ -471,6 +666,8 @@ namespace Lite {
 		if (found != m_Planes.end())
 			m_Planes.erase(found);
 
+		MarkDirty();
+		MarkStructure();
 		return count > 0 ? PlaneRemove::MovedToWorld : PlaneRemove::Removed;
 	}
 
@@ -492,7 +689,11 @@ namespace Lite {
 		{
 			if (plane.Id != id)
 				continue;
+			if (plane.Order == order)
+				return;
 			plane.Order = order;
+			MarkDirty();
+			MarkStructure();
 			return;
 		}
 	}
@@ -541,6 +742,7 @@ namespace Lite {
 		record.Name = std::move(name);
 		m_Records.push_back(std::move(record));
 		AddComponent(ComponentId::Transform, m_Records.back().Id);
+		MarkStructure();
 		return Entity(this, m_Records.back().Id);
 	}
 
@@ -825,20 +1027,25 @@ namespace Lite {
 
 	void Scene::DestroyRecord(uint32_t id)
 	{
-		if (FindRecord(id) == nullptr)
+		Record* record = FindRecord(id);
+		if (record == nullptr)
 			return;
 
+		const std::string name = record->Name;
+		DetachDistanceJoints(id, name);
 		RemovePhysicsBody(id);
 		for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
 			RemoveComponent(static_cast<ComponentId>(index), id);
 
-		for (auto record = m_Records.begin(); record != m_Records.end(); ++record)
+		for (auto it = m_Records.begin(); it != m_Records.end(); ++it)
 		{
-			if (record->Id != id)
+			if (it->Id != id)
 				continue;
-			m_Records.erase(record);
+			m_Records.erase(it);
 			break;
 		}
+
+		MarkStructure();
 	}
 
 	Scene::EntityDestroy Scene::DestroyEntity(uint32_t id, bool detachChildren)
@@ -1011,6 +1218,33 @@ namespace Lite {
 		return placed;
 	}
 
+	std::string Scene::GetTag(uint32_t id) const
+	{
+		const Record* record = FindRecord(id);
+		return record != nullptr ? record->Tag : std::string {};
+	}
+
+	void Scene::SetTag(uint32_t id, std::string tag)
+	{
+		Record* record = FindRecord(id);
+		if (record == nullptr || record->Tag == tag)
+			return;
+
+		record->Tag = std::move(tag);
+		MarkDirty();
+	}
+
+	std::vector<Entity> Scene::FindTagged(std::string_view tag)
+	{
+		std::vector<Entity> tagged;
+		for (const Record& record : m_Records)
+		{
+			if (record.Tag == tag)
+				tagged.emplace_back(this, record.Id);
+		}
+		return tagged;
+	}
+
 	Entity Scene::Find(std::string_view name)
 	{
 		for (const Record& record : m_Records)
@@ -1091,6 +1325,7 @@ namespace Lite {
 
 		m_Loaded = true;
 		m_Playback = ScenePlayback::Stopped;
+		m_Dirty = false;
 		Console::Log(std::format("Scene created: {}", m_Name));
 	}
 
@@ -1128,7 +1363,12 @@ namespace Lite {
 		if (paused)
 			SyncPhysics();
 		else
+		{
+			m_PlaySnapshot = Snapshot();
+			m_PlayPath = m_Path;
+			m_Swapped = false;
 			StartPhysics();
+		}
 		Console::Log(std::format("Scene playing: {}", m_Name));
 	}
 
@@ -1145,6 +1385,20 @@ namespace Lite {
 	{
 		if (m_Playback == ScenePlayback::Stopped)
 			return;
+
+		m_RequestedScene.clear();
+		if (m_Swapped && !m_PlaySnapshot.empty())
+		{
+			const bool dirty = m_Dirty;
+			m_Swapped = false;
+			m_Playback = ScenePlayback::Stopped;
+			m_Path = m_PlayPath;
+			Restore(m_PlaySnapshot);
+			m_Dirty = dirty;
+			m_Playback = ScenePlayback::Stopped;
+			Console::Log(std::format("Scene stopped: {}", m_Name));
+			return;
+		}
 
 		StopPhysics();
 		m_Playback = ScenePlayback::Stopped;
@@ -1167,9 +1421,30 @@ namespace Lite {
 	{
 		if (m_Playback != ScenePlayback::Playing)
 			return;
+		if (seconds < 0.0f)
+			return;
 
-		ScriptRuntime::Update(*this, seconds);
-		StepPhysics(seconds);
+		constexpr int kMaxSteps = 8;
+		m_StepRemainder += seconds;
+		if (m_StepRemainder > kPhysicsStep * static_cast<float>(kMaxSteps))
+			m_StepRemainder = kPhysicsStep * static_cast<float>(kMaxSteps);
+
+		int steps = 0;
+		while (m_StepRemainder >= kPhysicsStep && steps < kMaxSteps)
+		{
+			CaptureMotion();
+			ScriptRuntime::Update(*this, kPhysicsStep);
+			StepPhysics(kPhysicsStep);
+			m_StepRemainder -= kPhysicsStep;
+			++steps;
+		}
+
+		ApplyRequestedScene();
+	}
+
+	void Scene::RequestScene(std::string_view path)
+	{
+		m_RequestedScene.assign(path.begin(), path.end());
 	}
 
 	Mat4 Scene::ViewProjection(float aspect, const Transform& fallbackTransform, const CameraComponent& fallbackCamera) const
@@ -1194,17 +1469,8 @@ namespace Lite {
 		scene.reset();
 	}
 
-	void Scene::Render() const
+	void Scene::RebuildDrawList() const
 	{
-		struct DrawItem
-		{
-			Transform Transform;
-			const MaterialComponent* Material = nullptr;
-			const MeshComponent* Mesh = nullptr;
-			int Plane = 0;
-			int Order = 0;
-		};
-
 		std::vector<int> planeOrders(m_NextPlane, 0);
 		for (const Plane& plane : m_Planes)
 		{
@@ -1212,8 +1478,8 @@ namespace Lite {
 				planeOrders[plane.Id] = plane.Order;
 		}
 
-		std::vector<DrawItem> draw;
-		draw.reserve(m_Records.size());
+		m_DrawList.clear();
+		m_DrawList.reserve(m_Records.size());
 		for (const Record& record : m_Records)
 		{
 			const auto* mesh = static_cast<const MeshComponent*>(GetComponent(ComponentId::Mesh, record.Id));
@@ -1223,23 +1489,180 @@ namespace Lite {
 				continue;
 
 			const auto* sorting = static_cast<const SortingComponent*>(GetComponent(ComponentId::Sorting, record.Id));
-			const int plane = record.Plane < planeOrders.size() ? planeOrders[record.Plane] : 0;
-			draw.push_back({ WorldTransform(record.Id), material, mesh, plane, sorting != nullptr ? sorting->Order : 0 });
+			DrawEntry entry;
+			entry.Entity = record.Id;
+			entry.Material = material;
+			entry.Mesh = mesh;
+			entry.Plane = record.Plane < planeOrders.size() ? planeOrders[record.Plane] : 0;
+			entry.Order = sorting != nullptr ? sorting->Order : 0;
+			m_DrawList.push_back(entry);
 		}
 
-		std::stable_sort(draw.begin(), draw.end(), [](const DrawItem& left, const DrawItem& right)
+		std::stable_sort(m_DrawList.begin(), m_DrawList.end(), [](const DrawEntry& left, const DrawEntry& right)
 		{
 			if (left.Plane != right.Plane)
 				return left.Plane < right.Plane;
 			return left.Order < right.Order;
 		});
+		m_DrawRevision = m_StructureRevision;
+	}
 
-		for (const DrawItem& item : draw)
-			SubmitMesh(item.Transform, *item.Material, item.Mesh->Type);
+	void Scene::Render() const
+	{
+		if (m_DrawRevision != m_StructureRevision)
+			RebuildDrawList();
+
+		bool reorder = false;
+		for (DrawEntry& entry : m_DrawList)
+		{
+			Transform locals[64];
+			int count = 0;
+			for (uint32_t cursor = entry.Entity; cursor != 0 && count < 64; cursor = GetParent(cursor))
+				locals[count++] = DrawTransform(cursor);
+
+			Transform drawn;
+			for (int index = count - 1; index >= 0; --index)
+				drawn = CombineTransforms(drawn, locals[index]);
+			entry.Drawn = drawn;
+
+			const Record* record = FindRecord(entry.Entity);
+			const int plane = record != nullptr ? PlaneOrder(record->Plane) : entry.Plane;
+			const auto* sorting = record != nullptr ? static_cast<const SortingComponent*>(GetComponent(ComponentId::Sorting, record->Id)) : nullptr;
+			const int order = sorting != nullptr ? sorting->Order : 0;
+			if (plane != entry.Plane || order != entry.Order)
+			{
+				entry.Plane = plane;
+				entry.Order = order;
+				reorder = true;
+			}
+		}
+
+		if (reorder)
+		{
+			std::stable_sort(m_DrawList.begin(), m_DrawList.end(), [](const DrawEntry& left, const DrawEntry& right)
+			{
+				if (left.Plane != right.Plane)
+					return left.Plane < right.Plane;
+				return left.Order < right.Order;
+			});
+		}
+
+		Vec2 viewMin {};
+		Vec2 viewMax {};
+		const bool cull = ViewBounds(viewMin, viewMax);
+		for (const DrawEntry& entry : m_DrawList)
+		{
+			if (entry.Material == nullptr || entry.Mesh == nullptr)
+				continue;
+			if (cull && MissesView(entry.Drawn, entry.Mesh->Type, viewMin, viewMax))
+				continue;
+			SubmitMesh(entry.Drawn, *entry.Material, entry.Mesh->Type);
+		}
+	}
+
+	void Scene::ApplyRequestedScene()
+	{
+		if (m_RequestedScene.empty())
+			return;
+
+		const std::string requested = std::move(m_RequestedScene);
+		m_RequestedScene.clear();
+
+		std::filesystem::path full = ResolvePath(requested);
+		std::ifstream file(full);
+		if (!file)
+		{
+			Console::Log(std::format("Failed to load scene: {}", requested));
+			return;
+		}
+
+		std::stringstream buffer;
+		buffer << file.rdbuf();
+		const std::string document = buffer.str();
+		YAML::Node root;
+		try
+		{
+			root = YAML::Load(document);
+		}
+		catch (const YAML::Exception&)
+		{
+			root.reset();
+		}
+
+		if (!root || !root.IsMap())
+		{
+			Console::Log(std::format("Failed to load scene: {}", requested));
+			return;
+		}
+
+		const bool dirty = m_Dirty;
+		const ScenePlayback playback = m_Playback;
+		StopPhysics();
+		m_Planes.clear();
+		m_Records.clear();
+		m_NextPlane = 1;
+		m_NextId = 1;
+		m_Components = CreateScope<ComponentStorage>();
+		m_DrawList.clear();
+		m_DrawRevision = 0;
+		MarkStructure();
+
+		std::istringstream input(document);
+		if (!Read(input))
+		{
+			Console::Log(std::format("Failed to load scene: {}", requested));
+			if (!m_PlaySnapshot.empty())
+			{
+				m_Planes.clear();
+				m_Records.clear();
+				m_NextPlane = 1;
+				m_NextId = 1;
+				m_Components = CreateScope<ComponentStorage>();
+				m_DrawList.clear();
+				m_DrawRevision = 0;
+				std::istringstream snapshot(m_PlaySnapshot);
+				Read(snapshot);
+				m_Path = m_PlayPath;
+			}
+
+			m_Dirty = dirty;
+			m_Loaded = true;
+			ResolveTextures();
+			m_Playback = playback;
+			if (playback == ScenePlayback::Playing)
+				StartPhysics();
+			return;
+		}
+
+		std::error_code canonicalError;
+		std::filesystem::path canonical = std::filesystem::weakly_canonical(full, canonicalError);
+		m_Path = (canonicalError ? full.lexically_normal() : canonical).string();
+		m_Loaded = true;
+		ResolveTextures();
+		m_Swapped = true;
+		m_Dirty = dirty;
+		m_Playback = playback;
+		if (playback == ScenePlayback::Playing)
+			StartPhysics();
+		Console::Log(std::format("Scene loaded: {} ({})", m_Name, m_Path));
 	}
 
 	bool Scene::Read(std::istream& input)
 	{
+		struct Suppress
+		{
+			bool& Flag;
+			bool Previous;
+			bool& Dirty;
+
+			~Suppress()
+			{
+				Flag = Previous;
+				Dirty = false;
+			}
+		} suppress { m_SuppressDirty, m_SuppressDirty, m_Dirty };
+		m_SuppressDirty = true;
+
 		YAML::Node root;
 		try
 		{
@@ -1403,6 +1826,9 @@ namespace Lite {
 		m_NextPlane = 1;
 		m_NextId = 1;
 		m_Components = CreateScope<ComponentStorage>();
+		m_DrawList.clear();
+		m_DrawRevision = 0;
+		MarkStructure();
 
 		std::istringstream input { std::string(document) };
 		if (!Read(input))
@@ -1483,6 +1909,7 @@ namespace Lite {
 		std::error_code canonicalError;
 		std::filesystem::path canonical = std::filesystem::weakly_canonical(full, canonicalError);
 		m_Path = (canonicalError ? full.lexically_normal() : canonical).string();
+		m_Dirty = false;
 		Console::Log(std::format("Scene saved: {}", m_Path));
 		return true;
 	}

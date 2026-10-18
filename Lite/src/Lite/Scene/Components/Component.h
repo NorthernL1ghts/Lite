@@ -16,8 +16,12 @@ namespace Lite {
 		CircleCollider2D,
 		Sorting,
 		Script,
+		DistanceJoint2D,
 		Count
 	};
+
+	inline constexpr uint64_t kDefaultCollisionLayer = 1;
+	inline constexpr uint64_t kDefaultCollisionMask = ~uint64_t{0};
 
 	template<typename T>
 	struct ComponentTraits;

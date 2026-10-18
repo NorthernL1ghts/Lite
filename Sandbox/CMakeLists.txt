@@ -5,10 +5,6 @@ lite_compile_flags(Sandbox)
 lite_bin_dir(Sandbox sandbox)
 
 set(SANDBOX_SHADER_SOURCES
-    assets/shaders/Triangle.vert
-    assets/shaders/Triangle.frag
-    assets/shaders/Quad.vert
-    assets/shaders/Quad.frag
     assets/shaders/Batch.vert
     assets/shaders/Batch.frag
 )

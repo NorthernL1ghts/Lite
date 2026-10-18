@@ -10,6 +10,8 @@ namespace Lite {
 		float Radius = 0.5f;
 		Vec2 Offset {};
 		bool IsTrigger = false;
+		uint64_t Layer = kDefaultCollisionLayer;
+		uint64_t Mask = kDefaultCollisionMask;
 	};
 
 	template<>

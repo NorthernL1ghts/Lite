@@ -10,6 +10,8 @@ namespace Lite {
 		Vec2 Size { 1.0f, 1.0f };
 		Vec2 Offset {};
 		bool IsTrigger = false;
+		uint64_t Layer = kDefaultCollisionLayer;
+		uint64_t Mask = kDefaultCollisionMask;
 	};
 
 	template<>

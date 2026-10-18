@@ -1,3 +1,4 @@
+#include <Lite/Input/Input.h>
 #include <Lite/Scene/Console.h>
 #include <Lite/Scene/Scene.h>
 #include <Lite/Script/ScriptModule.h>
@@ -38,6 +39,14 @@ namespace {
 			return;
 
 		material->Color.x = 0.55f + 0.45f * std::sin(s_BounceTime * 6.0f);
+		material->Color.y = 0.16f;
+		material->Color.z = 0.18f;
+
+		Lite::Vec2 cursor {};
+		if (Lite::Input::CursorWorld(cursor) && Lite::Input::IsMouseButtonPressed(Lite::Mouse::ButtonLeft))
+			material->Color.y = 0.55f;
+		if (Lite::Input::IsKeyPressed(Lite::Key::Space))
+			material->Color.z = 0.55f;
 	}
 
 	void BounceCollision(Lite::Entity self, std::uint32_t other, bool begin)

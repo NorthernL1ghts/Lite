@@ -70,11 +70,25 @@ namespace {
 		return decoded;
 	}
 
+	uint32_t MipCount(uint32_t width, uint32_t height)
+	{
+		uint32_t size = width > height ? width : height;
+		uint32_t levels = 1;
+		while (size > 1)
+		{
+			size >>= 1;
+			++levels;
+		}
+		return levels;
+	}
+
 	bool UploadImage(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t width, uint32_t height, const std::vector<uint8_t>& pixels, VkImage& image, VkDeviceMemory& memory)
 	{
 		const uint64_t byteCount = static_cast<uint64_t>(width) * height * 4u;
 		if (width == 0 || height == 0 || byteCount != pixels.size())
 			return false;
+
+		const uint32_t mipLevels = MipCount(width, height);
 
 		Lite::AllocatedBuffer staging {};
 		if (!Lite::CreateBuffer(
@@ -102,11 +116,11 @@ namespace {
 		imageInfo.imageType = VK_IMAGE_TYPE_2D;
 		imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 		imageInfo.extent = { width, height, 1 };
-		imageInfo.mipLevels = 1;
+		imageInfo.mipLevels = mipLevels;
 		imageInfo.arrayLayers = 1;
 		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-		imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		bool ready = Lite::CheckVk(vkCreateImage(device, &imageInfo, nullptr, &image), "create texture image");
 
@@ -136,13 +150,77 @@ namespace {
 				region.imageExtent = { width, height, 1 };
 				vkCmdCopyBufferToImage(command, staging.Buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-				VkImageMemoryBarrier toSample = Lite::ImageBarrier(
-					image,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_ACCESS_SHADER_READ_BIT);
-				vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toSample);
+				int32_t mipWidth = static_cast<int32_t>(width);
+				int32_t mipHeight = static_cast<int32_t>(height);
+				for (uint32_t level = 1; level < mipLevels; ++level)
+				{
+					VkImageMemoryBarrier toSource = Lite::ImageBarrier(
+						image,
+						VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+						VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+						VK_ACCESS_TRANSFER_WRITE_BIT,
+						VK_ACCESS_TRANSFER_READ_BIT,
+						level - 1,
+						1);
+					vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toSource);
+
+					const int32_t nextWidth = mipWidth > 1 ? mipWidth / 2 : 1;
+					const int32_t nextHeight = mipHeight > 1 ? mipHeight / 2 : 1;
+					VkImageMemoryBarrier toDest = Lite::ImageBarrier(
+						image,
+						VK_IMAGE_LAYOUT_UNDEFINED,
+						VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+						0,
+						VK_ACCESS_TRANSFER_WRITE_BIT,
+						level,
+						1);
+					vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toDest);
+
+					VkImageBlit blit {};
+					blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+					blit.srcSubresource.mipLevel = level - 1;
+					blit.srcSubresource.layerCount = 1;
+					blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+					blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+					blit.dstSubresource.mipLevel = level;
+					blit.dstSubresource.layerCount = 1;
+					blit.dstOffsets[1] = { nextWidth, nextHeight, 1 };
+					vkCmdBlitImage(command, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+					mipWidth = nextWidth;
+					mipHeight = nextHeight;
+				}
+
+				if (mipLevels == 1)
+				{
+					VkImageMemoryBarrier toSample = Lite::ImageBarrier(
+						image,
+						VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+						VK_ACCESS_TRANSFER_WRITE_BIT,
+						VK_ACCESS_SHADER_READ_BIT);
+					vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toSample);
+				}
+				else
+				{
+					VkImageMemoryBarrier sources = Lite::ImageBarrier(
+						image,
+						VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+						VK_ACCESS_TRANSFER_READ_BIT,
+						VK_ACCESS_SHADER_READ_BIT,
+						0,
+						mipLevels - 1);
+					VkImageMemoryBarrier last = Lite::ImageBarrier(
+						image,
+						VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+						VK_ACCESS_TRANSFER_WRITE_BIT,
+						VK_ACCESS_SHADER_READ_BIT,
+						mipLevels - 1,
+						1);
+					VkImageMemoryBarrier ready[2] = { sources, last };
+					vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 2, ready);
+				}
 			}, "submit texture upload");
 		}
 
@@ -203,7 +281,7 @@ namespace Lite {
 		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.levelCount = MipCount(m_Width, m_Height);
 		viewInfo.subresourceRange.layerCount = 1;
 		if (!CheckVk(vkCreateImageView(m_Device, &viewInfo, nullptr, &m_View), "create texture view"))
 		{
@@ -218,7 +296,8 @@ namespace Lite {
 		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.maxLod = 0.0f;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.maxLod = static_cast<float>(MipCount(m_Width, m_Height) - 1);
 		if (!CheckVk(vkCreateSampler(m_Device, &samplerInfo, nullptr, &m_Sampler), "create texture sampler"))
 		{
 			DestroyGpu();

@@ -80,7 +80,7 @@ The window is a dockspace:
 
 Project files are YAML documents named `*.lite`. A project stores its name, start scene, asset directory, and script module path. The start scene and asset directory are relative to the project file. The script module path is relative to the project file too. The scene panel shows that path, and Browse picks a DLL. Open and Save use the same file browser, filtered to `*.lite`.
 
-A script module is a DLL that exports `LiteRegisterScripts`. Play loads it and stop unloads it. Each entity script is a component with a class name. On play, Lite calls that class's start function when it has one, then calls update with the timestep each frame. A class that provides a collision function is called when a contact begins and when it ends, with the other entity's id and which of the two it was. The editor and Sandbox load the same file. Sandbox's module is `scripts/SandboxScripts.dll`. The start scene uses `Bounce` on the crate, `Patrol` on the kinematic platform, and `Sensor` on the trigger.
+A script module is a DLL that exports `LiteRegisterScripts`. Play loads it and stop unloads it. Each entity script is a component with a class name. On play, Lite calls that class's start function when it has one, then calls update once per physics step with that fixed step. A class that provides a collision function is called when a contact begins and when it ends, with the other entity's id and which of the two it was. A script can ask if a key or mouse button is down, and where the cursor is in world units of the active camera. The editor and Sandbox load the same file. Sandbox's module is `scripts/SandboxScripts.dll`. The start scene uses `Bounce` on the crate, `Patrol` on the kinematic platform, and `Sensor` on the trigger.
 
 Open and Save As use a file browser. Save Scene writes the scene that is already open. A new scene with no path opens Save As. Scene files are YAML documents named `*.scene`. The document has a `name` and a `planes` list. Each plane has a `name`, an `order`, and an `entities` list. A higher plane order is drawn in front of a lower one. Sorting still orders the entities inside one plane. Each entity has a `name` and one map per component, such as `transform`, `camera`, `mesh`, and `rigidbody2d`.
 
@@ -118,9 +118,12 @@ quad.Add<BoxCollider2DComponent>();
 | Material | Color, opacity, roughness, metallic, emission, vertex colors, tiling, offset, and an optional texture |
 | Spin | A constant spin, in radians per second, applied when play starts |
 | Rigidbody 2D | Static, kinematic, or dynamic, plus mass, gravity, velocity, and freeze rotation |
-| Box Collider 2D | Size, offset, and trigger |
-| Circle Collider 2D | Radius, offset, and trigger |
+| Box Collider 2D | Size, offset, trigger, layer, and mask |
+| Circle Collider 2D | Radius, offset, trigger, layer, and mask |
+| Distance Joint | The other entity's name, and a rest length. Zero uses the distance between the bodies when play starts |
 | Sorting | Draw order. Higher values are drawn in front |
+
+An entity can store a short tag. `FindTagged` returns every entity with that tag. A collider's layer is a category bit and its mask is the categories it accepts. The default layer is 1 and the default mask accepts every layer, so an older scene still collides the way it used to. Two bodies collide only when each mask includes the other's layer. `Raycast` returns the first solid hit along a ray while the scene is playing. A trigger is not a hit, and a miss returns nothing. `RequestScene` asks to load another scene after the current physics steps. The same scene object stays in play. Stop puts back the scene that was open when play began. A missing file is a console line and the current scene keeps playing. `IsDirty` is set by a scene edit and cleared by a successful save. Play and stop do not mark it.
 
 A collider with no rigidbody is a static body. Trigger colliders overlap and do not block. Dynamic bodies fall. Kinematic bodies move with their velocity and are not pushed. Static bodies stay where they are.
 

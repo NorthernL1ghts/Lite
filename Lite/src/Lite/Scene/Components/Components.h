@@ -10,3 +10,4 @@
 #include <Lite/Scene/Components/CircleCollider2DComponent.h>
 #include <Lite/Scene/Components/SortingComponent.h>
 #include <Lite/Scene/Components/ScriptComponent.h>
+#include <Lite/Scene/Components/DistanceJoint2DComponent.h>

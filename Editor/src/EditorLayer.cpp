@@ -207,7 +207,13 @@ void EditorLayer::OnUpdate(Lite::Timestep timestep)
 	}
 
 	if (m_Scene)
+	{
+		Lite::CameraComponent lens;
+		lens.Size = m_ViewSize;
+		Lite::Input::SetCursorPlane(m_ViewportX, m_ViewportY, m_ViewportW, m_ViewportH,
+			m_Scene->ViewProjection(Lite::AspectRatio(m_ViewportW, m_ViewportH), m_Camera.GetTransform(), lens));
 		m_Scene->Update(timestep.GetSeconds());
+	}
 }
 
 void EditorLayer::OnRender()

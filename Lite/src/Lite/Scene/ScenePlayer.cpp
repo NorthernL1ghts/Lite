@@ -1,5 +1,7 @@
 #include <Lite/Scene/ScenePlayer.h>
 
+#include <Lite/Input/Input.h>
+#include <Lite/Renderer/Renderer.h>
 #include <Lite/Renderer/Renderer2D.h>
 #include <Lite/Scene/SceneCamera.h>
 
@@ -47,6 +49,11 @@ namespace Lite {
 			m_Camera.SetRotation(rotation);
 		}
 
+		VkExtent2D extent = Renderer::GetExtent();
+		CameraComponent lens;
+		lens.Size = m_ViewSize;
+		Input::SetCursorPlane(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height),
+			m_Scene->ViewProjection(AspectRatio(static_cast<float>(extent.width), static_cast<float>(extent.height)), m_Camera.GetTransform(), lens));
 		m_Scene->Update(seconds);
 	}
 

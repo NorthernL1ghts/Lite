@@ -3,6 +3,7 @@
 #include <Lite/Core/Base.h>
 #include <Lite/Input/KeyCodes.h>
 #include <Lite/Input/MouseCodes.h>
+#include <Lite/Math/Math.h>
 
 #include <utility>
 
@@ -19,6 +20,8 @@ namespace Lite {
 		static float GetMouseX();
 		static float GetMouseY();
 		static std::pair<float, float> GetMousePosition();
+		static bool CursorWorld(Vec2& world);
+		static void SetCursorPlane(float x, float y, float width, float height, const Mat4& viewProjection);
 
 	private:
 		friend class Application;

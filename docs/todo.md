@@ -19,7 +19,7 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Draw path.** A sprite rotates its two axes once per shape, then places every corner from those axes. The scene looks up each drawable entity once, then submits it.
 - **Core.** `FileSystem::Contains` is the path-inside-folder check. The layer stack walks forward and backward through one pair of helpers. The two loggers share one setup. The application passes the native window as an untyped handle.
 - **Prefabs.** File > Save Prefab, or the scene panel context menu, writes the selection to `assets/prefabs` as the same component YAML a scene entity uses. The plane name is only a hint. Double-click a prefab, or drag it into the viewport, to place a normal copy with a fresh name, its own physics body, and no second primary camera. The inspector shows the prefab path. Later edits to the file do not rewrite copies already in the scene.
-- **Scripts.** The scene panel sets the project script module. The path stays relative to the project file. Play loads that DLL and stop unloads it. A missing file or a failed load is a console error, and the scene still plays. A Script component stores a class name. On play, a class start function runs when it exists. Each frame, an update function receives the timestep. A collision function receives the other entity's id and whether the contact began or ended. Sandbox and the editor load the same module. Sandbox ships `scripts/SandboxScripts.dll` with `Bounce` on the crate, `Patrol` on the kinematic platform, and `Sensor` on the trigger.
+- **Scripts.** The scene panel sets the project script module. The path stays relative to the project file. Play loads that DLL and stop unloads it. A missing file or a failed load is a console error, and the scene still plays. A Script component stores a class name. On play, a class start function runs when it exists. Each physics step, an update function receives that fixed step. A collision function receives the other entity's id and whether the contact began or ended. Sandbox and the editor load the same module. Sandbox ships `scripts/SandboxScripts.dll` with `Bounce` on the crate, `Patrol` on the kinematic platform, and `Sensor` on the trigger.
 - **Planes in the editor.** Add Plane creates a plane in front of the highest draw order. The name is edited on the row, and two planes cannot share a name regardless of capitalization. Deleting an empty plane removes it. Deleting a plane that still has entities moves those entities to World and says so in the panel. World stays while it has entities, and the scene keeps at least one plane. The list stays in document order. The number on the row is still the draw order. The name and the number sit in separate columns.
 - **Selection while playing.** A viewport click selects the frontmost entity during play and pause, using the same pick as edit mode. Del, Ctrl+D, and removing a component stay available and still update physics.
 - **Undo.** The open scene has one undo stack. Ctrl+Z undoes and Ctrl+Y redoes an inspector edit, a gizmo drag, a delete, or an added component. A drag or a field edit becomes one step when it ends. Opening another scene clears the stack. Play and stop are not steps.
@@ -35,6 +35,20 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Batch flush.** Vertex and index memory stay mapped. A flush copies only the vertices and indices written since the last flush. A texture slot is written when that slot changes, and an unchanged frame does not call `vkUpdateDescriptorSets`. More than 16 textures flush and continue on another descriptor set, so the next texture is drawn.
 - **Matte shader.** Roughness 1 with metallic 0 and emission 0 samples the texture, tints it, and writes premultiplied alpha. Other materials keep the highlight, metal tint, and glow. The batch shader samples the vertex UVs directly.
 - **Scripted motion.** Before the physics step, a kinematic or dynamic body's linear velocity is copied from the component, so a script that wrote it during update is what that step uses. After the step, the component receives the body's velocity again. `Patrol` sets that velocity on the kinematic platform. `Sensor` brightens when an overlap begins and fades after it ends. Bodies resting on the moving platform are still unsolved.
+- **Fixed step.** Play accumulates the frame time and steps physics at 1/60. The leftover fraction blends the previous pose into the one that is drawn. A long frame takes at most eight steps. Rendering still uses the real frame.
+- **Script input.** A script can ask if a key or mouse button is down, and where the cursor is in world units of the active camera. The Sandbox crate reads that query. Q and E still turn the editor camera while the scene is stopped, and the wheel still zooms it.
+- **One log.** Engine info, warnings, and errors join `Console::Log` in one list. The editor console shows that list. Trace lines stay on the terminal.
+- **Headless update.** `SceneCheck` plays the Sandbox scene for 120 fixed steps with no window and prints where the crate ended. The crate is below where it started and has not fallen through the ground.
+- **Draw list.** The sorted list is kept. It is rebuilt when an entity, a plane, a parent, a mesh, a material, or a sorting component changes. A frame that only moves a body updates transforms and does not sort again.
+- **Cull.** A drawable whose bounds miss the camera is not submitted. A sprite that covers the camera still draws. If the view cannot be placed on the sprite plane, the sprite is submitted.
+- **Mips.** A texture larger than 1×1 keeps a mip chain. The 1×1 white texture stays one level.
+- **Batch shader.** `Batch` is the only sprite shader. The unused Triangle and Quad sources are gone.
+- **Raycast.** `Scene::Raycast` returns the first solid hit, with the entity id and the point, while the scene is playing. A miss returns nothing. Triggers are skipped.
+- **Layers.** A box or circle collider stores a layer and a mask. Two bodies collide only when each mask includes the other's layer. The default layer is 1 and the default mask includes every layer, so current scenes do not change. The values are saved only when they differ from that default.
+- **Distance joint.** A distance joint on one entity names the other. A rest length of zero uses the distance between the bodies when play starts. Deleting either entity removes the joint.
+- **Tags.** An entity stores a short tag. It is saved when it is not empty. A duplicate keeps it. `FindTagged` returns the matches. Physics does not read it.
+- **Dirty scene.** `IsDirty` is set when an entity, plane, parent, component, name, or tag changes. `SetLocalPose` does not set it, because the physics step uses it. Save clears it. Play and stop do not mark it. Loading a scene leaves it clean.
+- **Runtime scene change.** `RequestScene` loads another scene after the physics steps, into the same scene object, which stays in play. A missing file is a console line and the current scene keeps playing. Stop puts back the scene that was open when play began. The swap and that restore do not mark the scene dirty.
 
 ## Next
 
@@ -44,39 +58,9 @@ Nothing is queued. The backlog is under Later.
 
 Real gaps. They are not the next session. Each block says what exists today so the work is not started from a blank guess.
 
-### Core
+### Editor surfaces
 
-The loop polls events, begins a frame, updates layers, renders layers, flushes, draws ImGui, presents, and limits the frame rate. Input can ask if a key or mouse button is down and where the cursor is. Q and E rotate the editor camera while the scene is stopped. The scroll wheel zooms it.
-
-- **Fixed step.** A long frame is clamped to 0.05 seconds inside the physics step. There is no accumulator. Play should step physics at a fixed rate and pass the leftover time as interpolation. Rendering still uses the real frame.
-- **Script input.** A script cannot read the keyboard or the mouse. Add a small query for key, mouse button, and cursor position in world units of the active camera. Sandbox can use it. The editor camera keeps Q, E, and the wheel.
-- **One log in the console.** Engine logs and `Console::Log` are separate. Play errors should appear in the editor console without a second setup.
-- **Headless update.** `SceneCheck` loads the scene and stops. The same program should also step a scene for a fixed number of frames and report where the crate ended. Still no window.
-
-### Rendering
-
-Drawing is one 2D batch. Quads, triangles, and sprites share it. Blend is premultiplied. The batch holds 4096 quads and 16 textures. `Scene::Render` builds a draw list, sorts by plane then sorting order, and submits every drawable. `WorldTransform` walks parents for each one. There is no frustum test. Textures are uploaded as a single level.
-
-- **Draw list.** Keep the sorted list and rebuild it when an entity, a plane, a parent, or a material changes. A frame that only moves a body updates transforms, not the whole sort from scratch.
-- **Cull.** A drawable whose world bounds miss the camera is not submitted. A sprite larger than the view, such as the checkerboard, still draws when it covers the camera.
-- **Mips.** A texture larger than its on-screen size keeps a mip chain. The checkerboard, scaled down, does not shimmer. A 1x1 white texture stays one level.
-- **Unused shader files.** `Triangle` and `Quad` shader sources are compiled and are not the batch. Delete them when nothing references them, and leave `Batch` as the only sprite shader.
-
-### Scene
-
-A scene is planes of entities. Components are transform, camera, mesh, material, spin, rigidbody, box collider, circle collider, sorting, and script. YAML load and save round-trip those fields. One undo stack covers inspector edits, gizmos, delete, and added components.
-
-- **Dirty scene.** The window or the scene panel shows that the open scene has unsaved edits. Save clears it. Play and stop do not mark it dirty.
-- **Runtime scene change.** A call loads another scene from the project by the path stored in the project, the way the editor opens a scene. Scripts can ask for it. The editor Stop button still returns to the scene that was open when play began.
-- **Tags.** An entity can store a short tag. The scene panel can filter by it. Physics does not use it until collision layers exist.
-
-### Physics
-
-Box2D starts on play. Bodies are static, kinematic, or dynamic. Shapes are boxes and circles, solid or trigger. Begin and end are logged and sent to scripts. Gravity is down at 9.81, with a per-body gravity scale. Rotation can be frozen. A collider with no rigidbody is static.
-
-- **Queries.** A script can raycast and ask for the first solid hit, with the entity id and the point. A miss returns no hit. Triggers are skipped by that query.
-- **Layers.** A body stores a layer and a mask. Two bodies collide only when each mask includes the other's layer. The default layer collides with everything, so current scenes do not change. The inspector edits both fields.
-- **Joints.** One joint type is enough to start: a distance joint between two entities. It is saved on one of them. Deleting either entity removes the joint.
+The engine stores tags, the dirty flag, collider layer and mask, and the distance joint. The scene panel does not filter by tag or show that the scene is unsaved. The inspector does not edit layer, mask, or the joint. Those fields are set from code, scripts, or YAML.
 
 ### Scripts and assets
 

@@ -12,6 +12,7 @@ namespace Lite {
 	{
 	public:
 		static void Log(std::string_view message);
+		static void Append(std::string_view line);
 		static const std::vector<std::string>& GetLines();
 		static void Clear();
 	};

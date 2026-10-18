@@ -27,7 +27,14 @@ namespace Lite {
 			bool HasRigidbody = false;
 		};
 
+		struct Joint
+		{
+			uint32_t Owner = 0;
+			b2JointId Id = {};
+		};
+
 		std::vector<Body> Bodies;
+		std::vector<Joint> Joints;
 	};
 
 	namespace {
@@ -42,7 +49,7 @@ namespace Lite {
 			}
 		}
 
-		b2ShapeDef MakeShape(bool trigger)
+		b2ShapeDef MakeShape(bool trigger, uint64_t layer, uint64_t mask)
 		{
 			b2ShapeDef shape = b2DefaultShapeDef();
 			shape.density = trigger ? 0.0f : 1.0f;
@@ -52,6 +59,9 @@ namespace Lite {
 			shape.enableSensorEvents = true;
 			shape.material.friction = 0.5f;
 			shape.material.restitution = 0.15f;
+			shape.filter.categoryBits = layer;
+			shape.filter.maskBits = mask;
+			shape.filter.groupIndex = 0;
 			return shape;
 		}
 
@@ -97,7 +107,7 @@ namespace Lite {
 
 			b2Vec2 center { box.Offset.x * transform.Scale.x, box.Offset.y * transform.Scale.y };
 			b2Polygon polygon = b2MakeOffsetBox(halfWidth, halfHeight, center, b2MakeRot(0.0f));
-			b2ShapeDef shape = MakeShape(box.IsTrigger);
+			b2ShapeDef shape = MakeShape(box.IsTrigger, box.Layer, box.Mask);
 			b2CreatePolygonShape(body, &shape, &polygon);
 			return !box.IsTrigger;
 		}
@@ -115,7 +125,7 @@ namespace Lite {
 			if (shape.radius < 0.01f)
 				shape.radius = 0.01f;
 
-			b2ShapeDef definition = MakeShape(circle.IsTrigger);
+			b2ShapeDef definition = MakeShape(circle.IsTrigger, circle.Layer, circle.Mask);
 			b2CreateCircleShape(body, &definition, &shape);
 			return !circle.IsTrigger;
 		}
@@ -159,6 +169,10 @@ namespace Lite {
 		for (Entity entity : GetEntities())
 			SpawnPhysicsBody(entity, false);
 
+		SpawnDistanceJoints();
+
+		m_Motion.clear();
+		m_StepRemainder = 0.0f;
 		Console::Log(std::format("Box2D started: {} bodies", m_Physics->Bodies.size()));
 		ScriptRuntime::Load(*this);
 	}
@@ -281,10 +295,14 @@ namespace Lite {
 
 		for (uint32_t id : ids)
 			SpawnPhysicsBody(GetEntity(id), true);
+
+		RespawnDistanceJoints(ids);
 	}
 
 	void Scene::StopPhysics()
 	{
+		m_Motion.clear();
+		m_StepRemainder = 0.0f;
 		ScriptRuntime::Unload();
 		if (m_Physics == nullptr)
 			return;
@@ -341,15 +359,39 @@ namespace Lite {
 		}
 	}
 
+	void Scene::CaptureMotion()
+	{
+		m_Motion.clear();
+		if (m_Physics == nullptr)
+			return;
+
+		for (const PhysicsStorage::Body& body : m_Physics->Bodies)
+		{
+			Entity entity = GetEntity(body.Entity);
+			Rigidbody2DComponent* rigidbody = entity.Get<Rigidbody2DComponent>();
+			if (rigidbody == nullptr || rigidbody->Type == BodyType::Static)
+				continue;
+
+			TransformComponent* transform = entity.Get<TransformComponent>();
+			if (transform == nullptr)
+				continue;
+
+			MotionSample sample;
+			sample.Entity = body.Entity;
+			sample.X = transform->Local.Position.x;
+			sample.Y = transform->Local.Position.y;
+			sample.Angle = transform->Local.GetRotationZ();
+			m_Motion.push_back(sample);
+		}
+	}
+
 	void Scene::StepPhysics(float seconds)
 	{
 		if (m_Physics == nullptr || !b2World_IsValid(m_Physics->World))
 			return;
 
-		if (seconds < 0.0f)
+		if (seconds <= 0.0f)
 			return;
-		if (seconds > 0.05f)
-			seconds = 0.05f;
 
 		for (const PhysicsStorage::Body& body : m_Physics->Bodies)
 		{
@@ -430,6 +472,215 @@ namespace Lite {
 
 			b2Body_SetTransform(body.Id, { world.Position.x, world.Position.y }, b2MakeRot(world.GetRotationZ()));
 		}
+	}
+
+	void Scene::DestroyDistanceJoint(uint32_t owner)
+	{
+		if (m_Physics == nullptr)
+			return;
+
+		for (auto joint = m_Physics->Joints.begin(); joint != m_Physics->Joints.end(); ++joint)
+		{
+			if (joint->Owner != owner)
+				continue;
+
+			if (b2Joint_IsValid(joint->Id))
+				b2DestroyJoint(joint->Id);
+			m_Physics->Joints.erase(joint);
+			return;
+		}
+	}
+
+	void Scene::DetachDistanceJoints(uint32_t entityId, const std::string& name)
+	{
+		std::vector<uint32_t> owners;
+		if (!name.empty())
+		{
+			for (const Record& record : m_Records)
+			{
+				if (record.Id == entityId)
+					continue;
+
+				auto* joint = static_cast<DistanceJoint2DComponent*>(GetComponent(ComponentId::DistanceJoint2D, record.Id));
+				if (joint != nullptr && joint->Other == name)
+					owners.push_back(record.Id);
+			}
+		}
+
+		for (uint32_t owner : owners)
+			RemoveComponent(ComponentId::DistanceJoint2D, owner);
+
+		DestroyDistanceJoint(entityId);
+	}
+
+	void Scene::SpawnDistanceJoint(uint32_t owner)
+	{
+		if (m_Physics == nullptr || !b2World_IsValid(m_Physics->World))
+			return;
+
+		auto* joint = static_cast<DistanceJoint2DComponent*>(GetComponent(ComponentId::DistanceJoint2D, owner));
+		if (joint == nullptr)
+			return;
+
+		Entity self = GetEntity(owner);
+		const std::string name = self ? self.GetName() : std::string("entity");
+		if (joint->Other.empty())
+		{
+			Console::Log(std::format("Distance joint skipped: {} has no other entity", name));
+			return;
+		}
+
+		Entity other = Find(joint->Other);
+		if (!other)
+		{
+			Console::Log(std::format("Distance joint skipped: {} is missing", joint->Other));
+			return;
+		}
+
+		if (other.GetId() == owner)
+		{
+			Console::Log(std::format("Distance joint skipped: {} cannot join itself", name));
+			return;
+		}
+
+		b2BodyId bodyA {};
+		b2BodyId bodyB {};
+		for (const PhysicsStorage::Body& stored : m_Physics->Bodies)
+		{
+			if (!b2Body_IsValid(stored.Id))
+				continue;
+			if (stored.Entity == owner)
+				bodyA = stored.Id;
+			if (stored.Entity == other.GetId())
+				bodyB = stored.Id;
+		}
+		if (!b2Body_IsValid(bodyA) || !b2Body_IsValid(bodyB))
+		{
+			Console::Log(std::format("Distance joint skipped: {} has no body", !b2Body_IsValid(bodyA) ? name : joint->Other));
+			return;
+		}
+
+		DestroyDistanceJoint(owner);
+
+		b2Vec2 originA = b2Body_GetPosition(bodyA);
+		b2Vec2 originB = b2Body_GetPosition(bodyB);
+		float length = joint->Length;
+		if (length <= 0.0f)
+		{
+			float dx = originA.x - originB.x;
+			float dy = originA.y - originB.y;
+			length = std::sqrt(dx * dx + dy * dy);
+		}
+
+		if (length <= 0.0f)
+		{
+			Console::Log(std::format("Distance joint skipped: {} has no length", name));
+			return;
+		}
+
+		b2DistanceJointDef definition = b2DefaultDistanceJointDef();
+		definition.bodyIdA = bodyA;
+		definition.bodyIdB = bodyB;
+		definition.localAnchorA = { 0.0f, 0.0f };
+		definition.localAnchorB = { 0.0f, 0.0f };
+		definition.length = length;
+		b2JointId created = b2CreateDistanceJoint(m_Physics->World, &definition);
+		if (!b2Joint_IsValid(created))
+		{
+			Console::Log(std::format("Distance joint skipped: {} could not be created", name));
+			return;
+		}
+
+		PhysicsStorage::Joint stored;
+		stored.Owner = owner;
+		stored.Id = created;
+		m_Physics->Joints.push_back(stored);
+	}
+
+	void Scene::SpawnDistanceJoints()
+	{
+		for (const Record& record : m_Records)
+		{
+			if (GetComponent(ComponentId::DistanceJoint2D, record.Id) != nullptr)
+				SpawnDistanceJoint(record.Id);
+		}
+	}
+
+	void Scene::RespawnDistanceJoints(const std::vector<uint32_t>& ids)
+	{
+		if (m_Physics == nullptr)
+			return;
+
+		auto touches = [&](uint32_t entity)
+		{
+			for (uint32_t id : ids)
+			{
+				if (id == entity)
+					return true;
+			}
+			return false;
+		};
+
+		std::vector<uint32_t> owners;
+		for (const Record& record : m_Records)
+		{
+			auto* joint = static_cast<DistanceJoint2DComponent*>(GetComponent(ComponentId::DistanceJoint2D, record.Id));
+			if (joint == nullptr)
+				continue;
+
+			Entity other = joint->Other.empty() ? Entity{} : Find(joint->Other);
+			if (touches(record.Id) || (other && touches(other.GetId())))
+				owners.push_back(record.Id);
+		}
+
+		for (uint32_t owner : owners)
+			DestroyDistanceJoint(owner);
+		for (uint32_t owner : owners)
+			SpawnDistanceJoint(owner);
+	}
+
+	std::optional<RayHit> Scene::Raycast(Vec2 origin, Vec2 translation) const
+	{
+		if (m_Physics == nullptr || !b2World_IsValid(m_Physics->World))
+			return std::nullopt;
+		if (translation.x == 0.0f && translation.y == 0.0f)
+			return std::nullopt;
+
+		struct Query
+		{
+			bool Hit = false;
+			b2ShapeId Shape = {};
+			b2Vec2 Point {};
+			b2Vec2 Normal {};
+			float Fraction = 1.0f;
+		} query;
+
+		auto callback = [](b2ShapeId shapeId, b2Vec2 point, b2Vec2 normal, float fraction, void* context) -> float
+		{
+			if (fraction <= 0.0f || b2Shape_IsSensor(shapeId))
+				return -1.0f;
+
+			auto* hit = static_cast<Query*>(context);
+			if (hit->Hit && fraction > hit->Fraction)
+				return hit->Fraction;
+
+			hit->Hit = true;
+			hit->Shape = shapeId;
+			hit->Point = point;
+			hit->Normal = normal;
+			hit->Fraction = fraction;
+			return fraction;
+		};
+
+		b2World_CastRay(m_Physics->World, { origin.x, origin.y }, { translation.x, translation.y }, b2DefaultQueryFilter(), callback, &query);
+		if (!query.Hit)
+			return std::nullopt;
+
+		RayHit hit;
+		hit.Entity = EntityId(query.Shape);
+		hit.Point = { query.Point.x, query.Point.y };
+		hit.Normal = { query.Normal.x, query.Normal.y };
+		return hit;
 	}
 
 }

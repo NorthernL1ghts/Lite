@@ -112,6 +112,8 @@ namespace {
 	{
 		if (scene.GetPlayback() != Lite::ScenePlayback::Stopped)
 			return Fail("Scene check: scene is already playing");
+		if (scene.IsDirty())
+			return Fail("Scene check: the loaded scene is dirty");
 
 		const Lite::Scene::Plane* background = FindPlane(scene, "Background");
 		const Lite::Scene::Plane* world = FindPlane(scene, "World");
@@ -141,6 +143,211 @@ namespace {
 		if (!AboveGround(scene, "Ball", groundTop))
 			return false;
 
+		Lite::Entity crate = scene.Find("Crate");
+		float startY = crate.WorldTransform().Position.y;
+		scene.Play();
+		constexpr int kFrames = 120;
+		for (int frame = 0; frame < kFrames; ++frame)
+			scene.Update(Lite::kPhysicsStep);
+
+		crate = scene.Find("Crate");
+		if (!crate)
+			return Fail("Scene check: Crate was lost during play");
+
+		Lite::Vec3 ended = crate.WorldTransform().Position;
+		std::cout << std::format("Crate ended at {:.3f}, {:.3f}\n", ended.x, ended.y);
+		if (!(ended.y < startY - 0.5f))
+			return Fail("Scene check: the crate did not fall");
+		if (ended.y < -3.0f)
+			return Fail("Scene check: the crate fell through the ground");
+		if (scene.IsDirty())
+			return Fail("Scene check: play marked the scene dirty");
+
+		scene.Stop();
+		if (scene.IsDirty())
+			return Fail("Scene check: stop marked the scene dirty");
+
+		return true;
+	}
+
+	Lite::Entity AddBox(Lite::Scene& scene, const char* name, Lite::Vec2 position, Lite::BodyType type)
+	{
+		Lite::Entity entity = scene.CreateEntity(name);
+		if (Lite::TransformComponent* transform = entity.Get<Lite::TransformComponent>())
+			transform->Local.Position = { position.x, position.y, 0.0f };
+
+		Lite::Rigidbody2DComponent& body = entity.Add<Lite::Rigidbody2DComponent>();
+		body.Type = type;
+		body.FreezeRotation = true;
+		entity.Add<Lite::BoxCollider2DComponent>();
+		return entity;
+	}
+
+	bool CheckQueries()
+	{
+		Lite::Scene scene("Queries");
+		scene.Create();
+		if (scene.IsDirty())
+			return Fail("Scene check: a new scene is dirty");
+
+		Lite::Entity solid = AddBox(scene, "Solid", { 0.0f, 2.0f }, Lite::BodyType::Static);
+		Lite::Entity trigger = AddBox(scene, "Trigger", { 0.0f, 4.0f }, Lite::BodyType::Static);
+		trigger.Get<Lite::BoxCollider2DComponent>()->IsTrigger = true;
+		scene.SetTag(solid.GetId(), "marked");
+		solid.Get<Lite::BoxCollider2DComponent>()->Layer = 2;
+		solid.Get<Lite::BoxCollider2DComponent>()->Mask = 4;
+
+		const std::string document = scene.Snapshot();
+		if (!scene.Restore(document))
+			return Fail("Scene check: snapshot restore failed");
+
+		solid = scene.Find("Solid");
+		const Lite::BoxCollider2DComponent* box = solid.Get<Lite::BoxCollider2DComponent>();
+		if (box == nullptr || box->Layer != 2 || box->Mask != 4)
+			return Fail("Scene check: collider layer did not round-trip");
+
+		std::vector<Lite::Entity> tagged = scene.FindTagged("marked");
+		if (tagged.size() != 1 || tagged[0].GetId() != solid.GetId())
+			return Fail("Scene check: tag lookup failed");
+
+		Lite::Entity copy = scene.DuplicateEntity(solid.GetId());
+		if (scene.GetTag(copy.GetId()) != "marked")
+			return Fail("Scene check: duplicate dropped the tag");
+
+		box = solid.Get<Lite::BoxCollider2DComponent>();
+		if (box == nullptr)
+			return Fail("Scene check: Solid lost its collider");
+
+		Lite::BoxCollider2DComponent* editable = solid.Get<Lite::BoxCollider2DComponent>();
+		editable->Layer = Lite::kDefaultCollisionLayer;
+		editable->Mask = Lite::kDefaultCollisionMask;
+
+		if (!scene.IsDirty())
+			return Fail("Scene check: creating an entity left the scene clean");
+
+		scene.Play();
+		std::optional<Lite::RayHit> hit = scene.Raycast({ 0.0f, 6.0f }, { 0.0f, -8.0f });
+		if (!hit || hit->Entity != solid.GetId())
+			return Fail("Scene check: raycast missed the solid box");
+		if (scene.Raycast({ 10.0f, 6.0f }, { 0.0f, -1.0f }))
+			return Fail("Scene check: a miss returned a hit");
+
+		scene.Stop();
+		if (!scene.IsDirty())
+			return Fail("Scene check: stop cleared an unsaved edit");
+		if (scene.Raycast({ 0.0f, 6.0f }, { 0.0f, -8.0f }))
+			return Fail("Scene check: raycast hit while stopped");
+
+		return true;
+	}
+
+	bool CheckLayersAndJoint()
+	{
+		Lite::Scene scene("Layers");
+		scene.Create();
+		Lite::Entity ground = AddBox(scene, "Ground", { 0.0f, 0.0f }, Lite::BodyType::Static);
+		ground.Get<Lite::BoxCollider2DComponent>()->Size = { 20.0f, 1.0f };
+
+		Lite::Entity dropped = AddBox(scene, "Dropped", { 4.0f, 4.0f }, Lite::BodyType::Dynamic);
+		Lite::Entity left = AddBox(scene, "Left", { 0.0f, 4.0f }, Lite::BodyType::Dynamic);
+		Lite::Entity right = AddBox(scene, "Right", { 0.0f, 4.0f }, Lite::BodyType::Dynamic);
+		left.Get<Lite::BoxCollider2DComponent>()->Layer = 2;
+		left.Get<Lite::BoxCollider2DComponent>()->Mask = 1 | 2;
+		right.Get<Lite::BoxCollider2DComponent>()->Layer = 4;
+		right.Get<Lite::BoxCollider2DComponent>()->Mask = 1 | 4;
+
+		Lite::Entity pull = AddBox(scene, "Pull", { 10.0f, 8.0f }, Lite::BodyType::Dynamic);
+		Lite::Entity anchor = AddBox(scene, "Anchor", { 12.0f, 8.0f }, Lite::BodyType::Dynamic);
+		pull.Add<Lite::DistanceJoint2DComponent>().Other = "Anchor";
+		pull.Get<Lite::Rigidbody2DComponent>()->GravityScale = 0.0f;
+		anchor.Get<Lite::Rigidbody2DComponent>()->GravityScale = 0.0f;
+		pull.Get<Lite::Rigidbody2DComponent>()->LinearVelocity = { -2.0f, 0.0f };
+		anchor.Get<Lite::Rigidbody2DComponent>()->LinearVelocity = { 2.0f, 0.0f };
+
+		scene.Play();
+		for (int frame = 0; frame < 90; ++frame)
+			scene.Update(Lite::kPhysicsStep);
+
+		Lite::Vec3 droppedAt = scene.Find("Dropped").WorldTransform().Position;
+		if (!(droppedAt.y < 3.0f) || droppedAt.y < 0.2f)
+			return Fail("Scene check: the default layer did not land on the ground");
+
+		Lite::Vec3 leftAt = scene.Find("Left").WorldTransform().Position;
+		Lite::Vec3 rightAt = scene.Find("Right").WorldTransform().Position;
+		if (std::fabs(leftAt.x - rightAt.x) > 0.5f)
+			return Fail("Scene check: excluded layers blocked each other");
+		if (leftAt.y < 0.2f || rightAt.y < 0.2f || leftAt.y > 3.0f || rightAt.y > 3.0f)
+			return Fail("Scene check: a layered body missed the ground");
+
+		Lite::Vec3 pullAt = scene.Find("Pull").WorldTransform().Position;
+		Lite::Vec3 anchorAt = scene.Find("Anchor").WorldTransform().Position;
+		const float dx = pullAt.x - anchorAt.x;
+		const float dy = pullAt.y - anchorAt.y;
+		const float distance = std::sqrt(dx * dx + dy * dy);
+		if (std::fabs(distance - 2.0f) > 0.35f)
+			return Fail("Scene check: the distance joint did not hold");
+
+		scene.DestroyEntity(scene.Find("Anchor").GetId(), false);
+		if (scene.Find("Pull").Get<Lite::DistanceJoint2DComponent>() != nullptr)
+			return Fail("Scene check: deleting one end left the joint");
+
+		scene.Stop();
+		return true;
+	}
+
+	bool CheckSceneSwap()
+	{
+		std::filesystem::path directory = std::filesystem::temp_directory_path() / "lite-scene-check";
+		std::error_code error;
+		std::filesystem::remove_all(directory, error);
+		std::filesystem::create_directories(directory, error);
+		if (error)
+			return Fail("Scene check: could not create a temp directory");
+
+		const std::filesystem::path firstPath = directory / "first.scene";
+		const std::filesystem::path secondPath = directory / "second.scene";
+
+		{
+			Lite::Scene first("First");
+			first.Create();
+			first.CreateEntity("Keep");
+			if (!first.SaveAs(firstPath.string()))
+				return Fail("Scene check: could not save the first scene");
+
+			Lite::Scene second("Second");
+			second.Create();
+			second.CreateEntity("Swap");
+			if (!second.SaveAs(secondPath.string()))
+				return Fail("Scene check: could not save the second scene");
+		}
+
+		Lite::Scope<Lite::Scene> scene = Lite::Scene::Open(firstPath.string());
+		if (!scene)
+			return Fail("Scene check: the temp scene did not load");
+		if (scene->IsDirty())
+			return Fail("Scene check: a loaded scene is dirty");
+
+		scene->Play();
+		scene->RequestScene(secondPath.string());
+		scene->Update(Lite::kPhysicsStep);
+		if (!scene->IsPlaying() || !scene->Find("Swap") || scene->Find("Keep"))
+			return Fail("Scene check: the scene did not swap");
+
+		scene->Stop();
+		if (scene->IsPlaying() || scene->Find("Swap") || !scene->Find("Keep"))
+			return Fail("Scene check: stop did not return to the scene from play");
+		if (scene->IsDirty())
+			return Fail("Scene check: a scene swap marked the scene dirty");
+
+		scene->Play();
+		scene->RequestScene("missing-lite-scene.scene");
+		scene->Update(Lite::kPhysicsStep);
+		if (!scene->IsPlaying() || !scene->Find("Keep"))
+			return Fail("Scene check: a missing scene replaced the one that was playing");
+
+		scene->Stop();
+		Lite::Scene::Close(scene);
+		std::filesystem::remove_all(directory, error);
 		return true;
 	}
 
@@ -160,7 +367,7 @@ int main()
 	}
 	else if (Lite::Scope<Lite::Scene> scene = Lite::Scene::Open(scenePath.string()))
 	{
-		if (Check(*scene))
+		if (Check(*scene) && CheckQueries() && CheckLayersAndJoint() && CheckSceneSwap())
 		{
 			std::cout << "Scene check passed\n";
 			code = 0;

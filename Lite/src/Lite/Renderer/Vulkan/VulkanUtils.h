@@ -132,7 +132,7 @@ namespace Lite {
 		return ready;
 	}
 
-	[[nodiscard]] inline VkImageMemoryBarrier ImageBarrier(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkAccessFlags srcAccess, VkAccessFlags dstAccess)
+	[[nodiscard]] inline VkImageMemoryBarrier ImageBarrier(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkAccessFlags srcAccess, VkAccessFlags dstAccess, uint32_t baseMip = 0, uint32_t levelCount = 1)
 	{
 		VkImageMemoryBarrier barrier {};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -144,7 +144,8 @@ namespace Lite {
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.image = image;
 		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.baseMipLevel = baseMip;
+		barrier.subresourceRange.levelCount = levelCount;
 		barrier.subresourceRange.layerCount = 1;
 		return barrier;
 	}

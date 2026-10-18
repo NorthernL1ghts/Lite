@@ -22,6 +22,8 @@ namespace Lite {
 		Paused
 	};
 
+	inline constexpr float kPhysicsStep = 1.0f / 60.0f;
+
 	inline const char* PlaybackName(ScenePlayback playback)
 	{
 		switch (playback)
@@ -34,6 +36,13 @@ namespace Lite {
 
 	class Scene;
 	class ComponentStorage;
+
+	struct RayHit
+	{
+		uint32_t Entity = 0;
+		Vec2 Point {};
+		Vec2 Normal {};
+	};
 
 	class LITE_API Entity
 	{
@@ -89,8 +98,10 @@ namespace Lite {
 		Scene& operator=(const Scene&) = delete;
 
 		const std::string& GetName() const { return m_Name; }
-		void SetName(std::string name) { m_Name = std::move(name); }
+		void SetName(std::string name);
 		const std::string& GetPath() const { return m_Path; }
+		bool IsDirty() const { return m_Dirty; }
+		void MarkDirty();
 		ScenePlayback GetPlayback() const { return m_Playback; }
 
 		struct Plane
@@ -136,6 +147,9 @@ namespace Lite {
 		std::vector<Entity> GetChildren(uint32_t id);
 		int CountDescendants(uint32_t id) const;
 		Transform WorldTransform(uint32_t id) const;
+		std::string GetTag(uint32_t id) const;
+		void SetTag(uint32_t id, std::string tag);
+		std::vector<Entity> FindTagged(std::string_view tag);
 		std::string GetPrefab(uint32_t id) const;
 		void SetPrefab(uint32_t id, std::string path);
 		bool SavePrefab(uint32_t id, const std::filesystem::path& path) const;
@@ -156,6 +170,8 @@ namespace Lite {
 		void Stop();
 		void Restart();
 		void RefreshPhysics(uint32_t entityId);
+		std::optional<RayHit> Raycast(Vec2 origin, Vec2 translation) const;
+		void RequestScene(std::string_view path);
 		void Update(float seconds);
 		void Render() const;
 		Mat4 ViewProjection(float aspect, const Transform& fallbackTransform, const CameraComponent& fallbackCamera) const;
@@ -212,7 +228,18 @@ namespace Lite {
 			uint32_t Plane = 0;
 			uint32_t Parent = 0;
 			std::string Name;
+			std::string Tag;
 			std::string Prefab;
+		};
+
+		struct DrawEntry
+		{
+			uint32_t Entity = 0;
+			const MaterialComponent* Material = nullptr;
+			const MeshComponent* Mesh = nullptr;
+			int Plane = 0;
+			int Order = 0;
+			Transform Drawn {};
 		};
 
 		std::string UniqueEntityName(std::string name);
@@ -232,9 +259,31 @@ namespace Lite {
 		void StartPhysics();
 		void StopPhysics();
 		void SyncPhysics();
+		void CaptureMotion();
 		void StepPhysics(float seconds);
+		Transform DrawTransform(uint32_t id) const;
+
+		struct MotionSample
+		{
+			uint32_t Entity = 0;
+			float X = 0.0f;
+			float Y = 0.0f;
+			float Angle = 0.0f;
+		};
+
+		std::vector<MotionSample> m_Motion;
+		float m_StepRemainder = 0.0f;
+		void MarkStructure();
+		void RetargetJoints(const std::string& previous, const std::string& name);
+		void ApplyRequestedScene();
+		void RebuildDrawList() const;
 		void SpawnPhysicsBody(Entity entity, bool preserveSnapshot);
 		void RemovePhysicsBody(uint32_t entityId);
+		void DetachDistanceJoints(uint32_t entityId, const std::string& name);
+		void DestroyDistanceJoint(uint32_t owner);
+		void SpawnDistanceJoint(uint32_t owner);
+		void SpawnDistanceJoints();
+		void RespawnDistanceJoints(const std::vector<uint32_t>& ids);
 
 		struct PhysicsStorage;
 		PhysicsStorage* m_Physics = nullptr;
@@ -242,11 +291,20 @@ namespace Lite {
 
 		std::string m_Name;
 		std::string m_Path;
+		std::string m_PlaySnapshot;
+		std::string m_PlayPath;
+		std::string m_RequestedScene;
 		std::vector<Plane> m_Planes;
 		std::vector<Record> m_Records;
+		mutable std::vector<DrawEntry> m_DrawList;
 		uint32_t m_NextPlane = 1;
 		uint32_t m_NextId = 1;
+		uint32_t m_StructureRevision = 1;
+		mutable uint32_t m_DrawRevision = 0;
 		bool m_Loaded = false;
+		bool m_Dirty = false;
+		bool m_SuppressDirty = false;
+		bool m_Swapped = false;
 		ScenePlayback m_Playback = ScenePlayback::Stopped;
 	};
 

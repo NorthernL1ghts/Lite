@@ -5,10 +5,6 @@ lite_compile_flags(Editor)
 lite_bin_dir(Editor editor)
 
 set(EDITOR_SHADER_SOURCES
-    ../Sandbox/assets/shaders/Triangle.vert
-    ../Sandbox/assets/shaders/Triangle.frag
-    ../Sandbox/assets/shaders/Quad.vert
-    ../Sandbox/assets/shaders/Quad.frag
     ../Sandbox/assets/shaders/Batch.vert
     ../Sandbox/assets/shaders/Batch.frag
 )
