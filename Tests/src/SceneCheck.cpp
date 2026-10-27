@@ -241,6 +241,16 @@ namespace {
 		if (!scene.IsDirty())
 			return Fail("Scene check: creating an entity left the scene clean");
 
+		scene.SetGravity({ 0.0f, -3.0f });
+		const std::string gravityDocument = scene.Snapshot();
+		if (!scene.Restore(gravityDocument))
+			return Fail("Scene check: gravity snapshot restore failed");
+		if (scene.GetGravity().y != -3.0f)
+			return Fail("Scene check: gravity did not round-trip");
+		solid = scene.Find("Solid");
+		trigger = scene.Find("Trigger");
+		scene.MarkDirty();
+
 		scene.Play();
 		std::optional<Lite::RayHit> hit = scene.Raycast({ 0.0f, 6.0f }, { 0.0f, -8.0f });
 		if (!hit || hit->Entity != solid.GetId())
@@ -248,11 +258,39 @@ namespace {
 		if (scene.Raycast({ 10.0f, 6.0f }, { 0.0f, -1.0f }))
 			return Fail("Scene check: a miss returned a hit");
 
+		std::vector<std::uint32_t> overlapped = scene.Overlap({ 0.0f, 2.0f }, { 0.25f, 0.25f });
+		bool foundSolid = false;
+		for (std::uint32_t id : overlapped)
+			foundSolid = foundSolid || id == solid.GetId();
+		if (!foundSolid)
+			return Fail("Scene check: overlap missed the solid box");
+		for (std::uint32_t id : scene.Overlap({ 0.0f, 4.0f }, { 0.2f, 0.2f }))
+		{
+			if (id == trigger.GetId())
+				return Fail("Scene check: overlap hit a trigger");
+		}
+		if (!scene.Overlap({ 40.0f, 40.0f }, { 0.2f, 0.2f }).empty())
+			return Fail("Scene check: an empty overlap returned a body");
+
+		scene.SetGravity({ 0.0f, 0.0f });
+		Lite::Entity floater = AddBox(scene, "Floater", { 6.0f, 3.0f }, Lite::BodyType::Dynamic);
+		floater.Get<Lite::Rigidbody2DComponent>()->FreezeRotation = false;
+		scene.RefreshPhysics(floater.GetId());
+		floater.Get<Lite::Rigidbody2DComponent>()->AngularVelocity = 4.0f;
+		const float startY = floater.WorldTransform().Position.y;
+		scene.Update(Lite::kPhysicsStep);
+		if (std::fabs(scene.Find("Floater").WorldTransform().Position.y - startY) > 0.02f)
+			return Fail("Scene check: zero gravity still pulled the body");
+		if (std::fabs(scene.Find("Floater").WorldTransform().GetRotationZ()) < 0.01f)
+			return Fail("Scene check: angular velocity was ignored");
+
 		scene.Stop();
 		if (!scene.IsDirty())
 			return Fail("Scene check: stop cleared an unsaved edit");
 		if (scene.Raycast({ 0.0f, 6.0f }, { 0.0f, -8.0f }))
 			return Fail("Scene check: raycast hit while stopped");
+		if (!scene.Overlap({ 0.0f, 2.0f }, { 0.25f, 0.25f }).empty())
+			return Fail("Scene check: overlap hit while stopped");
 
 		return true;
 	}

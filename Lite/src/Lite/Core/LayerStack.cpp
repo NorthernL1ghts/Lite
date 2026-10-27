@@ -28,12 +28,15 @@ namespace Lite {
 
 	LayerStack::~LayerStack()
 	{
-		for (auto& layer : m_Layers)
-			layer->OnDetach();
+		for (auto it = m_Layers.rbegin(); it != m_Layers.rend(); ++it)
+			(*it)->OnDetach();
 	}
 
 	void LayerStack::PushLayer(Scope<Layer> layer)
 	{
+		if (!layer)
+			return;
+
 		LITE_TRACE("Attached layer {}", layer->GetName());
 		layer->OnAttach();
 		m_Layers.emplace(m_Layers.begin() + m_LayerInsertIndex, std::move(layer));
@@ -42,6 +45,9 @@ namespace Lite {
 
 	void LayerStack::PushOverlay(Scope<Layer> layer)
 	{
+		if (!layer)
+			return;
+
 		LITE_TRACE("Attached overlay {}", layer->GetName());
 		layer->OnAttach();
 		m_Layers.push_back(std::move(layer));
@@ -55,10 +61,12 @@ namespace Lite {
 
 	void LayerStack::Clear()
 	{
-		for (auto& layer : m_Layers)
+		for (size_t index = m_Layers.size(); index > 0; --index)
 		{
-			LITE_TRACE("Detached layer {}", layer->GetName());
-			layer->OnDetach();
+			const size_t slot = index - 1;
+			const char* kind = slot < m_LayerInsertIndex ? "layer" : "overlay";
+			LITE_TRACE("Detached {} {}", kind, m_Layers[slot]->GetName());
+			m_Layers[slot]->OnDetach();
 		}
 
 		m_Layers.clear();

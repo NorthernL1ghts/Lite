@@ -61,6 +61,9 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Player input.** A and D, or the left and right arrows, set the crate's horizontal speed while they are held. W or the up arrow jumps once when a short ray under the crate hits something. With no keys held, the crate keeps the velocity from the simulation.
 - **Revolute joint.** A revolute joint on one entity names the other and pins their origins together. A motor and angle limits are saved only when they are enabled. Deleting either entity removes the joint.
 - **Force and impulse.** `ApplyForce` and `ApplyLinearImpulse` push a body while the scene is playing. An impulse is kept on the next step. A stopped scene ignores both.
+- **Queries and gravity.** `Overlap` returns the solid bodies touching a box and skips triggers. A stopped scene returns nothing. Gravity defaults to `(0, -9.81)` and is saved only when it differs. Each step copies a rigidbody's angular velocity and gravity scale into the simulation.
+- **Core log level.** `LITE_WARN` sets the engine log level and `LITE_CLIENT_WARN` sets the application log level. An empty or unknown value stays at trace, and an unknown value is logged. Warnings flush immediately. The elapsed clock keeps real time when a frame is clamped.
+- **Core helpers.** A window that does not open does not start the renderer. An assertion still breaks when the logger is already gone. The elapsed clock is stored in double precision. The window no longer has unused clear and swap calls.
 
 ## Next
 

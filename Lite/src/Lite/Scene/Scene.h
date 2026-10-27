@@ -23,6 +23,7 @@ namespace Lite {
 	};
 
 	inline constexpr float kPhysicsStep = 1.0f / 60.0f;
+	inline constexpr Vec2 kDefaultGravity { 0.0f, -9.81f };
 
 	inline const char* PlaybackName(ScenePlayback playback)
 	{
@@ -172,7 +173,10 @@ namespace Lite {
 		void RefreshPhysics(uint32_t entityId);
 		void ApplyForce(uint32_t id, Vec2 force);
 		void ApplyLinearImpulse(uint32_t id, Vec2 impulse);
+		void SetGravity(Vec2 gravity);
+		Vec2 GetGravity() const { return m_Gravity; }
 		std::optional<RayHit> Raycast(Vec2 origin, Vec2 translation) const;
+		std::vector<uint32_t> Overlap(Vec2 center, Vec2 halfExtents) const;
 		void RequestScene(std::string_view path);
 		void Update(float seconds);
 		void Render() const;
@@ -320,6 +324,7 @@ namespace Lite {
 		bool m_SuppressDirty = false;
 		bool m_Swapped = false;
 		ScenePlayback m_Playback = ScenePlayback::Stopped;
+		Vec2 m_Gravity = kDefaultGravity;
 	};
 
 	template<typename T>

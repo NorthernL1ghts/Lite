@@ -166,9 +166,8 @@ namespace Lite {
 	{
 		StopPhysics();
 
-		constexpr float kGravity = 9.81f;
 		b2WorldDef worldDef = b2DefaultWorldDef();
-		worldDef.gravity = { 0.0f, -kGravity };
+		worldDef.gravity = { m_Gravity.x, m_Gravity.y };
 		m_Physics.reset(new PhysicsStorage());
 		m_Physics->World = b2CreateWorld(&worldDef);
 
@@ -462,6 +461,8 @@ namespace Lite {
 				continue;
 
 			b2Body_SetLinearVelocity(body.Id, { rigidbody->LinearVelocity.x, rigidbody->LinearVelocity.y });
+			b2Body_SetAngularVelocity(body.Id, rigidbody->AngularVelocity);
+			b2Body_SetGravityScale(body.Id, rigidbody->GravityScale);
 		}
 
 		b2World_Step(m_Physics->World, seconds, 4);
@@ -847,6 +848,53 @@ namespace Lite {
 			DestroyDistanceJoint(owner);
 		for (uint32_t owner : owners)
 			SpawnDistanceJoint(owner);
+	}
+
+	void Scene::SetGravity(Vec2 gravity)
+	{
+		if (m_Gravity.x == gravity.x && m_Gravity.y == gravity.y)
+			return;
+
+		m_Gravity = gravity;
+		MarkDirty();
+		if (m_Physics != nullptr && b2World_IsValid(m_Physics->World))
+			b2World_SetGravity(m_Physics->World, { gravity.x, gravity.y });
+	}
+
+	std::vector<uint32_t> Scene::Overlap(Vec2 center, Vec2 halfExtents) const
+	{
+		std::vector<uint32_t> hits;
+		if (m_Physics == nullptr || !b2World_IsValid(m_Physics->World))
+			return hits;
+
+		const float halfX = std::fabs(halfExtents.x);
+		const float halfY = std::fabs(halfExtents.y);
+		b2AABB box;
+		box.lowerBound = { center.x - halfX, center.y - halfY };
+		box.upperBound = { center.x + halfX, center.y + halfY };
+
+		auto callback = [](b2ShapeId shapeId, void* context) -> bool
+		{
+			if (!b2Shape_IsValid(shapeId) || b2Shape_IsSensor(shapeId))
+				return true;
+
+			const uint32_t entity = EntityId(shapeId);
+			if (entity == 0)
+				return true;
+
+			auto* found = static_cast<std::vector<uint32_t>*>(context);
+			for (uint32_t id : *found)
+			{
+				if (id == entity)
+					return true;
+			}
+
+			found->push_back(entity);
+			return true;
+		};
+
+		b2World_OverlapAABB(m_Physics->World, box, b2DefaultQueryFilter(), callback, &hits);
+		return hits;
 	}
 
 	std::optional<RayHit> Scene::Raycast(Vec2 origin, Vec2 translation) const

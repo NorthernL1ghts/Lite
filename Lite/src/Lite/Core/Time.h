@@ -32,7 +32,7 @@ namespace Lite {
 
 		static float GetDelta();
 		static float GetDeltaMilliseconds();
-		static float GetElapsed();
+		static double GetElapsed();
 		static Timestep GetTimestep();
 
 	private:

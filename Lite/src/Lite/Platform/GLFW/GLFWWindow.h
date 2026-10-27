@@ -13,8 +13,6 @@ namespace Lite {
 		~GLFWWindow() override;
 
 		void PollEvents() override;
-		void Clear() override;
-		void SwapBuffers() override;
 		bool IsOpen() const override;
 
 		void SetEventCallback(EventCallback callback) override;

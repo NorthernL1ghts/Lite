@@ -14,7 +14,8 @@
 		{ \
 			if (!(condition)) \
 			{ \
-				LITE_CRITICAL("Assertion failed ({}): {}", #condition, std::format(__VA_ARGS__)); \
+				if (auto logger = ::Lite::Logger::GetCoreLogger()) \
+					logger->critical("Assertion failed ({}): {}", #condition, std::format(__VA_ARGS__)); \
 				__debugbreak(); \
 			} \
 		} while (0)
@@ -24,7 +25,8 @@
 		{ \
 			if (!(condition)) \
 			{ \
-				LITE_CLIENT_CRITICAL("Assertion failed ({}): {}", #condition, std::format(__VA_ARGS__)); \
+				if (auto logger = ::Lite::Logger::GetClientLogger()) \
+					logger->critical("Assertion failed ({}): {}", #condition, std::format(__VA_ARGS__)); \
 				__debugbreak(); \
 			} \
 		} while (0)

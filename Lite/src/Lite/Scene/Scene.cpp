@@ -1686,6 +1686,10 @@ namespace Lite {
 		if (root["name"])
 			m_Name = root["name"].as<std::string>();
 
+		m_Gravity = kDefaultGravity;
+		if (root["gravity"] && root["gravity"].IsSequence() && root["gravity"].size() >= 2)
+			m_Gravity = { root["gravity"][0].as<float>(), root["gravity"][1].as<float>() };
+
 		struct ParentLink
 		{
 			uint32_t Entity = 0;
@@ -1767,6 +1771,14 @@ namespace Lite {
 	{
 		YAML::Node root;
 		root["name"] = m_Name;
+		if (m_Gravity.x != kDefaultGravity.x || m_Gravity.y != kDefaultGravity.y)
+		{
+			YAML::Node gravity(YAML::NodeType::Sequence);
+			gravity.SetStyle(YAML::EmitterStyle::Flow);
+			gravity.push_back(m_Gravity.x);
+			gravity.push_back(m_Gravity.y);
+			root["gravity"] = gravity;
+		}
 
 		std::vector<uint32_t> order;
 		for (const Plane& plane : m_Planes)

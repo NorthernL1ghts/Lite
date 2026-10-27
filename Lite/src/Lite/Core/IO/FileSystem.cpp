@@ -3,6 +3,8 @@
 #include <Windows.h>
 
 #include <fstream>
+#include <limits>
+#include <string>
 #include <vector>
 
 namespace Lite {
@@ -35,12 +37,15 @@ namespace Lite {
 				std::error_code error;
 				if (std::filesystem::is_directory(cursor, error))
 				{
-					for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(cursor, error))
+					error.clear();
+					std::filesystem::directory_iterator it(cursor, error);
+					const std::filesystem::directory_iterator end;
+					while (!error && it != end)
 					{
 						std::error_code childError;
-						if (error || !entry.is_directory(childError))
-							continue;
-						Consider(entry.path() / relative, matches);
+						if (it->is_directory(childError))
+							Consider(it->path() / relative, matches);
+						it.increment(error);
 					}
 				}
 
@@ -70,12 +75,25 @@ namespace Lite {
 
 	std::filesystem::path FileSystem::ExecutableDirectory()
 	{
-		wchar_t modulePath[MAX_PATH] {};
-		DWORD length = GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
-		if (length == 0 || length >= MAX_PATH)
-			return {};
+		std::wstring module(MAX_PATH, L'\0');
+		for (;;)
+		{
+			DWORD length = GetModuleFileNameW(nullptr, module.data(), static_cast<DWORD>(module.size()));
+			if (length == 0)
+				return {};
+			if (length < module.size())
+			{
+				module.resize(length);
+				break;
+			}
 
-		return std::filesystem::path(modulePath).parent_path();
+			if (module.size() > 1024 * 1024)
+				return {};
+
+			module.resize(module.size() * 2);
+		}
+
+		return std::filesystem::path(module).parent_path();
 	}
 
 	std::filesystem::path FileSystem::Locate(const std::filesystem::path& relative)
@@ -109,7 +127,7 @@ namespace Lite {
 
 		std::error_code error;
 		std::filesystem::path relative = std::filesystem::relative(path, root, error);
-		return !error && (relative.empty() || relative.begin()->string() != "..");
+		return !error && (relative.empty() || *relative.begin() != std::filesystem::path(".."));
 	}
 
 	std::filesystem::path FileSystem::Unused(const std::filesystem::path& parent, const std::string& stem, std::string_view extension)
@@ -132,7 +150,7 @@ namespace Lite {
 	{
 		std::error_code error;
 		auto size = std::filesystem::file_size(path, error);
-		if (error || size == 0)
+		if (error || size == 0 || size > static_cast<std::uintmax_t>(std::numeric_limits<size_t>::max()))
 			return {};
 
 		std::ifstream file(path, std::ios::binary);

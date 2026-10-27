@@ -9,7 +9,7 @@ namespace Lite {
 
 		float s_Delta = 0.0f;
 		float s_UnscaledDelta = 0.0f;
-		float s_Elapsed = 0.0f;
+		double s_Elapsed = 0.0;
 		float s_TargetDelta = 0.0f;
 		bool s_Started = false;
 		std::chrono::steady_clock::time_point s_Last {};
@@ -18,7 +18,7 @@ namespace Lite {
 
 	void Time::SetFPS(float fps)
 	{
-		if (fps <= 0.0f)
+		if (!(fps > 0.0f))
 		{
 			s_TargetDelta = 0.0f;
 			return;
@@ -53,7 +53,7 @@ namespace Lite {
 		return s_Delta * 1000.0f;
 	}
 
-	float Time::GetElapsed()
+	double Time::GetElapsed()
 	{
 		return s_Elapsed;
 	}
@@ -85,7 +85,7 @@ namespace Lite {
 		if (s_Delta > 0.1f)
 			s_Delta = 0.1f;
 
-		s_Elapsed += s_Delta;
+		s_Elapsed += s_UnscaledDelta;
 	}
 
 	void Time::Limit()

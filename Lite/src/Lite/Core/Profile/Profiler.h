@@ -41,6 +41,8 @@ namespace Lite {
 
 		ProfileScope(const ProfileScope&) = delete;
 		ProfileScope& operator=(const ProfileScope&) = delete;
+		ProfileScope(ProfileScope&&) = delete;
+		ProfileScope& operator=(ProfileScope&&) = delete;
 
 	private:
 		int m_Index = -1;

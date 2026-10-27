@@ -129,14 +129,6 @@ namespace Lite {
 		glfwPollEvents();
 	}
 
-	void GLFWWindow::Clear()
-	{
-	}
-
-	void GLFWWindow::SwapBuffers()
-	{
-	}
-
 	bool GLFWWindow::IsOpen() const
 	{
 		return m_Window && !glfwWindowShouldClose(m_Window);

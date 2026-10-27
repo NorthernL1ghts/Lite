@@ -15,10 +15,10 @@ namespace Lite {
 
 		virtual void OnAttach() {}
 		virtual void OnDetach() {}
-		virtual void OnUpdate(Timestep timestep) { (void)timestep; }
+		virtual void OnUpdate(Timestep) {}
 		virtual void OnRender() {}
 		virtual void OnImGuiRender() {}
-		virtual void OnEvent(Event& event) { (void)event; }
+		virtual void OnEvent(Event&) {}
 
 		const std::string& GetName() const { return m_Name; }
 

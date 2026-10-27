@@ -38,6 +38,16 @@ namespace Lite {
 
 		AssetRegistry::Init();
 		m_Window = Window::Create(m_Props);
+		if (!m_Window->IsOpen())
+		{
+			LITE_ERROR("Failed to open a window");
+			m_Window.reset();
+			s_Instance = nullptr;
+			AssetRegistry::Shutdown();
+			Logger::Shutdown();
+			return;
+		}
+
 		m_Window->SetEventCallback([this](Event& event) { OnEvent(event); });
 		Input::SetWindow(m_Window->GetNativeHandle());
 		Renderer2D::Init(m_Window->GetNativeHandle());
@@ -71,7 +81,7 @@ namespace Lite {
 
 	void Application::Run()
 	{
-		while (m_Running && m_Window->IsOpen())
+		while (m_Running && m_Window && m_Window->IsOpen())
 		{
 			Profiler::BeginFrame();
 			Time::Update();

@@ -40,11 +40,6 @@ namespace Lite {
 			}
 		}
 
-		auto begin() { return m_Layers.begin(); }
-		auto end() { return m_Layers.end(); }
-		auto rbegin() { return m_Layers.rbegin(); }
-		auto rend() { return m_Layers.rend(); }
-
 	private:
 		std::vector<Scope<Layer>> m_Layers;
 		unsigned int m_LayerInsertIndex = 0;

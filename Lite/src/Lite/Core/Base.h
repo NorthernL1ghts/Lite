@@ -3,7 +3,7 @@
 #include <Lite/Core/Platform.h>
 #include <Lite/Core/Memory.h>
 
-#define LITE_BIT(x) (1 << (x))
+#define LITE_BIT(x) (1u << (x))
 
 #ifdef LITE_PLATFORM_WINDOWS
     #if defined(BUILD_DLL) || defined(LITE_BUILD_DLL)
