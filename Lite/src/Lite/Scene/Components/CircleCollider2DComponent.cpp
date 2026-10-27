@@ -21,6 +21,10 @@ namespace Lite {
 				circle->Radius = node["radius"].as<float>();
 			if (node["offset"])
 				circle->Offset = ReadVec2(node["offset"], circle->Offset);
+			if (node["friction"])
+				circle->Friction = node["friction"].as<float>();
+			if (node["restitution"])
+				circle->Restitution = node["restitution"].as<float>();
 			if (node["trigger"])
 				circle->IsTrigger = node["trigger"].as<bool>();
 			if (node["layer"])
@@ -34,6 +38,10 @@ namespace Lite {
 			const auto& circle = *static_cast<const CircleCollider2DComponent*>(component);
 			node["radius"] = circle.Radius;
 			node["offset"] = WriteVec2(circle.Offset);
+			if (circle.Friction != kDefaultFriction)
+				node["friction"] = circle.Friction;
+			if (circle.Restitution != kDefaultRestitution)
+				node["restitution"] = circle.Restitution;
 			node["trigger"] = circle.IsTrigger;
 			if (circle.Layer != kDefaultCollisionLayer)
 				node["layer"] = circle.Layer;

@@ -30,6 +30,7 @@ namespace Lite {
 		struct Joint
 		{
 			uint32_t Owner = 0;
+			ComponentId Kind = ComponentId::DistanceJoint2D;
 			b2JointId Id = {};
 		};
 
@@ -54,7 +55,7 @@ namespace Lite {
 			}
 		}
 
-		b2ShapeDef MakeShape(bool trigger, uint64_t layer, uint64_t mask)
+		b2ShapeDef MakeShape(bool trigger, uint64_t layer, uint64_t mask, float friction, float restitution)
 		{
 			b2ShapeDef shape = b2DefaultShapeDef();
 			shape.density = trigger ? 0.0f : 1.0f;
@@ -62,8 +63,8 @@ namespace Lite {
 			shape.enableContactEvents = !trigger;
 			// A sensor only reports a visitor that also has sensor events enabled.
 			shape.enableSensorEvents = true;
-			shape.material.friction = 0.5f;
-			shape.material.restitution = 0.15f;
+			shape.material.friction = friction < 0.0f ? 0.0f : friction;
+			shape.material.restitution = restitution < 0.0f ? 0.0f : restitution;
 			shape.filter.categoryBits = layer;
 			shape.filter.maskBits = mask;
 			shape.filter.groupIndex = 0;
@@ -112,7 +113,7 @@ namespace Lite {
 
 			b2Vec2 center { box.Offset.x * transform.Scale.x, box.Offset.y * transform.Scale.y };
 			b2Polygon polygon = b2MakeOffsetBox(halfWidth, halfHeight, center, b2MakeRot(0.0f));
-			b2ShapeDef shape = MakeShape(box.IsTrigger, box.Layer, box.Mask);
+			b2ShapeDef shape = MakeShape(box.IsTrigger, box.Layer, box.Mask, box.Friction, box.Restitution);
 			b2CreatePolygonShape(body, &shape, &polygon);
 			return !box.IsTrigger;
 		}
@@ -130,7 +131,7 @@ namespace Lite {
 			if (shape.radius < 0.01f)
 				shape.radius = 0.01f;
 
-			b2ShapeDef definition = MakeShape(circle.IsTrigger, circle.Layer, circle.Mask);
+			b2ShapeDef definition = MakeShape(circle.IsTrigger, circle.Layer, circle.Mask, circle.Friction, circle.Restitution);
 			b2CreateCircleShape(body, &definition, &shape);
 			return !circle.IsTrigger;
 		}
@@ -175,6 +176,7 @@ namespace Lite {
 			SpawnPhysicsBody(entity, false);
 
 		SpawnDistanceJoints();
+		SpawnRevoluteJoints();
 
 		m_Motion.clear();
 		m_StepRemainder = 0.0f;
@@ -302,6 +304,59 @@ namespace Lite {
 			SpawnPhysicsBody(GetEntity(id), true);
 
 		RespawnDistanceJoints(ids);
+		RespawnRevoluteJoints(ids);
+	}
+
+	struct Scene::PhysicsBodyRef
+	{
+		b2BodyId Id = {};
+	};
+
+	bool Scene::TakeBody(uint32_t entityId, PhysicsBodyRef& body) const
+	{
+		body.Id = {};
+		if (m_Physics == nullptr)
+			return false;
+
+		for (const PhysicsStorage::Body& stored : m_Physics->Bodies)
+		{
+			if (stored.Entity == entityId && b2Body_IsValid(stored.Id))
+			{
+				body.Id = stored.Id;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	void Scene::ApplyForce(uint32_t id, Vec2 force)
+	{
+		if (m_Playback != ScenePlayback::Playing)
+			return;
+
+		PhysicsBodyRef body;
+		if (!TakeBody(id, body))
+			return;
+
+		b2Body_ApplyForceToCenter(body.Id, { force.x, force.y }, true);
+	}
+
+	void Scene::ApplyLinearImpulse(uint32_t id, Vec2 impulse)
+	{
+		if (m_Playback != ScenePlayback::Playing)
+			return;
+
+		PhysicsBodyRef body;
+		if (!TakeBody(id, body))
+			return;
+
+		b2Body_ApplyLinearImpulseToCenter(body.Id, { impulse.x, impulse.y }, true);
+		if (Rigidbody2DComponent* rigidbody = GetEntity(id).Get<Rigidbody2DComponent>())
+		{
+			b2Vec2 velocity = b2Body_GetLinearVelocity(body.Id);
+			rigidbody->LinearVelocity = { velocity.x, velocity.y };
+		}
 	}
 
 	void Scene::StopPhysics()
@@ -477,14 +532,14 @@ namespace Lite {
 		}
 	}
 
-	void Scene::DestroyDistanceJoint(uint32_t owner)
+	void Scene::DestroyJoint(uint32_t owner, ComponentId kind)
 	{
 		if (m_Physics == nullptr)
 			return;
 
 		for (auto joint = m_Physics->Joints.begin(); joint != m_Physics->Joints.end(); ++joint)
 		{
-			if (joint->Owner != owner)
+			if (joint->Owner != owner || joint->Kind != kind)
 				continue;
 
 			if (b2Joint_IsValid(joint->Id))
@@ -492,6 +547,16 @@ namespace Lite {
 			m_Physics->Joints.erase(joint);
 			return;
 		}
+	}
+
+	void Scene::DestroyDistanceJoint(uint32_t owner)
+	{
+		DestroyJoint(owner, ComponentId::DistanceJoint2D);
+	}
+
+	void Scene::DestroyRevoluteJoint(uint32_t owner)
+	{
+		DestroyJoint(owner, ComponentId::RevoluteJoint2D);
 	}
 
 	void Scene::DetachDistanceJoints(uint32_t entityId, const std::string& name)
@@ -596,8 +661,150 @@ namespace Lite {
 
 		PhysicsStorage::Joint stored;
 		stored.Owner = owner;
+		stored.Kind = ComponentId::DistanceJoint2D;
 		stored.Id = created;
 		m_Physics->Joints.push_back(stored);
+	}
+
+	void Scene::DetachRevoluteJoints(uint32_t entityId, const std::string& name)
+	{
+		std::vector<uint32_t> owners;
+		if (!name.empty())
+		{
+			for (const Record& record : m_Records)
+			{
+				if (record.Id == entityId)
+					continue;
+
+				auto* joint = static_cast<RevoluteJoint2DComponent*>(GetComponent(ComponentId::RevoluteJoint2D, record.Id));
+				if (joint != nullptr && joint->Other == name)
+					owners.push_back(record.Id);
+			}
+		}
+
+		for (uint32_t owner : owners)
+			RemoveComponent(ComponentId::RevoluteJoint2D, owner);
+
+		DestroyRevoluteJoint(entityId);
+	}
+
+	void Scene::SpawnRevoluteJoint(uint32_t owner)
+	{
+		if (m_Physics == nullptr || !b2World_IsValid(m_Physics->World))
+			return;
+
+		auto* joint = static_cast<RevoluteJoint2DComponent*>(GetComponent(ComponentId::RevoluteJoint2D, owner));
+		if (joint == nullptr)
+			return;
+
+		Entity self = GetEntity(owner);
+		const std::string name = self ? self.GetName() : std::string("entity");
+		if (joint->Other.empty())
+		{
+			Console::Log(std::format("Revolute joint skipped: {} has no other entity", name));
+			return;
+		}
+
+		Entity other = Find(joint->Other);
+		if (!other)
+		{
+			Console::Log(std::format("Revolute joint skipped: {} is missing", joint->Other));
+			return;
+		}
+
+		if (other.GetId() == owner)
+		{
+			Console::Log(std::format("Revolute joint skipped: {} cannot join itself", name));
+			return;
+		}
+
+		PhysicsBodyRef foundA;
+		PhysicsBodyRef foundB;
+		if (!TakeBody(owner, foundA) || !TakeBody(other.GetId(), foundB))
+		{
+			Console::Log(std::format("Revolute joint skipped: {} has no body", b2Body_IsValid(foundA.Id) ? joint->Other : name));
+			return;
+		}
+
+		b2BodyId bodyA = foundA.Id;
+		b2BodyId bodyB = foundB.Id;
+
+		DestroyRevoluteJoint(owner);
+
+		float lower = joint->LowerAngle;
+		float upper = joint->UpperAngle;
+		if (lower > upper)
+			std::swap(lower, upper);
+		constexpr float kLimit = 3.1f;
+		lower = std::max(-kLimit, std::min(lower, kLimit));
+		upper = std::max(-kLimit, std::min(upper, kLimit));
+
+		b2RevoluteJointDef definition = b2DefaultRevoluteJointDef();
+		definition.bodyIdA = bodyA;
+		definition.bodyIdB = bodyB;
+		definition.localAnchorA = { 0.0f, 0.0f };
+		definition.localAnchorB = { 0.0f, 0.0f };
+		definition.referenceAngle = b2Rot_GetAngle(b2Body_GetRotation(bodyB)) - b2Rot_GetAngle(b2Body_GetRotation(bodyA));
+		definition.enableMotor = joint->Motor;
+		definition.motorSpeed = joint->MotorSpeed;
+		definition.maxMotorTorque = std::max(joint->MaxTorque, 0.0f);
+		definition.enableLimit = joint->Limit;
+		definition.lowerAngle = lower;
+		definition.upperAngle = upper;
+		b2JointId created = b2CreateRevoluteJoint(m_Physics->World, &definition);
+		if (!b2Joint_IsValid(created))
+		{
+			Console::Log(std::format("Revolute joint skipped: {} could not be created", name));
+			return;
+		}
+
+		PhysicsStorage::Joint stored;
+		stored.Owner = owner;
+		stored.Kind = ComponentId::RevoluteJoint2D;
+		stored.Id = created;
+		m_Physics->Joints.push_back(stored);
+	}
+
+	void Scene::SpawnRevoluteJoints()
+	{
+		for (const Record& record : m_Records)
+		{
+			if (GetComponent(ComponentId::RevoluteJoint2D, record.Id) != nullptr)
+				SpawnRevoluteJoint(record.Id);
+		}
+	}
+
+	void Scene::RespawnRevoluteJoints(const std::vector<uint32_t>& ids)
+	{
+		if (m_Physics == nullptr)
+			return;
+
+		auto touches = [&](uint32_t entity)
+		{
+			for (uint32_t id : ids)
+			{
+				if (id == entity)
+					return true;
+			}
+			return false;
+		};
+
+		std::vector<uint32_t> owners;
+		for (const Record& record : m_Records)
+		{
+			auto* joint = static_cast<RevoluteJoint2DComponent*>(GetComponent(ComponentId::RevoluteJoint2D, record.Id));
+			if (joint == nullptr)
+				continue;
+
+			Entity other = joint->Other.empty() ? Entity{} : Find(joint->Other);
+			if (touches(record.Id) || (other && touches(other.GetId())))
+				owners.push_back(record.Id);
+		}
+
+		for (uint32_t owner : owners)
+			DestroyRevoluteJoint(owner);
+		for (uint32_t owner : owners)
+			SpawnRevoluteJoint(owner);
 	}
 
 	void Scene::SpawnDistanceJoints()

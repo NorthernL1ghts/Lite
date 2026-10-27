@@ -527,6 +527,12 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			if (ImGui::Checkbox("Box trigger", &box->IsTrigger))
 				refreshPhysics();
 			finish();
+			if (ImGui::DragFloat("Friction", &box->Friction, 0.01f, 0.0f, 5.0f))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat("Restitution", &box->Restitution, 0.01f, 0.0f, 1.0f))
+				refreshPhysics();
+			finish();
 			CollisionFilter(box->Layer, box->Mask, refreshPhysics, finish);
 			break;
 			}
@@ -552,6 +558,12 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 				refreshPhysics();
 			finish();
 			if (ImGui::Checkbox("Circle trigger", &circle->IsTrigger))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat("Circle friction", &circle->Friction, 0.01f, 0.0f, 5.0f))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat("Circle restitution", &circle->Restitution, 0.01f, 0.0f, 1.0f))
 				refreshPhysics();
 			finish();
 			CollisionFilter(circle->Layer, circle->Mask, refreshPhysics, finish);
@@ -587,6 +599,52 @@ void Inspector::Draw(std::uint32_t selected, SceneHistory& history)
 			}
 			finish();
 			ImGui::TextDisabled("Zero uses the distance between the bodies when play starts.");
+			break;
+			default:
+				break;
+		}
+	}
+
+	if (Lite::RevoluteJoint2DComponent* hinge = entity.Get<Lite::RevoluteJoint2DComponent>())
+	{
+		switch (ComponentSection("Revolute Joint", "RevoluteJoint", false))
+		{
+			case SectionAction::Remove:
+			entity.Remove<Lite::RevoluteJoint2DComponent>();
+			removed("Revolute Joint");
+			break;
+			case SectionAction::Open:
+			if (ImGui::GetActiveID() != ImGui::GetID("##HingeOther") && std::strcmp(m_HingeOther, hinge->Other.c_str()) != 0)
+				std::snprintf(m_HingeOther, sizeof(m_HingeOther), "%s", hinge->Other.c_str());
+			ImGui::SetNextItemWidth(-1.0f);
+			if (ImGui::InputTextWithHint("##HingeOther", "Other entity", m_HingeOther, sizeof(m_HingeOther)))
+			{
+				hinge->Other = m_HingeOther;
+				refreshPhysics();
+			}
+			finish();
+			if (ImGui::Checkbox("Motor", &hinge->Motor))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat("Motor speed", &hinge->MotorSpeed, 0.01f))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat("Max torque", &hinge->MaxTorque, 0.05f, 0.0f, 10000.0f))
+			{
+				hinge->MaxTorque = std::max(hinge->MaxTorque, 0.0f);
+				refreshPhysics();
+			}
+			finish();
+			if (ImGui::Checkbox("Limit", &hinge->Limit))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat("Lower angle", &hinge->LowerAngle, 0.01f, -3.1f, 3.1f))
+				refreshPhysics();
+			finish();
+			if (ImGui::DragFloat("Upper angle", &hinge->UpperAngle, 0.01f, -3.1f, 3.1f))
+				refreshPhysics();
+			finish();
+			ImGui::TextDisabled("The hinge pins the two origins. Angles are radians.");
 			break;
 			default:
 				break;

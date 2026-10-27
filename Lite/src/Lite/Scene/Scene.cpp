@@ -303,6 +303,8 @@ namespace Lite {
 
 		if (id == ComponentId::DistanceJoint2D)
 			DestroyDistanceJoint(entity);
+		else if (id == ComponentId::RevoluteJoint2D)
+			DestroyRevoluteJoint(entity);
 
 		m_Components->Erase(id, entity);
 		MarkDirty();
@@ -342,6 +344,10 @@ namespace Lite {
 			auto* joint = static_cast<DistanceJoint2DComponent*>(GetComponent(ComponentId::DistanceJoint2D, record.Id));
 			if (joint != nullptr && joint->Other == previous)
 				joint->Other = name;
+
+			auto* hinge = static_cast<RevoluteJoint2DComponent*>(GetComponent(ComponentId::RevoluteJoint2D, record.Id));
+			if (hinge != nullptr && hinge->Other == previous)
+				hinge->Other = name;
 		}
 	}
 
@@ -1033,6 +1039,7 @@ namespace Lite {
 
 		const std::string name = record->Name;
 		DetachDistanceJoints(id, name);
+		DetachRevoluteJoints(id, name);
 		RemovePhysicsBody(id);
 		for (size_t index = 0; index < static_cast<size_t>(ComponentId::Count); ++index)
 			RemoveComponent(static_cast<ComponentId>(index), id);

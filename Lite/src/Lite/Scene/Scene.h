@@ -170,6 +170,8 @@ namespace Lite {
 		void Stop();
 		void Restart();
 		void RefreshPhysics(uint32_t entityId);
+		void ApplyForce(uint32_t id, Vec2 force);
+		void ApplyLinearImpulse(uint32_t id, Vec2 impulse);
 		std::optional<RayHit> Raycast(Vec2 origin, Vec2 translation) const;
 		void RequestScene(std::string_view path);
 		void Update(float seconds);
@@ -277,13 +279,21 @@ namespace Lite {
 		void RetargetJoints(const std::string& previous, const std::string& name);
 		void ApplyRequestedScene();
 		void RebuildDrawList() const;
+		struct PhysicsBodyRef;
 		void SpawnPhysicsBody(Entity entity, bool preserveSnapshot);
 		void RemovePhysicsBody(uint32_t entityId);
+		bool TakeBody(uint32_t entityId, PhysicsBodyRef& body) const;
 		void DetachDistanceJoints(uint32_t entityId, const std::string& name);
+		void DetachRevoluteJoints(uint32_t entityId, const std::string& name);
+		void DestroyJoint(uint32_t owner, ComponentId kind);
 		void DestroyDistanceJoint(uint32_t owner);
+		void DestroyRevoluteJoint(uint32_t owner);
 		void SpawnDistanceJoint(uint32_t owner);
+		void SpawnRevoluteJoint(uint32_t owner);
 		void SpawnDistanceJoints();
+		void SpawnRevoluteJoints();
 		void RespawnDistanceJoints(const std::vector<uint32_t>& ids);
+		void RespawnRevoluteJoints(const std::vector<uint32_t>& ids);
 
 		struct PhysicsStorage;
 		struct PhysicsDeleter

@@ -31,9 +31,36 @@ namespace {
 		Lite::Console::Log(std::format("{} started", entity.GetName()));
 	}
 
+	bool s_JumpHeld = false;
+
+	void DriveCrate(Lite::Entity entity)
+	{
+		Lite::Rigidbody2DComponent* body = entity.Get<Lite::Rigidbody2DComponent>();
+		if (body == nullptr || body->Type != Lite::BodyType::Dynamic)
+			return;
+
+		const bool left = Lite::Input::IsKeyPressed(Lite::Key::A) || Lite::Input::IsKeyPressed(Lite::Key::Left);
+		const bool right = Lite::Input::IsKeyPressed(Lite::Key::D) || Lite::Input::IsKeyPressed(Lite::Key::Right);
+		if (left != right)
+			body->LinearVelocity.x = left ? -3.2f : 3.2f;
+
+		const bool jump = Lite::Input::IsKeyPressed(Lite::Key::W) || Lite::Input::IsKeyPressed(Lite::Key::Up);
+		if (jump && !s_JumpHeld)
+		{
+			Lite::Scene* scene = Lite::Scene::GetActive();
+			const Lite::Transform world = entity.WorldTransform();
+			const float reach = std::fabs(world.Scale.y) * 0.55f + 0.08f;
+			if (scene != nullptr && scene->Raycast({ world.Position.x, world.Position.y }, { 0.0f, -reach }))
+				body->LinearVelocity.y = 6.5f;
+		}
+		s_JumpHeld = jump;
+	}
+
 	void BounceUpdate(Lite::Entity entity, float seconds)
 	{
 		s_BounceTime += seconds;
+		DriveCrate(entity);
+
 		Lite::MaterialComponent* material = entity.Get<Lite::MaterialComponent>();
 		if (material == nullptr)
 			return;

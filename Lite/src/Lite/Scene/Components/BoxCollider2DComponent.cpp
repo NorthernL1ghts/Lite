@@ -21,6 +21,10 @@ namespace Lite {
 				box->Size = ReadVec2(node["size"], box->Size);
 			if (node["offset"])
 				box->Offset = ReadVec2(node["offset"], box->Offset);
+			if (node["friction"])
+				box->Friction = node["friction"].as<float>();
+			if (node["restitution"])
+				box->Restitution = node["restitution"].as<float>();
 			if (node["trigger"])
 				box->IsTrigger = node["trigger"].as<bool>();
 			if (node["layer"])
@@ -34,6 +38,10 @@ namespace Lite {
 			const auto& box = *static_cast<const BoxCollider2DComponent*>(component);
 			node["size"] = WriteVec2(box.Size);
 			node["offset"] = WriteVec2(box.Offset);
+			if (box.Friction != kDefaultFriction)
+				node["friction"] = box.Friction;
+			if (box.Restitution != kDefaultRestitution)
+				node["restitution"] = box.Restitution;
 			node["trigger"] = box.IsTrigger;
 			if (box.Layer != kDefaultCollisionLayer)
 				node["layer"] = box.Layer;

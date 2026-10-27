@@ -57,6 +57,10 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Console.** Clear empties the panel. A filter hides lines that do not contain the typed word. Mute contacts hides collision and trigger lines and leaves script errors visible.
 - **Material color.** The inspector swatch shows the material color. Roughness and emission stay in the Surface section.
 - **Editor look.** The window and the menu bar use the same mark. Explorer tiles ease in on hover. A material tile shows its color, a texture tile shows the image, and a folder shows a few of those previews. The strip under the files renames the selection. The asset folders themselves stay fixed.
+- **Collider surface.** A box or circle collider stores friction and restitution. The defaults are 0.5 and 0.15, and those values are saved only when they differ. The inspector edits them and rebuilds the body while playing.
+- **Player input.** A and D, or the left and right arrows, set the crate's horizontal speed while they are held. W or the up arrow jumps once when a short ray under the crate hits something. With no keys held, the crate keeps the velocity from the simulation.
+- **Revolute joint.** A revolute joint on one entity names the other and pins their origins together. A motor and angle limits are saved only when they are enabled. Deleting either entity removes the joint.
+- **Force and impulse.** `ApplyForce` and `ApplyLinearImpulse` push a body while the scene is playing. An impulse is kept on the next step. A stopped scene ignores both.
 
 ## Next
 
@@ -68,9 +72,8 @@ Real gaps. They are not the next session. Each block says what exists today so t
 
 ### Sandbox and shipping
 
-Sandbox is a player. It locates `Sandbox/Sandbox.lite`, opens the start scene, and calls play. The scroll wheel zooms the player camera. Key presses are traced. There is no gameplay input on the crate.
+Sandbox is a player. It locates `Sandbox/Sandbox.lite`, opens the start scene, and calls play. The scroll wheel zooms the player camera. Key presses are traced. The crate moves from the keyboard while that scene is playing.
 
-- **Player input.** After script input exists, the crate or a new body moves from the keyboard. The scene stays playable with no keys held.
 - **Project argument.** Starting Sandbox with a path to a `*.lite` file plays that project. No argument still plays `Sandbox/Sandbox.lite`. A missing file logs the path and exits.
 - **One player binary.** Shipping a project is that executable plus the project folder. It is not a new executable per project.
 

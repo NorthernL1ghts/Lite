@@ -19,5 +19,6 @@ private:
 	char m_TextureText[1024] {};
 	char m_ScriptText[128] {};
 	char m_JointOther[128] {};
+	char m_HingeOther[128] {};
 	std::uint32_t m_SyncedId = 0;
 };

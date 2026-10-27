@@ -203,6 +203,8 @@ namespace {
 		scene.SetTag(solid.GetId(), "marked");
 		solid.Get<Lite::BoxCollider2DComponent>()->Layer = 2;
 		solid.Get<Lite::BoxCollider2DComponent>()->Mask = 4;
+		solid.Get<Lite::BoxCollider2DComponent>()->Friction = 0.2f;
+		solid.Get<Lite::BoxCollider2DComponent>()->Restitution = 0.8f;
 
 		const std::string document = scene.Snapshot();
 		if (!scene.Restore(document))
@@ -212,6 +214,13 @@ namespace {
 		const Lite::BoxCollider2DComponent* box = solid.Get<Lite::BoxCollider2DComponent>();
 		if (box == nullptr || box->Layer != 2 || box->Mask != 4)
 			return Fail("Scene check: collider layer did not round-trip");
+		if (box->Friction != 0.2f || box->Restitution != 0.8f)
+			return Fail("Scene check: collider surface did not round-trip");
+
+		trigger = scene.Find("Trigger");
+		const Lite::BoxCollider2DComponent* sensor = trigger.Get<Lite::BoxCollider2DComponent>();
+		if (sensor == nullptr || sensor->Friction != Lite::kDefaultFriction || sensor->Restitution != Lite::kDefaultRestitution)
+			return Fail("Scene check: a default collider surface was rewritten");
 
 		std::vector<Lite::Entity> tagged = scene.FindTagged("marked");
 		if (tagged.size() != 1 || tagged[0].GetId() != solid.GetId())
@@ -293,6 +302,36 @@ namespace {
 		const float distance = std::sqrt(dx * dx + dy * dy);
 		if (std::fabs(distance - 2.0f) > 0.35f)
 			return Fail("Scene check: the distance joint did not hold");
+
+		Lite::Entity pin = AddBox(scene, "Pin", { 24.0f, 6.0f }, Lite::BodyType::Static);
+		Lite::Entity bar = AddBox(scene, "Bar", { 24.0f, 7.2f }, Lite::BodyType::Dynamic);
+		scene.RefreshPhysics(pin.GetId());
+		scene.RefreshPhysics(bar.GetId());
+		bar.Add<Lite::RevoluteJoint2DComponent>().Other = "Pin";
+		scene.RefreshPhysics(bar.GetId());
+
+		Lite::Entity pushed = AddBox(scene, "Pushed", { 30.0f, 6.0f }, Lite::BodyType::Dynamic);
+		pushed.Get<Lite::Rigidbody2DComponent>()->GravityScale = 0.0f;
+		scene.RefreshPhysics(pushed.GetId());
+		const float pushedStart = pushed.WorldTransform().Position.x;
+		scene.ApplyLinearImpulse(pushed.GetId(), { 2.0f, 0.0f });
+		scene.Update(Lite::kPhysicsStep);
+		if (!(scene.Find("Pushed").WorldTransform().Position.x > pushedStart + 0.01f))
+			return Fail("Scene check: an impulse did not move the body");
+
+		for (int frame = 0; frame < 90; ++frame)
+			scene.Update(Lite::kPhysicsStep);
+
+		Lite::Vec3 barAt = scene.Find("Bar").WorldTransform().Position;
+		Lite::Vec3 pinAt = scene.Find("Pin").WorldTransform().Position;
+		const float hingeX = barAt.x - pinAt.x;
+		const float hingeY = barAt.y - pinAt.y;
+		if (std::sqrt(hingeX * hingeX + hingeY * hingeY) > 0.5f || barAt.y < 4.5f)
+			return Fail("Scene check: the revolute joint did not hold");
+
+		scene.DestroyEntity(scene.Find("Pin").GetId(), false);
+		if (scene.Find("Bar").Get<Lite::RevoluteJoint2DComponent>() != nullptr)
+			return Fail("Scene check: deleting one end left the revolute joint");
 
 		scene.DestroyEntity(scene.Find("Anchor").GetId(), false);
 		if (scene.Find("Pull").Get<Lite::DistanceJoint2DComponent>() != nullptr)
