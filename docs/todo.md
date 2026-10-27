@@ -56,6 +56,7 @@ Do not add a second graphics API. Vulkan is the only backend until a game needs 
 - **Snap.** Holding Ctrl while moving a gizmo snaps that position to the grid. The grid size is the Grid field in the viewport and lasts for the session.
 - **Console.** Clear empties the panel. A filter hides lines that do not contain the typed word. Mute contacts hides collision and trigger lines and leaves script errors visible.
 - **Material color.** The inspector swatch shows the material color. Roughness and emission stay in the Surface section.
+- **Editor look.** The window and the menu bar use the same mark. Explorer tiles ease in on hover. A material tile shows its color, a texture tile shows the image, and a folder shows a few of those previews. The strip under the files renames the selection. The asset folders themselves stay fixed.
 
 ## Next
 

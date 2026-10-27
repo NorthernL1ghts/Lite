@@ -1,10 +1,13 @@
 #include <Explorer.h>
 
+#include <Lite/Assets/AssetRegistry.h>
+#include <Lite/Assets/Texture.h>
 #include <Lite/Core/IO/FileSystem.h>
 #include <Lite/Project/Project.h>
 #include <Lite/Scene/Console.h>
 
 #include <imgui.h>
+#include <imgui_impl_vulkan.h>
 
 #ifndef WIN32_LEAN_AND_MEAN
 	#define WIN32_LEAN_AND_MEAN
@@ -17,10 +20,15 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <cstdio>
+#include <cstring>
 #include <cwchar>
+#include <fstream>
 #include <format>
 #include <string>
+#include <unordered_map>
 #include <vector>
+#include <vulkan/vulkan.h>
 
 namespace {
 
@@ -224,6 +232,297 @@ namespace {
 			|| extension == ".inl";
 	}
 
+	float EaseHover(const std::string& key, bool hovered)
+	{
+		static std::unordered_map<std::string, float> amounts;
+		float& amount = amounts[key];
+		const float target = hovered ? 1.0f : 0.0f;
+		const float step = std::min(1.0f, ImGui::GetIO().DeltaTime * 12.0f);
+		amount += (target - amount) * step;
+		return amount;
+	}
+
+	struct MaterialLook
+	{
+		std::filesystem::file_time_type Stamp {};
+		ImVec4 Color { 1.0f, 1.0f, 1.0f, 1.0f };
+		float Metallic = 0.0f;
+		bool Ready = false;
+		bool Found = false;
+	};
+
+	bool MaterialLookFor(const std::filesystem::path& path, ImVec4& color, float& metallic)
+	{
+		static std::unordered_map<std::string, MaterialLook> looks;
+		const std::string key = path.generic_string();
+		std::error_code error;
+		const auto stamp = std::filesystem::last_write_time(path, error);
+		MaterialLook& look = looks[key];
+		if (!error && look.Ready && look.Stamp == stamp)
+		{
+			color = look.Color;
+			metallic = look.Metallic;
+			return look.Found;
+		}
+
+		look.Ready = true;
+		look.Stamp = stamp;
+		look.Found = false;
+		look.Metallic = 0.0f;
+		std::ifstream file(path);
+		std::string line;
+		while (std::getline(file, line))
+		{
+			const auto colorAt = line.find("color:");
+			if (colorAt != std::string::npos)
+			{
+				const char* bracket = std::strchr(line.c_str() + colorAt, '[');
+				float red = 1.0f;
+				float green = 1.0f;
+				float blue = 1.0f;
+				float alpha = 1.0f;
+				if (bracket != nullptr && std::sscanf(bracket + 1, " %f , %f , %f , %f", &red, &green, &blue, &alpha) >= 3)
+				{
+					look.Color = ImVec4(red, green, blue, alpha);
+					look.Found = true;
+				}
+			}
+
+			const auto metalAt = line.find("metallic:");
+			if (metalAt != std::string::npos)
+				std::sscanf(line.c_str() + metalAt + 9, " %f", &look.Metallic);
+		}
+
+		color = look.Color;
+		metallic = look.Metallic;
+		return look.Found;
+	}
+
+	struct Thumb
+	{
+		VkImageView View = VK_NULL_HANDLE;
+		VkDescriptorSet Set = VK_NULL_HANDLE;
+		std::filesystem::file_time_type Stamp {};
+		int Frame = 0;
+		bool Failed = false;
+		bool Ready = false;
+	};
+
+	std::unordered_map<std::string, Thumb> g_Thumbs;
+	int g_ThumbFrame = -1;
+
+	void TrimThumbs()
+	{
+		const int frame = ImGui::GetFrameCount();
+		if (g_ThumbFrame == frame)
+			return;
+
+		g_ThumbFrame = frame;
+		for (auto thumb = g_Thumbs.begin(); thumb != g_Thumbs.end();)
+		{
+			if (thumb->second.Frame > 0 && thumb->second.Frame + 1 < frame)
+			{
+				if (thumb->second.Set != VK_NULL_HANDLE)
+					ImGui_ImplVulkan_RemoveTexture(thumb->second.Set);
+				thumb = g_Thumbs.erase(thumb);
+			}
+			else
+			{
+				++thumb;
+			}
+		}
+	}
+
+	VkDescriptorSet Thumbnail(const std::filesystem::path& path)
+	{
+		const std::string key = path.generic_string();
+		const int frame = ImGui::GetFrameCount();
+		std::error_code error;
+		const auto stamp = std::filesystem::last_write_time(path, error);
+		auto found = g_Thumbs.find(key);
+		if (found == g_Thumbs.end() && g_Thumbs.size() >= 64)
+			return VK_NULL_HANDLE;
+		if (found == g_Thumbs.end())
+			found = g_Thumbs.emplace(key, Thumb {}).first;
+
+		Thumb& cached = found->second;
+		cached.Frame = frame;
+		if (cached.Failed && cached.Ready && cached.Stamp == stamp)
+			return VK_NULL_HANDLE;
+
+		Lite::Ref<Lite::Texture> texture = Lite::AssetRegistry::Get().Load<Lite::Texture>(path.string());
+		if (!texture || texture->GetView() == VK_NULL_HANDLE)
+		{
+			cached.Failed = true;
+			cached.Ready = true;
+			cached.Stamp = stamp;
+			return VK_NULL_HANDLE;
+		}
+
+		if (cached.View != texture->GetView() || cached.Set == VK_NULL_HANDLE)
+		{
+			if (cached.Set != VK_NULL_HANDLE)
+				ImGui_ImplVulkan_RemoveTexture(cached.Set);
+			cached.Set = ImGui_ImplVulkan_AddTexture(texture->GetView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			cached.View = texture->GetView();
+		}
+
+		cached.Failed = cached.Set == VK_NULL_HANDLE;
+		cached.Ready = true;
+		cached.Stamp = stamp;
+		return cached.Set;
+	}
+
+	void DrawImage(ImDrawList* draw, ImVec2 min, ImVec2 max, VkDescriptorSet set)
+	{
+		const ImTextureID id = static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(set));
+		draw->AddImageRounded(id, min, max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32_WHITE, 6.0f);
+		draw->AddRect(min, max, IM_COL32(255, 255, 255, 40), 6.0f);
+	}
+
+	void DrawMaterialSwatch(ImDrawList* draw, ImVec2 min, ImVec2 max, const ImVec4& color, float metallic)
+	{
+		draw->AddRectFilled(min, max, ImGui::ColorConvertFloat4ToU32(color), 6.0f);
+		draw->AddRect(min, max, IM_COL32(255, 255, 255, 48), 6.0f);
+		if (metallic > 0.15f)
+		{
+			const float shine = std::min(1.0f, metallic);
+			const ImVec2 shineMax { max.x - 4.0f, min.y + (max.y - min.y) * 0.42f };
+			draw->AddRectFilled(
+				ImVec2(min.x + 4.0f, min.y + 4.0f),
+				shineMax,
+				IM_COL32(255, 255, 255, static_cast<int>(36.0f + shine * 90.0f)),
+				4.0f);
+		}
+	}
+
+	void DrawFolderPeek(ImDrawList* draw, ImVec2 min, ImVec2 max, const std::filesystem::path& folder)
+	{
+		ImU32 chips[3] {};
+		VkDescriptorSet images[3] {};
+		int count = 0;
+		int seen = 0;
+		std::error_code error;
+		for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(folder, error))
+		{
+			if (error || count >= 3 || seen >= 12)
+				break;
+			++seen;
+			if (IsHidden(entry.path()) || IsCode(entry.path()))
+				continue;
+
+			std::error_code fileError;
+			if (entry.is_directory(fileError))
+				continue;
+
+			const IconKind kind = KindFor(entry.path(), false);
+			if (kind == IconKind::Material)
+			{
+				ImVec4 color { 0.84f, 0.55f, 0.36f, 1.0f };
+				float metallic = 0.0f;
+				MaterialLookFor(entry.path(), color, metallic);
+				chips[count] = ImGui::ColorConvertFloat4ToU32(color);
+				images[count] = VK_NULL_HANDLE;
+				++count;
+			}
+			else if (kind == IconKind::Image)
+			{
+				chips[count] = IM_COL32(92, 176, 138, 255);
+				images[count] = Thumbnail(entry.path());
+				++count;
+			}
+		}
+
+		if (count == 0)
+			return;
+
+		const float chip = 11.0f;
+		const float gap = 3.0f;
+		const float row = chip * static_cast<float>(count) + gap * static_cast<float>(count - 1);
+		float x = min.x + ((max.x - min.x) - row) * 0.5f;
+		const float y = max.y - chip - 5.0f;
+		for (int index = 0; index < count; ++index)
+		{
+			const ImVec2 chipMin { x, y };
+			const ImVec2 chipMax { x + chip, y + chip };
+			if (images[index] != VK_NULL_HANDLE)
+				DrawImage(draw, chipMin, chipMax, images[index]);
+			else
+				draw->AddRectFilled(chipMin, chipMax, chips[index], 2.0f);
+			x += chip + gap;
+		}
+	}
+
+	void DrawPreview(ImDrawList* draw, ImVec2 min, ImVec2 max, const std::filesystem::path& path, IconKind kind, ImU32 folderColor)
+	{
+		if (kind == IconKind::Material)
+		{
+			ImVec4 color { 0.84f, 0.52f, 0.36f, 1.0f };
+			float metallic = 0.0f;
+			if (MaterialLookFor(path, color, metallic))
+			{
+				DrawMaterialSwatch(draw, min, max, color, metallic);
+				return;
+			}
+		}
+
+		if (kind == IconKind::Image)
+		{
+			if (VkDescriptorSet set = Thumbnail(path))
+			{
+				DrawImage(draw, min, max, set);
+				return;
+			}
+		}
+
+		if (kind == IconKind::Folder)
+		{
+			DrawFolderIcon(draw, min, max, folderColor == 0 ? IM_COL32(214, 168, 72, 255) : folderColor);
+			DrawFolderPeek(draw, min, max, path);
+			return;
+		}
+
+		DrawIcon(draw, min, max, kind);
+	}
+
+	void DrawTileFrame(ImDrawList* draw, ImVec2 origin, ImVec2 size, float hover, bool selected)
+	{
+		const ImVec2 max { origin.x + size.x, origin.y + size.y };
+		if (selected)
+			draw->AddRectFilled(origin, max, IM_COL32(70, 110, 170, static_cast<int>(78.0f + hover * 40.0f)), 8.0f);
+		else if (hover > 0.01f)
+			draw->AddRectFilled(origin, max, IM_COL32(255, 255, 255, static_cast<int>(hover * 28.0f)), 8.0f);
+
+		if (selected || hover > 0.02f)
+		{
+			const int alpha = selected ? static_cast<int>(150.0f + hover * 70.0f) : static_cast<int>(hover * 90.0f);
+			draw->AddRect(origin, max, IM_COL32(126, 170, 224, alpha), 8.0f, 0, 1.0f + hover);
+		}
+	}
+
+	void ScaleRect(ImVec2& min, ImVec2& max, float hover)
+	{
+		const float scale = 1.0f + hover * 0.08f;
+		const ImVec2 center { (min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f };
+		const ImVec2 half { (max.x - min.x) * 0.5f * scale, (max.y - min.y) * 0.5f * scale };
+		min = ImVec2(center.x - half.x, center.y - half.y);
+		max = ImVec2(center.x + half.x, center.y + half.y);
+	}
+
+	const char* KindLabel(IconKind kind)
+	{
+		switch (kind)
+		{
+			case IconKind::Folder: return "Folder";
+			case IconKind::Scene: return "Scene";
+			case IconKind::Image: return "Texture";
+			case IconKind::Script: return "Script";
+			case IconKind::Prefab: return "Prefab";
+			case IconKind::Material: return "Material";
+			default: return "File";
+		}
+	}
+
 }
 
 std::filesystem::path Explorer::ProjectRoot() const
@@ -325,18 +624,21 @@ void Explorer::DrawGrid(
 		if (!directoryEntry)
 			BeginFileDrag(child, kind, name);
 
+		if (ImGui::BeginPopupContextItem())
+		{
+			if (ImGui::MenuItem("Rename", nullptr, false, CanRename(child)))
+				m_FocusRename = true;
+			ImGui::EndPopup();
+		}
+
+		const float hover = EaseHover(child.generic_string(), hovered);
 		ImDrawList* draw = ImGui::GetWindowDrawList();
-		ImU32 background = 0;
-		if (selected)
-			background = IM_COL32(70, 110, 170, 90);
-		else if (hovered)
-			background = IM_COL32(255, 255, 255, 18);
-		if (background != 0)
-			draw->AddRectFilled(origin, ImVec2(origin.x + tileWidth, origin.y + tileHeight), background, 6.0f);
+		DrawTileFrame(draw, origin, ImVec2(tileWidth, tileHeight), hover, selected);
 
 		ImVec2 iconMin { origin.x + 22.0f, origin.y + 8.0f };
 		ImVec2 iconMax { origin.x + 62.0f, origin.y + 46.0f };
-		DrawIcon(draw, iconMin, iconMax, kind);
+		ScaleRect(iconMin, iconMax, hover);
+		DrawPreview(draw, iconMin, iconMax, child, kind, 0);
 
 		const std::string label = FitLabel(name, tileWidth - 8.0f);
 		ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
@@ -452,12 +754,156 @@ void Explorer::ImportFiles()
 	}
 }
 
+bool Explorer::CanRename(const std::filesystem::path& path) const
+{
+	if (!InsideProject(path) || path == m_Project)
+		return false;
+
+	Lite::Ref<Lite::Project> project = Lite::Project::GetActive();
+	if (!project)
+		return false;
+
+	std::filesystem::path assetName = project->GetConfig().AssetDirectory.empty() ? std::filesystem::path("assets") : project->GetConfig().AssetDirectory;
+	std::filesystem::path assets = assetName.is_absolute() ? assetName : m_Project / assetName;
+	if (path == assets)
+		return false;
+
+	for (const char* folder : Lite::Project::ContentFolders)
+	{
+		if (path == assets / folder)
+			return false;
+	}
+
+	return true;
+}
+
+void Explorer::ApplyRename()
+{
+	const std::string current = m_Selected.filename().string();
+	std::string name = m_Rename;
+	while (!name.empty() && (name.back() == ' ' || name.back() == '.'))
+		name.pop_back();
+	while (!name.empty() && name.front() == ' ')
+		name.erase(name.begin());
+
+	auto restore = [&]()
+	{
+		std::snprintf(m_Rename, sizeof(m_Rename), "%s", current.c_str());
+	};
+
+	if (name.empty() || name == current)
+	{
+		restore();
+		return;
+	}
+
+	if (name.find_first_of("\\/:*?\"<>|") != std::string::npos)
+	{
+		Lite::Console::Log("Failed to rename: invalid name");
+		restore();
+		return;
+	}
+
+	const std::filesystem::path next = m_Selected.parent_path() / name;
+	std::error_code error;
+	if (std::filesystem::exists(next, error))
+	{
+		Lite::Console::Log(std::format("Failed to rename: {} already exists", name));
+		restore();
+		return;
+	}
+
+	std::filesystem::rename(m_Selected, next, error);
+	if (error)
+	{
+		Lite::Console::Log(std::format("Failed to rename {}", current));
+		restore();
+		return;
+	}
+
+	if (Lite::FileSystem::Contains(m_Selected, m_View))
+	{
+		std::error_code relativeError;
+		const std::filesystem::path relative = std::filesystem::relative(m_View, m_Selected, relativeError);
+		if (!relativeError)
+			m_View = relative.empty() ? next : next / relative;
+	}
+
+	m_Selected = next;
+	m_RenamePath = next;
+	Lite::Console::Log(std::format("Renamed {} to {}", current, name));
+}
+
+void Explorer::DrawDetails()
+{
+	std::error_code error;
+	const bool directory = std::filesystem::is_directory(m_Selected, error);
+	const IconKind kind = KindFor(m_Selected, directory);
+	if (m_RenamePath != m_Selected && !m_RenameEditing)
+	{
+		m_RenamePath = m_Selected;
+		const std::string name = m_Selected.filename().string();
+		std::snprintf(m_Rename, sizeof(m_Rename), "%s", name.c_str());
+	}
+
+	ImGui::BeginChild("##ExplorerDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+	const ImVec2 origin = ImGui::GetCursorScreenPos();
+	const ImVec2 previewMin { origin.x + 8.0f, origin.y + 10.0f };
+	const ImVec2 previewMax { previewMin.x + 64.0f, previewMin.y + 64.0f };
+	ImDrawList* draw = ImGui::GetWindowDrawList();
+	draw->AddRectFilled(previewMin, previewMax, IM_COL32(18, 20, 26, 255), 8.0f);
+	ImVec2 iconMin { previewMin.x + 8.0f, previewMin.y + 8.0f };
+	ImVec2 iconMax { previewMax.x - 8.0f, previewMax.y - 8.0f };
+	ImU32 folderColor = 0;
+	if (kind == IconKind::Folder)
+	{
+		const std::string folder = LowerName(m_Selected);
+		if (folder == "scenes")
+			folderColor = IM_COL32(86, 156, 214, 255);
+		else if (folder == "scripts")
+			folderColor = IM_COL32(126, 146, 214, 255);
+		else if (folder == "prefabs")
+			folderColor = IM_COL32(176, 124, 214, 255);
+		else if (folder == "materials")
+			folderColor = IM_COL32(214, 140, 92, 255);
+		else if (folder == "textures")
+			folderColor = IM_COL32(92, 176, 138, 255);
+	}
+	DrawPreview(draw, iconMin, iconMax, m_Selected, kind, folderColor);
+	ImGui::Dummy(ImVec2(80.0f, 80.0f));
+	ImGui::SameLine();
+	ImGui::BeginGroup();
+	ImGui::TextDisabled("%s", KindLabel(kind));
+	const bool editable = CanRename(m_Selected);
+	if (m_FocusRename && editable)
+		ImGui::SetKeyboardFocusHere();
+	m_FocusRename = false;
+	ImGui::SetNextItemWidth(220.0f);
+	if (editable)
+	{
+		ImGui::InputText("##Rename", m_Rename, sizeof(m_Rename));
+		m_RenameEditing = ImGui::IsItemActive();
+		if (ImGui::IsItemDeactivatedAfterEdit())
+			ApplyRename();
+	}
+	else
+	{
+		ImGui::BeginDisabled();
+		ImGui::InputText("##RenameLocked", m_Rename, sizeof(m_Rename), ImGuiInputTextFlags_ReadOnly);
+		ImGui::EndDisabled();
+		m_RenameEditing = false;
+	}
+	ImGui::EndGroup();
+	ImGui::EndChild();
+}
+
 void Explorer::Draw(
 	const std::function<void(const std::string&)>& openScene,
 	const std::function<void(const std::string&)>& openProject,
 	const std::function<void(const std::string&)>& openPrefab)
 {
 	ImGui::Begin("Explorer");
+	TrimThumbs();
 
 	std::filesystem::path root = ProjectRoot();
 	if (root.empty())
@@ -584,7 +1030,9 @@ void Explorer::Draw(
 		}
 	}
 
-	ImGui::BeginChild("##ExplorerGrid", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+	const bool details = !m_Selected.empty() && InsideProject(m_Selected);
+	const float footer = details ? 96.0f : 0.0f;
+	ImGui::BeginChild("##ExplorerGrid", ImVec2(0.0f, footer > 0.0f ? -footer : 0.0f), ImGuiChildFlags_Borders);
 	if (m_View.empty())
 	{
 		const float tileWidth = 84.0f;
@@ -606,16 +1054,24 @@ void Explorer::Draw(
 			if (ImGui::IsItemClicked())
 				m_Selected = library.Path;
 
-			ImDrawList* draw = ImGui::GetWindowDrawList();
-			ImU32 background = 0;
-			if (selected)
-				background = IM_COL32(70, 110, 170, 90);
-			else if (hovered)
-				background = IM_COL32(255, 255, 255, 18);
-			if (background != 0)
-				draw->AddRectFilled(origin, ImVec2(origin.x + tileWidth, origin.y + tileHeight), background, 6.0f);
+			if (ImGui::BeginPopupContextItem())
+			{
+				if (ImGui::MenuItem("Open"))
+				{
+					m_View = library.Path;
+					m_Selected = library.Path;
+				}
+				ImGui::EndPopup();
+			}
 
-			DrawFolderIcon(draw, ImVec2(origin.x + 22.0f, origin.y + 8.0f), ImVec2(origin.x + 62.0f, origin.y + 46.0f), library.Color);
+			const float hover = EaseHover(library.Path.generic_string(), hovered);
+			ImDrawList* draw = ImGui::GetWindowDrawList();
+			DrawTileFrame(draw, origin, ImVec2(tileWidth, tileHeight), hover, selected);
+
+			ImVec2 iconMin { origin.x + 22.0f, origin.y + 8.0f };
+			ImVec2 iconMax { origin.x + 62.0f, origin.y + 46.0f };
+			ScaleRect(iconMin, iconMax, hover);
+			DrawPreview(draw, iconMin, iconMax, library.Path, IconKind::Folder, library.Color);
 
 			ImVec2 textSize = ImGui::CalcTextSize(library.Label.c_str());
 			draw->AddText(ImVec2(origin.x + (tileWidth - textSize.x) * 0.5f, origin.y + 54.0f), IM_COL32(220, 224, 230, 255), library.Label.c_str());
@@ -637,6 +1093,8 @@ void Explorer::Draw(
 		DrawGrid(m_View, openScene, openProject, openPrefab);
 	}
 	ImGui::EndChild();
+	if (details)
+		DrawDetails();
 
 	if (m_ShowNewFolder)
 	{

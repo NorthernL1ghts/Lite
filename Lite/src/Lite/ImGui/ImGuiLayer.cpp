@@ -31,7 +31,8 @@ namespace Lite {
 			style.ItemInnerSpacing = ImVec2(6.0f, 4.0f);
 			style.CellPadding = ImVec2(6.0f, 4.0f);
 			style.IndentSpacing = 14.0f;
-			style.ScrollbarSize = 10.0f;
+			style.ScrollbarSize = 12.0f;
+			style.GrabMinSize = 12.0f;
 			style.WindowBorderSize = 0.0f;
 			style.FrameBorderSize = 0.0f;
 			style.TabBorderSize = 0.0f;
@@ -120,7 +121,7 @@ namespace Lite {
 		info.Device = Renderer::GetDevice();
 		info.QueueFamily = Renderer::GetGraphicsQueueFamily();
 		info.Queue = Renderer::GetGraphicsQueue();
-		info.DescriptorPoolSize = 128;
+		info.DescriptorPoolSize = 256;
 		info.MinImageCount = Renderer::GetMinImageCount();
 		info.ImageCount = Renderer::GetImageCount();
 		info.PipelineInfoMain.RenderPass = Renderer::GetRenderPass();

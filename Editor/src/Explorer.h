@@ -23,10 +23,17 @@ private:
 		const std::function<void(const std::string&)>& openPrefab);
 	void CreateFolder();
 	void ImportFiles();
+	void DrawDetails();
+	void ApplyRename();
+	bool CanRename(const std::filesystem::path& path) const;
 
 	std::filesystem::path m_Selected;
 	std::filesystem::path m_View;
 	std::filesystem::path m_Project;
+	std::filesystem::path m_RenamePath;
 	char m_FolderName[128] {};
+	char m_Rename[260] {};
 	bool m_ShowNewFolder = false;
+	bool m_RenameEditing = false;
+	bool m_FocusRename = false;
 };

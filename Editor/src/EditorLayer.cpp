@@ -27,6 +27,7 @@
 #include <functional>
 #include <iterator>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -156,6 +157,26 @@ namespace {
 		Reset
 	};
 
+	void DrawLiteMark(ImDrawList* draw, ImVec2 origin, float size)
+	{
+		ImVec2 max { origin.x + size, origin.y + size };
+		draw->AddRectFilled(origin, max, IM_COL32(58, 112, 196, 255), size * 0.28f);
+		ImVec2 a { origin.x + size * 0.38f, origin.y + size * 0.34f };
+		ImVec2 b { origin.x + size * 0.38f, origin.y + size * 0.66f };
+		ImVec2 c { origin.x + size * 0.68f, origin.y + size * 0.50f };
+		draw->AddTriangleFilled(a, b, c, IM_COL32(246, 248, 252, 255));
+	}
+
+	float HoverMotion(ImGuiID id, bool hovered)
+	{
+		static std::unordered_map<ImGuiID, float> amounts;
+		float& amount = amounts[id];
+		const float target = hovered ? 1.0f : 0.0f;
+		const float step = std::min(1.0f, ImGui::GetIO().DeltaTime * 14.0f);
+		amount += (target - amount) * step;
+		return amount;
+	}
+
 	bool TransportButton(const char* id, bool enabled, bool active, const ImVec4& activeColor, TransportSymbol symbol)
 	{
 		ImGui::BeginDisabled(!enabled);
@@ -165,10 +186,16 @@ namespace {
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, active ? activeColor : ImVec4(0.22f, 0.26f, 0.32f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, active ? activeColor : ImVec4(0.28f, 0.34f, 0.44f, 1.0f));
 		bool pressed = ImGui::Button(id, ImVec2(28.0f, 22.0f));
+		const float motion = HoverMotion(ImGui::GetItemID(), enabled && ImGui::IsItemHovered());
 		ImU32 symbolColor = ImGui::GetColorU32(active ? ImVec4(0.96f, 0.97f, 0.98f, 1.0f) : ImVec4(0.78f, 0.82f, 0.88f, 1.0f));
 		ImDrawList* draw = ImGui::GetWindowDrawList();
 		ImVec2 itemMin = ImGui::GetItemRectMin();
 		ImVec2 itemMax = ImGui::GetItemRectMax();
+		const float grow = motion * 1.4f;
+		itemMin.x -= grow;
+		itemMin.y -= grow;
+		itemMax.x += grow;
+		itemMax.y += grow;
 		if (symbol == TransportSymbol::Play)
 			DrawPlay(draw, itemMin, itemMax, symbolColor);
 		else if (symbol == TransportSymbol::Pause)
@@ -1125,6 +1152,11 @@ void EditorLayer::DrawMenu()
 		return;
 	}
 
+	ImVec2 mark = ImGui::GetCursorScreenPos();
+	mark.y += 4.0f;
+	DrawLiteMark(ImGui::GetWindowDrawList(), mark, 16.0f);
+	ImGui::Dummy(ImVec2(16.0f, ImGui::GetFrameHeight()));
+	ImGui::SameLine(0.0f, 8.0f);
 	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.78f, 0.88f, 1.0f, 1.0f));
 	ImGui::TextUnformatted("Lite");
 	ImGui::PopStyleColor();
